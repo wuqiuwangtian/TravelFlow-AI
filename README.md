@@ -27,16 +27,13 @@ cd TravelFlow-AI
 2. 配置环境变量
 ```bash
 在 backend 目录下创建 .env 文件：
-code
-Ini
 OPENAI_API_KEY=sk-xxxx
 OPENAI_BASE_URL=https://api.deepseek.com/v1
 TAVILY_API_KEY=tvly-xxxx
 ```
 3. 使用 Docker 一键启动
 ```bash
-code
-Bash
 docker-compose up --build
 ```
 访问浏览器：http://localhost:3000 即可开始规划你的旅行！
+
