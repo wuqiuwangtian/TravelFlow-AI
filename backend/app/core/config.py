@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     # 默认不使用 "*"，对照阶段①缺陷 P2-1
     app_cors_origins: str = "http://localhost:3000"
 
+    # 跨域严格模式（安全相关）：
+    #   默认（false）放行**任意本机来源**（localhost/127.0.0.1 的任意端口），
+    #   这样用户改前端端口不会出现「连不上后端」；
+    #   设为 true 时**只**放行 APP_CORS_ORIGINS 中列出的来源，更严格但改端口需同步配置。
+    #
+    # 取舍说明：本项目的真实边界是「只监听 127.0.0.1」——
+    # 该开关影响的是「本机其它端口的页面能否读取本 API」，属纵深防御而非主要防线。
+    app_cors_strict: bool = False
+
     # ---------------- 数据 ----------------
     session_db_path: Path = Path("./data/travelflow.db")
     session_ttl_hours: int = 168
@@ -122,6 +131,20 @@ class Settings(BaseSettings):
                     f"未配置 SEARCH_API_KEY（检索服务：{self.search_provider}），"
                     "可改用 SEARCH_PROVIDER=ddg 免密钥检索"
                 )
+
+        # 安全提醒：把服务暴露到本机之外会显著放大风险
+        if self.app_host not in {"127.0.0.1", "localhost", "::1"}:
+            warnings.append(
+                f"APP_HOST={self.app_host} 表示服务将对本机之外开放，"
+                "任何能访问该端口的人都可以读取你的会话与路书。"
+                "如非必要，请改回 127.0.0.1"
+            )
+
+        if not self.app_cors_strict:
+            warnings.append(
+                "跨域当前为宽松模式（放行任意本机端口）。"
+                "如需只允许指定来源，请设置 APP_CORS_STRICT=true"
+            )
 
         return warnings
 

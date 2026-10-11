@@ -13,6 +13,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
+from app.main import create_app
+
 LOCAL_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3100",
@@ -64,3 +67,73 @@ def test_explicit_origins_still_honoured(client: TestClient) -> None:
     response = client.get("/api/system/health", headers={"Origin": "http://localhost:3000"})
 
     assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
+# ============================================================ 严格模式
+def test_strict_mode_allows_only_listed_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """APP_CORS_STRICT=true 时收紧为白名单，其它本机端口一律拒绝。"""
+    monkeypatch.setenv("APP_CORS_STRICT", "true")
+    monkeypatch.setenv("APP_CORS_ORIGINS", "http://localhost:3100")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        allowed = test_client.get("/api/system/health", headers={"Origin": "http://localhost:3100"})
+        other_local = test_client.get(
+            "/api/system/health", headers={"Origin": "http://localhost:4000"}
+        )
+
+    get_settings.cache_clear()
+
+    assert allowed.headers.get("access-control-allow-origin") == "http://localhost:3100"
+    assert "access-control-allow-origin" not in other_local.headers
+
+
+def test_relaxed_mode_is_reported_as_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """宽松模式必须在配置自检里明示，不能悄悄生效。"""
+    monkeypatch.setenv("APP_CORS_STRICT", "false")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        warnings = test_client.get("/api/system/config").json()["warnings"]
+
+    get_settings.cache_clear()
+
+    assert any("APP_CORS_STRICT" in w for w in warnings)
+
+
+def test_strict_mode_does_not_warn_about_cors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_CORS_STRICT", "true")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        warnings = test_client.get("/api/system/config").json()["warnings"]
+
+    get_settings.cache_clear()
+
+    assert not any("APP_CORS_STRICT" in w for w in warnings)
+
+
+# ============================================================ 暴露到局域网
+def test_warns_when_host_is_not_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """把服务开放到本机之外会显著放大风险，必须提醒。"""
+    monkeypatch.setenv("APP_HOST", "0.0.0.0")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        warnings = test_client.get("/api/system/config").json()["warnings"]
+
+    get_settings.cache_clear()
+
+    assert any("本机之外" in w for w in warnings)
+
+
+def test_no_host_warning_for_localhost(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_HOST", "127.0.0.1")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        warnings = test_client.get("/api/system/config").json()["warnings"]
+
+    get_settings.cache_clear()
+
+    assert not any("本机之外" in w for w in warnings)

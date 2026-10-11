@@ -92,13 +92,17 @@ def create_app() -> FastAPI:
     # 用户改端口后如果忘了同步白名单，看到的现象是「前端连不上后端」，
     # 排查成本很高（浏览器不会告诉你真实原因是 CORS）。
     #
-    # 因此这里用正则**放行任意本机来源（不限端口）**，
-    # 既不像 ``allow_origins=["*"]`` 那样对全网开放，也不会有改端口就失效的问题。
-    # 需要额外来源时仍可通过 APP_CORS_ORIGINS 追加。
+    # 默认（APP_CORS_STRICT=false）用正则**放行任意本机来源（不限端口）**；
+    # 设为 true 则只放行 APP_CORS_ORIGINS 中列出的来源。
+    #
+    # 安全边界说明：本服务的真实边界是「只监听 127.0.0.1」（见 APP_HOST），
+    # 该开关属于**纵深防御** —— 限制的是「本机其它端口的页面能否读取本 API」。
+    # 需要说明的是它并非主要防线：任何能在本机执行代码的程序，本就可以直接读取
+    # .env 与数据库文件。
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_origin_regex=LOCAL_ORIGIN_REGEX,
+        allow_origin_regex=None if settings.app_cors_strict else LOCAL_ORIGIN_REGEX,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
