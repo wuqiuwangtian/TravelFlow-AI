@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 虚拟环境
+.venv/
+.venv-verify/
+venv/
+env/
+
+# 环境变量（切勿提交密钥）
+.env
+.env.local
+.env.*.local
+
+# 运行期产出
+backend/static/
+
+# 工具缓存
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
