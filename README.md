@@ -42,6 +42,7 @@
 | [阶段② 升级规划](docs/02-upgrade-plan.md) | 完整设计稿：架构、选型、API 契约、部署方案 |
 | [阶段② Prompt 设计](docs/02b-prompt-design.md) | 四个节点的完整 Prompt、结构化输出契约、防幻觉闭环 |
 | [阶段② 会话与体验设计](docs/02d-session-ux-design.md) | 会话分支对比、多页面结构、详细度档位、HTML 呈现 |
+| [**M1 实施蓝图**](docs/02e-m1-blueprint.md) | **编码起点**：目录结构、文件职责、完成定义、执行步骤 |
 | [历史产出样例](docs/legacy-samples/) | 从 git 历史还原的 3 份真实路书，作为回归基线 |
 
 ---
