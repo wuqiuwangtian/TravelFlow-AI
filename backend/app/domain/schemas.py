@@ -68,6 +68,25 @@ class ConnectionTestResponse(BaseModel):
     message: str
 
 
+class SettingsUpdate(BaseModel):
+    """可写回 ``.env`` 的配置项（白名单，其余字段不可改）。"""
+
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_api_key: str | None = None
+    llm_base_url: str | None = None
+    search_provider: str | None = None
+    search_api_key: str | None = None
+    searxng_base_url: str | None = None
+    default_detail_level: str | None = None
+
+
+class SettingsUpdateResponse(BaseModel):
+    saved: bool
+    changed: list[str] = Field(default_factory=list)
+    message: str
+
+
 # ---------------------------------------------------------------- 错误
 class ErrorDetail(BaseModel):
     code: str

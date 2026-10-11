@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
+from app.core.env_writer import FIELD_TO_ENV, write_env
 from app.core.errors import ConfigError
 from app.core.providers import LLM_PROVIDERS, SEARCH_PROVIDERS, ProviderInfo
 from app.domain.schemas import (
@@ -23,6 +25,8 @@ from app.domain.schemas import (
     ProviderItem,
     ProvidersResponse,
     SearchConfigCheck,
+    SettingsUpdate,
+    SettingsUpdateResponse,
 )
 from app.llm.factory import create_llm_provider
 from app.search.factory import create_search_provider
@@ -122,4 +126,52 @@ async def test_search(settings: Settings = Depends(get_settings)) -> ConnectionT
         ok=True,
         provider=settings.search_provider,
         message=f"连接正常，返回 {len(results)} 条结果",
+    )
+
+
+# ============================================================ 设置读写
+def _env_path() -> Path:
+    """``backend/.env``（本文件位于 ``backend/app/api/``）。"""
+    return Path(__file__).resolve().parents[2] / ".env"
+
+
+@router.get("/settings", summary="读取当前设置")
+async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
+    """返回可编辑的配置项。
+
+    **安全约束**：密钥永不回显，只返回 ``*_has_key`` 布尔值。
+    """
+    return {
+        "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+        "llm_base_url": settings.llm_base_url or "",
+        "llm_has_key": bool(settings.llm_api_key),
+        "search_provider": settings.search_provider,
+        "searxng_base_url": settings.searxng_base_url or "",
+        "search_has_key": bool(settings.search_api_key),
+        "default_detail_level": settings.default_detail_level,
+        "env_path": str(_env_path()),
+    }
+
+
+@router.put("/settings", response_model=SettingsUpdateResponse, summary="保存设置")
+async def update_settings(payload: SettingsUpdate) -> SettingsUpdateResponse:
+    """把改动写回 ``.env``（仅白名单字段）。"""
+    updates: dict[str, str] = {}
+    for field, env_key in FIELD_TO_ENV.items():
+        value = getattr(payload, field)
+        if value is not None:
+            updates[env_key] = value
+
+    if not updates:
+        return SettingsUpdateResponse(saved=False, message="没有需要保存的改动")
+
+    changed = write_env(_env_path(), updates)
+    if not changed:
+        return SettingsUpdateResponse(saved=True, message="配置没有变化")
+
+    return SettingsUpdateResponse(
+        saved=True,
+        changed=changed,
+        message=f"已保存 {len(changed)} 项到 .env。大模型与检索配置需要重启后端服务后生效。",
     )

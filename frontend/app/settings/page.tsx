@@ -1,0 +1,379 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { CheckCircle2, ExternalLink, Plug, Save, Settings as SettingsIcon, XCircle } from "lucide-react";
+
+import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
+import { api } from "@/lib/api";
+import type { SettingsPayload } from "@/lib/settings-types";
+import type { ConnectionTest, DetailLevel, ProvidersResponse } from "@/lib/types";
+import { DETAIL_LEVEL_LABELS } from "@/lib/types";
+
+type TestState = ConnectionTest | null;
+
+export default function SettingsPage() {
+  const [current, setCurrent] = useState<SettingsPayload | null>(null);
+  const [providers, setProviders] = useState<ProvidersResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // 表单（密钥单独保存，避免回显）
+  const [llmKey, setLlmKey] = useState("");
+  const [searchKey, setSearchKey] = useState("");
+  const [form, setForm] = useState({
+    llm_provider: "",
+    llm_model: "",
+    llm_base_url: "",
+    search_provider: "",
+    searxng_base_url: "",
+    default_detail_level: "L2_standard",
+  });
+  const [saving, setSaving] = useState(false);
+  const [llmTest, setLlmTest] = useState<TestState>(null);
+  const [searchTest, setSearchTest] = useState<TestState>(null);
+  const [testing, setTesting] = useState<"llm" | "search" | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [s, p] = await Promise.all([api.getSettings(), api.providers()]);
+      setCurrent(s);
+      setProviders(p);
+      setForm({
+        llm_provider: s.llm_provider,
+        llm_model: s.llm_model,
+        llm_base_url: s.llm_base_url,
+        search_provider: s.search_provider,
+        searxng_base_url: s.searxng_base_url,
+        default_detail_level: s.default_detail_level,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载设置失败");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save() {
+    setSaving(true);
+    setNotice(null);
+    try {
+      const payload: Record<string, string> = { ...form };
+      if (llmKey.trim()) payload.llm_api_key = llmKey.trim();
+      if (searchKey.trim()) payload.search_api_key = searchKey.trim();
+
+      const result = await api.saveSettings(payload);
+      setNotice(result.message);
+      setLlmKey("");
+      setSearchKey("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runTest(kind: "llm" | "search") {
+    setTesting(kind);
+    try {
+      const result = kind === "llm" ? await api.testLlm() : await api.testSearch();
+      if (kind === "llm") setLlmTest(result);
+      else setSearchTest(result);
+    } catch (err) {
+      const failure: ConnectionTest = {
+        ok: false,
+        provider: "-",
+        message: err instanceof Error ? err.message : "测试失败",
+      };
+      if (kind === "llm") setLlmTest(failure);
+      else setSearchTest(failure);
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  if (!current || !providers) {
+    return (
+      <div className="mx-auto max-w-2xl px-5 py-10">
+        {error ? <ErrorBanner message={error} onRetry={load} /> : <Spinner label="正在读取配置…" />}
+      </div>
+    );
+  }
+
+  const llmMeta = providers.llm.find((p) => p.id === form.llm_provider);
+  const searchMeta = providers.search.find((p) => p.id === form.search_provider);
+  const llmKeyOptional = llmMeta?.requires_api_key === false;
+  const searchKeyOptional = searchMeta?.requires_api_key === false;
+
+  return (
+    <div className="mx-auto max-w-2xl px-5 py-8">
+      <div className="mb-5 flex items-center gap-2.5">
+        <SettingsIcon className="h-5 w-5 text-brand-500" />
+        <div>
+          <h1 className="text-lg font-bold">设置</h1>
+          <p className="text-xs text-slate-400">
+            保存到 <code className="rounded bg-slate-100 px-1">{current.env_path}</code>
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4">
+          <ErrorBanner message={error} onRetry={load} />
+        </div>
+      )}
+      {notice && (
+        <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          {notice}
+        </div>
+      )}
+
+      {/* ---------------- 大模型 ---------------- */}
+      <Card className="mb-5 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-700">🤖 大模型</h2>
+          {current.llm_has_key || llmKeyOptional ? (
+            <Badge tone="teal">已配置</Badge>
+          ) : (
+            <Badge tone="amber">未配置</Badge>
+          )}
+        </div>
+
+        <div className="space-y-3.5">
+          <Field label="服务商">
+            <select
+              className={inputClass}
+              value={form.llm_provider}
+              onChange={(e) => setForm({ ...form, llm_provider: e.target.value })}
+            >
+              {providers.llm.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.requires_api_key ? "" : "（无需 Key）"}
+                </option>
+              ))}
+            </select>
+            {llmMeta && (
+              <Hint>
+                {llmMeta.note}
+                {llmMeta.docs_url && (
+                  <>
+                    {" · "}
+                    <a
+                      className="text-brand-600 underline"
+                      href={llmMeta.docs_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      官方文档 <ExternalLink className="inline h-3 w-3" />
+                    </a>
+                  </>
+                )}
+              </Hint>
+            )}
+          </Field>
+
+          <Field label="模型名称">
+            <input
+              className={inputClass}
+              value={form.llm_model}
+              onChange={(e) => setForm({ ...form, llm_model: e.target.value })}
+              placeholder="例如 deepseek-chat / qwen2.5:7b"
+            />
+          </Field>
+
+          <Field label="API Key">
+            <input
+              className={inputClass}
+              type="password"
+              value={llmKey}
+              onChange={(e) => setLlmKey(e.target.value)}
+              placeholder={
+                llmKeyOptional
+                  ? "本地模型无需填写"
+                  : current.llm_has_key
+                    ? "已保存（留空则不修改）"
+                    : "请填写你的 API Key"
+              }
+              disabled={llmKeyOptional}
+            />
+          </Field>
+
+          <Field label="接口地址">
+            <input
+              className={inputClass}
+              value={form.llm_base_url}
+              onChange={(e) => setForm({ ...form, llm_base_url: e.target.value })}
+              placeholder={llmMeta?.default_base_url ?? "留空则使用默认地址"}
+            />
+          </Field>
+
+          <TestRow
+            state={llmTest}
+            testing={testing === "llm"}
+            onTest={() => runTest("llm")}
+          />
+        </div>
+      </Card>
+
+      {/* ---------------- 检索 ---------------- */}
+      <Card className="mb-5 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-700">🔍 信息检索</h2>
+          {current.search_has_key || searchKeyOptional ? (
+            <Badge tone="teal">已配置</Badge>
+          ) : (
+            <Badge tone="amber">未配置</Badge>
+          )}
+        </div>
+
+        <div className="space-y-3.5">
+          <Field label="检索服务">
+            <select
+              className={inputClass}
+              value={form.search_provider}
+              onChange={(e) => setForm({ ...form, search_provider: e.target.value })}
+            >
+              {providers.search.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.requires_api_key ? "" : "（无需 Key）"}
+                </option>
+              ))}
+            </select>
+            {searchMeta && (
+              <Hint>
+                {searchMeta.note} · 额度与计费以{" "}
+                <a
+                  className="text-brand-600 underline"
+                  href={searchMeta.docs_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  官方文档
+                </a>{" "}
+                为准
+              </Hint>
+            )}
+          </Field>
+
+          {form.search_provider === "searxng" ? (
+            <Field label="SearXNG 地址">
+              <input
+                className={inputClass}
+                value={form.searxng_base_url}
+                onChange={(e) => setForm({ ...form, searxng_base_url: e.target.value })}
+                placeholder="http://localhost:8080"
+              />
+              <Hint>需要自行部署 SearXNG，并在其配置中开启 json 输出格式</Hint>
+            </Field>
+          ) : (
+            <Field label="API Key">
+              <input
+                className={inputClass}
+                type="password"
+                value={searchKey}
+                onChange={(e) => setSearchKey(e.target.value)}
+                placeholder={
+                  searchKeyOptional
+                    ? "当前服务无需填写"
+                    : current.search_has_key
+                      ? "已保存（留空则不修改）"
+                      : "请填写检索服务的 API Key"
+                }
+                disabled={searchKeyOptional}
+              />
+            </Field>
+          )}
+
+          <TestRow
+            state={searchTest}
+            testing={testing === "search"}
+            onTest={() => runTest("search")}
+          />
+        </div>
+      </Card>
+
+      {/* ---------------- 生成偏好 ---------------- */}
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-slate-700">📐 生成偏好</h2>
+        <Field label="默认详细度">
+          <select
+            className={inputClass}
+            value={form.default_detail_level}
+            onChange={(e) => setForm({ ...form, default_detail_level: e.target.value })}
+          >
+            {(Object.keys(DETAIL_LEVEL_LABELS) as DetailLevel[]).map((level) => (
+              <option key={level} value={level}>
+                {DETAIL_LEVEL_LABELS[level]}
+              </option>
+            ))}
+          </select>
+          <Hint>生成时仍可在对话页随时切换，切换会产生新版本而非覆盖</Hint>
+        </Field>
+      </Card>
+
+      <div className="flex items-center gap-3">
+        <Button variant="primary" size="lg" loading={saving} onClick={save}>
+          <Save className="h-4 w-4" />
+          保存设置
+        </Button>
+        <span className="text-xs text-slate-400">
+          大模型与检索配置需重启后端服务后生效
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const inputClass =
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1.5 sm:grid-cols-[110px_1fr] sm:items-start">
+      <span className="pt-2 text-xs font-medium text-slate-500">{label}</span>
+      <span className="block">{children}</span>
+    </label>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{children}</span>;
+}
+
+function TestRow({
+  state,
+  testing,
+  onTest,
+}: {
+  state: TestState;
+  testing: boolean;
+  onTest: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 sm:pl-[122px]">
+      <Button size="sm" loading={testing} onClick={onTest}>
+        <Plug className="h-3.5 w-3.5" />
+        测试连接
+      </Button>
+      {state && (
+        <span
+          className={`flex items-center gap-1 text-xs ${state.ok ? "text-teal-600" : "text-red-600"}`}
+        >
+          {state.ok ? (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          ) : (
+            <XCircle className="h-3.5 w-3.5" />
+          )}
+          {state.message}
+        </span>
+      )}
+    </div>
+  );
+}

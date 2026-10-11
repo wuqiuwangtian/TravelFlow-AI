@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Tailwind v4 采用 CSS-first 配置：主题变量直接写在这里。
+   刻意保持精简 —— 界面以清晰易用为先，不做花哨视觉。
+   ------------------------------------------------------------------ */
+@theme {
+  --color-brand-50: #f0f9ff;
+  --color-brand-100: #e0f2fe;
+  --color-brand-200: #bae6fd;
+  --color-brand-400: #38bdf8;
+  --color-brand-500: #0ea5e9;
+  --color-brand-600: #0284c7;
+  --color-brand-700: #0369a1;
+
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
+}
+
+/* 细滚动条，避免在窄栏里喧宾夺主 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 路书正文的 Markdown 排版（不引入 typography 插件，保持依赖精简） */
+.prose-report h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--color-brand-100);
+}
+
+.prose-report h2:first-child {
+  margin-top: 0;
+}
+
+.prose-report h3 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-brand-600);
+  margin: 1.1rem 0 0.4rem;
+}
+
+.prose-report p {
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: #334155;
+  margin-bottom: 0.6rem;
+}
+
+.prose-report ul,
+.prose-report ol {
+  font-size: 0.875rem;
+  color: #334155;
+  margin: 0 0 0.75rem 1.25rem;
+  list-style: revert;
+}
+
+.prose-report li {
+  margin-bottom: 0.25rem;
+}
+
+.prose-report a {
+  color: var(--color-brand-600);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-brand-200);
+  font-weight: 600;
+}
+
+.prose-report blockquote {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #f59e0b;
+  border-radius: 0.6rem;
+  padding: 0.7rem 1rem;
+  margin: 0.8rem 0;
+  color: #78350f;
+}
+
+.prose-report blockquote p {
+  color: #78350f;
+  margin: 0;
+}
+
+.prose-report table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin: 0.9rem 0;
+}
+
+.prose-report th {
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #e2e8f0;
+}
+
+.prose-report td {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.prose-report code {
+  background: #f1f5f9;
+  border-radius: 0.25rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.8rem;
+  color: #0f766e;
+}
+
+.prose-report hr {
+  border: none;
+  border-top: 1px dashed #e2e8f0;
+  margin: 1.2rem 0;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
+}
