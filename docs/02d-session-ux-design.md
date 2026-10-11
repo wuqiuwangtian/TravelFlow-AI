@@ -349,6 +349,10 @@ Prompt 中追加：
 
 ### 5.2 HTML：图文并茂 + 动画 ★
 
+> 🎨 **效果原型已产出** → [`docs/prototype/report-preview.html`](prototype/report-preview.html)
+> 用阶段①考古出的**真实路书数据**做的高保真预览，浏览器直接打开即可看到全部动画。
+> 实测：**21 KB 单文件、零外部依赖**、含打印样式与 `prefers-reduced-motion` 降级。
+
 **必须是单文件、离线可用**（内联全部 CSS/JS，不引用任何 CDN）。
 
 **视觉结构**：

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重庆 3 天 2 夜 · TravelFlow AI 路书（设计原型）</title>
+<style>
+/* ============================================================
+   TravelFlow AI · HTML 路书导出 —— 视觉设计原型
+   数据来源：docs/legacy-samples/ （旧系统真实产出，仅作演示）
+   单文件、零外部依赖、离线可用、打印友好
+   ============================================================ */
+
+:root{
+  --brand-1:#0ea5e9; --brand-2:#06b6d4; --brand-3:#14b8a6;
+  --warn:#f59e0b; --warn-bg:#fffbeb; --warn-line:#fcd34d;
+  --ink:#0f172a; --ink-2:#334155; --ink-3:#64748b;
+  --bg:#f6f9fc; --card:#ffffff; --line:#e2e8f0;
+  --radius:16px; --shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -8px rgba(15,23,42,.10);
+  --shadow-hover:0 2px 4px rgba(15,23,42,.05),0 16px 40px -12px rgba(15,23,42,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+  background:var(--bg); color:var(--ink); line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- 顶部滚动进度条 ---------- */
+.progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:99;
+  background:linear-gradient(90deg,var(--brand-1),var(--brand-2),var(--brand-3));
+  transition:width .1s linear}
+
+/* ---------- 封面 ---------- */
+.cover{
+  position:relative; overflow:hidden; color:#fff;
+  padding:88px 24px 72px; text-align:center;
+  background:linear-gradient(135deg,#0284c7 0%,#0891b2 45%,#0d9488 100%);
+}
+.cover::before,.cover::after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.5}
+.cover::before{width:380px;height:380px;background:#22d3ee;top:-140px;left:-90px;animation:float 9s ease-in-out infinite}
+.cover::after{width:320px;height:320px;background:#5eead4;bottom:-150px;right:-80px;animation:float 11s ease-in-out infinite reverse}
+@keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(24px,-18px)}}
+.cover-inner{position:relative;z-index:2}
+.cover .badge{display:inline-block;font-size:12px;letter-spacing:.12em;
+  background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);
+  padding:5px 14px;border-radius:999px;margin-bottom:20px;backdrop-filter:blur(6px)}
+.cover h1{font-size:clamp(28px,5vw,44px);font-weight:800;letter-spacing:-.02em;
+  text-shadow:0 2px 20px rgba(0,0,0,.15);animation:riseIn .9s cubic-bezier(.2,.8,.2,1) both}
+.cover .sub{margin-top:10px;font-size:15px;opacity:.9;animation:riseIn .9s .12s cubic-bezier(.2,.8,.2,1) both}
+.chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:26px;
+  animation:riseIn .9s .24s cubic-bezier(.2,.8,.2,1) both}
+.chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+  padding:7px 16px;border-radius:999px;font-size:13.5px;font-weight:500;backdrop-filter:blur(6px)}
+.cover .stamp{margin-top:24px;font-size:12.5px;opacity:.75;
+  animation:riseIn .9s .36s cubic-bezier(.2,.8,.2,1) both}
+@keyframes riseIn{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---------- 布局 ---------- */
+main{max-width:860px;margin:0 auto;padding:0 20px 80px}
+section{margin-top:56px}
+.sec-head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.sec-num{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+  font-weight:800;font-size:15px;color:#fff;
+  background:linear-gradient(135deg,var(--brand-1),var(--brand-3));
+  box-shadow:0 4px 12px -3px rgba(14,165,233,.5)}
+.sec-head h2{font-size:21px;font-weight:750;letter-spacing:-.01em}
+
+/* ---------- 滚动淡入 ---------- */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .65s cubic-bezier(.2,.8,.2,1),transform .65s cubic-bezier(.2,.8,.2,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- 总览卡片 ---------- */
+.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.ov-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s}
+.ov-card:hover{transform:translateY(-5px);box-shadow:var(--shadow-hover)}
+.ov-card .day{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--brand-1)}
+.ov-card h3{font-size:16.5px;margin:8px 0 12px;font-weight:700}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;color:var(--ink-2);background:#f1f5f9;border-radius:6px;padding:3px 9px}
+
+/* ---------- 时间轴 ---------- */
+.tl{position:relative;padding-left:30px}
+.tl::before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:2px;
+  background:linear-gradient(180deg,var(--brand-1),var(--brand-3));opacity:.28;border-radius:2px}
+.tl-day{margin-bottom:34px}
+.tl-day-title{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-weight:750;font-size:16.5px}
+.tl-day-title .dot{position:absolute;left:3px;width:14px;height:14px;border-radius:50%;
+  background:#fff;border:3px solid var(--brand-1);box-shadow:0 0 0 4px rgba(14,165,233,.12)}
+.tl-item{position:relative;margin-bottom:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);
+  opacity:0;transform:translateX(-14px);
+  transition:opacity .5s cubic-bezier(.2,.8,.2,1),transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.tl-item.in{opacity:1;transform:none}
+.tl-item:hover{box-shadow:var(--shadow-hover)}
+.tl-item::before{content:"";position:absolute;left:-24px;top:20px;width:9px;height:9px;border-radius:50%;
+  background:var(--brand-2);box-shadow:0 0 0 3px rgba(6,182,212,.15)}
+.tl-time{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--brand-3);text-transform:uppercase}
+.tl-item p{font-size:14.5px;color:var(--ink-2);margin-top:5px}
+cite{font-style:normal;font-size:11.5px;color:var(--brand-1);font-weight:700;
+  background:rgba(14,165,233,.08);border-radius:5px;padding:1px 5px;margin-left:3px;cursor:help}
+
+/* ---------- 费用图表 ---------- */
+.cost-table{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow)}
+.cost-row{display:grid;grid-template-columns:110px 1fr;gap:14px;align-items:center;margin-bottom:13px}
+.cost-label{font-size:13.5px;color:var(--ink-2);font-weight:500}
+.bar-wrap{display:flex;flex-direction:column;gap:5px}
+.bar{height:11px;border-radius:6px;width:0;transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.bar.eco{background:linear-gradient(90deg,#38bdf8,#0ea5e9)}
+.bar.com{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.bar-val{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.total{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);
+  display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px}
+.total .num{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;
+  background:linear-gradient(135deg,var(--brand-1),var(--brand-3));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.total .hint{font-size:13px;color:var(--ink-3)}
+.legend{display:flex;gap:16px;margin-bottom:14px;font-size:12.5px;color:var(--ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+
+/* ---------- 避雷卡片 ---------- */
+.tips{display:grid;gap:12px}
+.tip{background:var(--warn-bg);border:1px solid var(--warn-line);border-left:4px solid var(--warn);
+  border-radius:12px;padding:14px 18px;box-shadow:0 2px 10px -4px rgba(245,158,11,.25)}
+.tip h4{font-size:14px;color:#92400e;display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.tip p{font-size:14px;color:#78350f}
+
+/* ---------- 参考资料 ---------- */
+.refs{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;box-shadow:var(--shadow)}
+.refs ol{list-style:none;counter-reset:r}
+.refs li{counter-increment:r;position:relative;padding-left:34px;margin-bottom:11px;font-size:13.5px}
+.refs li::before{content:"["counter(r)"]";position:absolute;left:0;top:1px;font-size:11.5px;font-weight:800;
+  color:var(--brand-1);background:rgba(14,165,233,.08);border-radius:5px;padding:1px 6px}
+.refs a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line);transition:.2s}
+.refs a:hover{color:var(--brand-1);border-color:var(--brand-1)}
+.refs .meta{display:block;font-size:11.5px;color:#94a3b8;margin-top:3px}
+
+footer{text-align:center;padding:40px 20px 60px;color:#94a3b8;font-size:12.5px}
+footer strong{color:var(--brand-1)}
+
+/* ---------- 原型标注（非产品功能） ---------- */
+.demo-note{max-width:860px;margin:22px auto 0;padding:12px 18px;border-radius:10px;
+  background:#eff6ff;border:1px dashed #93c5fd;color:#1e40af;font-size:12.5px;line-height:1.7}
+
+/* ---------- 打印友好：关闭动画、展开全部 ---------- */
+@media print{
+  .progress,.demo-note{display:none!important}
+  body{background:#fff}
+  .cover{padding:36px 20px 30px;background:#0891b2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::before,.cover::after{display:none}
+  .reveal,.tl-item{opacity:1!important;transform:none!important}
+  .bar{transition:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .ov-card,.tl-item,.cost-table,.refs,.tip{box-shadow:none;break-inside:avoid}
+  section{margin-top:26px}
+  main{padding-bottom:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal,.tl-item{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<header class="cover">
+  <div class="cover-inner">
+    <span class="badge">✈️ TravelFlow AI · 旅行路书</span>
+    <h1>重庆 3 天 2 夜</h1>
+    <p class="sub">山城魔幻都市 · 渝中半岛精华环线</p>
+    <div class="chips">
+      <span class="chip">💰 预算 ¥2000</span>
+      <span class="chip">📅 3 天</span>
+      <span class="chip">📐 标准档</span>
+      <span class="chip">🚄 北京出发</span>
+    </div>
+    <p class="stamp">信息检索时间：2026-10-11 15:32 · 共引用 6 个来源</p>
+  </div>
+</header>
+
+<div class="demo-note">
+  <strong>设计原型说明</strong>：本页面是「HTML 导出」的<b>视觉与交互效果预览</b>，数据取自阶段①从 git 历史还原的旧系统真实产出。
+  正式实现将由 Jinja2 模板渲染，同样是<b>单文件、零外部依赖、离线可用</b>，并支持浏览器打印为 PDF。
+</div>
+
+<main>
+
+  <!-- ① 行程总览 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">1</div><h2>行程总览</h2></div>
+    <div class="overview">
+      <div class="ov-card">
+        <div class="day">DAY 1</div>
+        <h3>渝中半岛核心区</h3>
+        <div class="tags"><span class="tag">解放碑</span><span class="tag">三峡博物馆</span><span class="tag">李子坝</span><span class="tag">洪崖洞夜景</span></div>
+      </div>
+      <div class="ov-card">
+        <div class="day">DAY 2</div>
+        <h3>文艺怀旧与江城夜景</h3>
+        <div class="tags"><span class="tag">磁器口</span><span class="tag">山城步道</span><span class="tag">长江索道</span><span class="tag">南山一棵树</span></div>
+      </div>
+      <div class="ov-card">
+        <div class="day">DAY 3</div>
+        <h3>艺术涂鸦与离别</h3>
+        <div class="tags"><span class="tag">黄桷坪</span><span class="tag">涂鸦一条街</span><span class="tag">交通茶馆</span><span class="tag">动物园</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 每日行程 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">2</div><h2>每日详细行程</h2></div>
+    <div class="tl">
+
+      <div class="tl-day">
+        <div class="tl-day-title"><span class="dot"></span>第 1 天 · 魔幻都市初体验</div>
+        <div class="tl-item"><div class="tl-time">上午</div>
+          <p>抵达重庆，入住酒店后前往<b>解放碑</b>商圈，在<b>八一好吃街</b>解决午餐（酸辣粉、山城小汤圆）。<cite title="来源 1">[1]</cite></p></div>
+        <div class="tl-item"><div class="tl-time">下午</div>
+          <p>步行至<b>重庆中国三峡博物馆</b>（免费），对面即<b>重庆市人民大礼堂</b>（门票 8 元）。随后乘轨道 2 号线到<b>李子坝站</b>体验「轻轨穿楼」。<cite title="来源 1">[1]</cite></p></div>
+        <div class="tl-item"><div class="tl-time">晚上</div>
+          <p>前往<b>洪崖洞</b>观赏吊脚楼夜景，亮灯时间通常 18:00–23:00。最佳拍摄点在千厮门大桥或对岸。<cite title="来源 3">[3]</cite></p></div>
+      </div>
+
+      <div class="tl-day">
+        <div class="tl-day-title"><span class="dot"></span>第 2 天 · 文艺怀旧与江城夜景</div>
+        <div class="tl-item"><div class="tl-time">上午</div>
+          <p>轨道 1 号线至<b>磁器口古镇</b>，感受老重庆码头文化，品尝陈麻花。主街较商业化，可探索旁边小巷。<cite title="来源 1">[1]</cite></p></div>
+        <div class="tl-item"><div class="tl-time">下午</div>
+          <p>返回市区走<b>山城步道（第三步道）</b>，再步行至<b>十八梯传统风貌区</b>，适合拍照。随后乘<b>长江索道</b>过江 —— 建议从<b>南站（上新街站）</b>上车，排队远少于北站。<cite title="来源 4">[4]</cite></p></div>
+        <div class="tl-item"><div class="tl-time">晚上</div>
+          <p>步行至<b>龙门浩老街</b>观景用餐，之后前往<b>南山一棵树观景台</b>（门票约 30 元）俯瞰渝中半岛夜景。<cite title="来源 1">[1]</cite></p></div>
+      </div>
+
+      <div class="tl-day">
+        <div class="tl-day-title"><span class="dot"></span>第 3 天 · 艺术涂鸦与离别</div>
+        <div class="tl-item"><div class="tl-time">上午</div>
+          <p>轨道 2 号线至杨家坪换乘，前往<b>黄桷坪</b>参观<b>四川美术学院</b>及<b>涂鸦一条街</b>，在<b>交通茶馆</b>体验市井生活。<cite title="来源 1">[1]</cite></p></div>
+        <div class="tl-item"><div class="tl-time">下午</div>
+          <p>视返程时间可选<b>重庆动物园</b>（门票 25 元）看大熊猫，随后整理行李前往车站 / 机场。<cite title="来源 2">[2]</cite></p></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ③ 费用预估 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">3</div><h2>费用预估（人均）</h2></div>
+    <div class="cost-table">
+      <div class="legend">
+        <span><i style="background:#0ea5e9"></i>经济型</span>
+        <span><i style="background:#f59e0b"></i>舒适型</span>
+      </div>
+      <div class="cost-row"><div class="cost-label">往返大交通</div>
+        <div class="bar-wrap">
+          <div class="bar eco" data-w="62%" data-val="500 元"></div>
+          <div class="bar com" data-w="100%" data-val="800 元"></div>
+        </div></div>
+      <div class="cost-row"><div class="cost-label">住宿（2 晚）</div>
+        <div class="bar-wrap">
+          <div class="bar eco" data-w="58%" data-val="350 元"></div>
+          <div class="bar com" data-w="100%" data-val="600 元"></div>
+        </div></div>
+      <div class="cost-row"><div class="cost-label">餐饮（3 天）</div>
+        <div class="bar-wrap">
+          <div class="bar eco" data-w="60%" data-val="300 元"></div>
+          <div class="bar com" data-w="100%" data-val="500 元"></div>
+        </div></div>
+      <div class="cost-row"><div class="cost-label">门票与市内交通</div>
+        <div class="bar-wrap">
+          <div class="bar eco" data-w="60%" data-val="150 元"></div>
+          <div class="bar com" data-w="100%" data-val="250 元"></div>
+        </div></div>
+      <div class="cost-row"><div class="cost-label">纪念品 / 其他</div>
+        <div class="bar-wrap">
+          <div class="bar eco" data-w="50%" data-val="100 元"></div>
+          <div class="bar com" data-w="100%" data-val="200 元"></div>
+        </div></div>
+      <div class="total">
+        <div>
+          <div class="hint">经济型总计</div>
+          <div class="num" data-count="1400">¥0</div>
+        </div>
+        <div>
+          <div class="hint">舒适型总计</div>
+          <div class="num" data-count="2350">¥0</div>
+        </div>
+        <div class="hint">✅ 2000 元预算选经济型可达成</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 避雷贴士 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">4</div><h2>避雷与实用贴士</h2></div>
+    <div class="tips">
+      <div class="tip"><h4>⚠️ 拒绝「金西梅」</h4>
+        <p>洪崖洞、磁器口等景区路边颜色鲜艳的「金西梅」是色素腌制品，不好吃也不健康，不要购买。<cite title="来源 5">[5]</cite></p></div>
+      <div class="tip"><h4>⚠️ 导航会失灵</h4>
+        <p>渝中区老巷子、立体交通处手机导航常不准，<b>多问本地人</b>是最佳选择。<cite title="来源 5">[5]</cite></p></div>
+      <div class="tip"><h4>⚠️ 不要挑战「特辣」</h4>
+        <p>本地人也多选中辣，微辣或鸳鸯锅是稳妥之选。选火锅店不必执着网红店，本地人多的「苍蝇馆子」往往更地道。<cite title="来源 6">[6]</cite></p></div>
+      <div class="tip"><h4>⚠️ 务必穿舒服的鞋</h4>
+        <p>渝中半岛上下坡多，平底舒适鞋是刚需。</p></div>
+    </div>
+  </section>
+
+  <!-- ⑤ 参考资料 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">5</div><h2>参考资料</h2></div>
+    <div class="refs">
+      <ol>
+        <li><a href="#" onclick="return false">重庆市内十大必去旅游景点游玩攻略</a>
+          <span class="meta">m.cq.bendibao.com · 抓取于 2026-10-11 15:31</span></li>
+        <li><a href="#" onclick="return false">重庆动物园门票与开放信息</a>
+          <span class="meta">m.cq.bendibao.com · 抓取于 2026-10-11 15:31</span></li>
+        <li><a href="#" onclick="return false">洪崖洞开关灯时间公告</a>
+          <span class="meta">cqrb.cn（重庆日报）· 抓取于 2026-10-11 15:31</span></li>
+        <li><a href="#" onclick="return false">长江索道游玩攻略</a>
+          <span class="meta">检索结果 · 抓取于 2026-10-11 15:31</span></li>
+        <li><a href="#" onclick="return false">关于整治景区「哈儿果」乱象的建议</a>
+          <span class="meta">cqwz.cqnews.net（重庆网络问政）· 抓取于 2026-10-11 15:31</span></li>
+        <li><a href="#" onclick="return false">2026 重庆旅游攻略 · 本地人避坑</a>
+          <span class="meta">检索结果 · 抓取于 2026-10-11 15:31</span></li>
+      </ol>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Generated by <strong>TravelFlow AI</strong> · 信息检索于 2026-10-11 15:32 ·
+  所有引用链接均由系统从检索结果直接透传，未经大模型改写
+</footer>
+
+<script>
+/* ---------- 顶部滚动进度条 ---------- */
+var bar = document.getElementById('progress');
+function onScroll(){
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+}
+window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+/* ---------- 滚动淡入 + 时间轴逐项点亮 ---------- */
+var io = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(!e.isIntersecting) return;
+    e.target.classList.add('in');
+    io.unobserve(e.target);
+  });
+},{threshold:.15, rootMargin:'0px 0px -40px 0px'});
+
+document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+
+// 时间轴节点依次错峰点亮
+document.querySelectorAll('.tl-day').forEach(function(day, di){
+  day.querySelectorAll('.tl-item').forEach(function(item, i){
+    var ob = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if(!e.isIntersecting) return;
+        setTimeout(function(){ item.classList.add('in'); }, i * 110);
+        ob.unobserve(item);
+      });
+    },{threshold:.2});
+    ob.observe(item);
+  });
+});
+
+/* ---------- 费用条形图 + 数字滚动 ---------- */
+function animateCount(el){
+  var target = parseInt(el.getAttribute('data-count'), 10);
+  var start = performance.now(), dur = 1100;
+  function tick(now){
+    var p = Math.min((now - start) / dur, 1);
+    var eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = '¥' + Math.round(target * eased).toLocaleString('zh-CN');
+    if(p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+var costIO = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(!e.isIntersecting) return;
+    var sec = e.target;
+    sec.querySelectorAll('.bar').forEach(function(b, i){
+      setTimeout(function(){
+        b.style.width = b.getAttribute('data-w');
+        if(b.getAttribute('data-val')){
+          var v = document.createElement('div');
+          v.className = 'bar-val'; v.textContent = b.getAttribute('data-val');
+          b.parentNode.appendChild(v);
+        }
+      }, i * 90);
+    });
+    sec.querySelectorAll('.num[data-count]').forEach(function(n, i){
+      setTimeout(function(){ animateCount(n); }, 300 + i * 160);
+    });
+    costIO.unobserve(sec);
+  });
+},{threshold:.25});
+var costSec = document.querySelector('.cost-table');
+if(costSec) costIO.observe(costSec);
+</script>
+</body>
+</html>
