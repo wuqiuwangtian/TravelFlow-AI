@@ -14,7 +14,7 @@
 | :--- | :--- | :--- | :--- |
 | **①** | **默认检索 Provider** | 默认 **Tavily**（你已有 key，旧项目验证有效），同时内置 4 个可切换 Provider | 决定「小白开箱即用」的成本 |
 | **②** | **TypeScript 版本** | 锁 **TS 5.9.x**（成熟）；TS 7.0.2 作为实验项在阶段③验证 | TS 7 是 Go 重写的全新实现，生态工具链可能未跟上 |
-| **③** | **会话状态方案** | LangGraph 内置 **SQLite Checkpointer** | 同时解决持久化、并发、断点续聊 |
+| **③** | **会话状态方案** | LangGraph 内置 **SQLite Checkpointer** | 同时解决持久化、并发、断点续聊。**已实测可行**（18.V2） |
 
 其余全部可按本文档执行。
 
@@ -603,7 +603,7 @@ docker compose up -d
 | :--- | :--- | :--- |
 | 单元测试 | pytest + pytest-asyncio | 每个节点、每个 Provider、导出渲染、配置校验 |
 | Mock 策略 | respx（HTTP）+ 假 LLM Provider | **不消耗真实 API 额度** |
-| 编排测试 | LangGraph `stream()` 断言节点序列 | **回归旧项目 P0-1**：第 2 轮"确认"必须进 refiner |
+| 编排测试 | LangGraph `stream()` 断言节点序列（**不可用静态图渲染判断可达性**，见 18.V1） | **回归旧项目 P0-1**：第 2 轮"确认"必须进 refiner |
 | 并发测试 | asyncio + httpx | 回归旧项目 P1-1：3 并发不得串行 |
 | 基线回归 | 旧项目 3 份路书（`docs/legacy-samples/`） | 结构完整性快照对比 |
 | 前端测试 | Vitest + Playwright | 三栏渲染、导出下载、错误提示 |
@@ -649,7 +649,7 @@ docker compose up -d
 | :--- | :--- | :--- | :--- |
 | **①** | 默认检索 Provider | A. Tavily（你已有 key）<br>B. 百度千帆（国内免费 100/天）<br>C. DuckDuckGo（零配置无需 key）<br>D. 博查（¥36/1000） | **A**，并把 B/C/D 作为可切换项写进 README |
 | **②** | TypeScript 版本 | A. 5.9.x（成熟）<br>B. 7.0.2（最新，Go 重写版） | **A**；B 在阶段③做兼容性实验 |
-| **③** | 会话状态方案 | A. LangGraph SQLite Checkpointer<br>B. 自管 SQLite 表 + 显式入口路由 | **A**，代码更少且原生支持断点续聊 |
+| **③** | 会话状态方案 | A. LangGraph SQLite Checkpointer<br>B. 自管 SQLite 表 + 显式入口路由 | **A**，代码更少且原生支持断点续聊。**已实测验证可行**（见 18.V2） |
 
 ### 需要你确认的理解（是否有偏差）
 
@@ -663,6 +663,63 @@ docker compose up -d
 
 ---
 
+## 18. 技术可行性验证（阶段②实测记录）
+
+规划定稿前，对方案中**最关键的机制**做了实机验证。**4 项全部通过**，方案无阻塞。
+
+### V1. 显式入口路由 —— 修复 P0-1 的核心机制 ✅
+
+**验证目标**：能否让 LangGraph 按会话状态决定进入哪个节点，替代旧项目固定的 `START → collector`。
+
+**方法**：把条件边挂在 `START` 上 —— `g.add_conditional_edges(START, route_entry, {...})`
+
+**实测结果**：
+
+| 入口 `status` | 实际执行链 |
+| :--- | :--- |
+| `collecting` | `collector → planner` |
+| `planning` | `planner` |
+| **`reviewing`** | **`refiner`** ✅ |
+
+→ 旧项目「第 2 轮用户说"确认"仍走 collector」的缺陷，在新机制下**彻底解决**。
+
+> **附带印证**：`draw_mermaid()` **不渲染条件边**（只画普通边），这与阶段①在旧项目上观察到的现象完全一致 —— 属框架渲染特性，**不代表图结构损坏**。因此判断可达性**必须用运行时 `stream()`**，不能只看静态图渲染。这条经验已写入第 14 章测试策略。
+
+### V2. SQLite Checkpointer —— 持久化与断点续聊 ✅
+
+| 验证项 | 结果 |
+| :--- | :--- |
+| `SqliteSaver` 导入 | ✅ |
+| `AsyncSqliteSaver`（后端全异步需要它） | ✅ |
+| 写入后读取同一 thread 状态 | ✅ |
+| **重新建立连接（模拟进程重启）后读取** | ✅ 状态未丢失 |
+
+→ 会话持久化、断点续聊、重启不丢，均确认可实现。
+
+### V3. `with_structured_output` —— 根除 KeyError ✅
+
+`ChatOpenAI(...).with_structured_output(PydanticModel)` 可用（返回 `RunnableSequence`）。
+
+→ 旧项目 `data["status"]` 直接下标导致 500 的问题，在 schema 约束下**从机制上不可能再发生**。
+
+### V4. 各检索 Provider 的 SDK 可用性（PyPI 实测）
+
+| Provider | 包 | 版本 | 实现方式 |
+| :--- | :--- | :--- | :--- |
+| Tavily | `tavily-python` | 0.8.5 | 官方 SDK |
+| DuckDuckGo | `ddgs` | 9.16.0 | 官方 SDK（`duckduckgo-search` 已更名） |
+| 百度千帆 | `qianfan` | 0.4.12.3 | 官方 SDK |
+| 博查 Bocha | **无官方包** | — | 用 `httpx` 直接调 REST API（≈50 行） |
+| SearXNG | **无需 SDK** | — | 自建服务，`httpx` 调 JSON API |
+
+→ 印证第 7 章判断：**Provider 抽象层是必要的**，且每个实现的成本确实可控。
+
+### 验证环境
+
+Python 3.13.13（并在 3.11.15 复现）· LangGraph 1.2.14 · langgraph-checkpoint-sqlite 3.1.1 · langchain-openai 1.7.0
+
+---
+
 ## 附：本规划的制定依据
 
 | 依据 | 来源 |
@@ -672,3 +729,4 @@ docker compose up -d
 | 依赖版本、环境约束 | `docs/01b-decision-inputs.md` |
 | 检索方案价格调研 | [搜索 API 价格汇总](https://hebangwen.github.io/2026/03/04/search-api-summary/)、[Tavily 计价文档](https://docs.tavily.com/documentation/api-credits)、[Ollama OpenAI 兼容](https://docs.ollama.com/api/openai-compatibility) |
 | Python 3.13 可行性 | 阶段②实测（`uv` 建 3.13.13 环境装 LangGraph 1.2.14 成功） |
+| 显式入口路由 / Checkpointer / 结构化输出 / 检索 SDK | 阶段②实测，见第 18 章 |
