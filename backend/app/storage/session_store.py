@@ -78,6 +78,18 @@ class SessionStore:
         rows = await cursor.fetchall()
         return [self._to_session(row) for row in rows]
 
+    async def count_sessions(self, *, archived: bool = False, query: str | None = None) -> int:
+        """会话总数（用于分页的 total，注意不是「本页数量」）。"""
+        sql = ["SELECT COUNT(*) FROM sessions WHERE archived = ?"]
+        params: list[object] = [1 if archived else 0]
+        if query:
+            sql.append("AND title LIKE ?")
+            params.append(f"%{query}%")
+
+        cursor = await self._conn.execute(" ".join(sql), params)
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
     async def get_session(self, session_id: str) -> SessionInfo | None:
         cursor = await self._conn.execute(
             "SELECT s.*, "

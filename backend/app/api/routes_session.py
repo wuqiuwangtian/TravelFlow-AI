@@ -39,7 +39,9 @@ async def list_sessions(
     items = await store.list_sessions(
         archived=archived, query=q, limit=page_size, offset=(page - 1) * page_size
     )
-    return SessionListResponse(items=items, total=len(items))
+    # total 必须是「总数」而不是本页数量，否则前端分页会算错
+    total = await store.count_sessions(archived=archived, query=q)
+    return SessionListResponse(items=items, total=total)
 
 
 @router.post("/sessions", response_model=SessionDetailResponse, summary="新建会话")
