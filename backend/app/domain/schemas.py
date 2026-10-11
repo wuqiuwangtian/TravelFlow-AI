@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.domain.enums import DetailLevel
+from app.domain.models import BranchInfo, SessionInfo, VersionInfo
+
 
 # ---------------------------------------------------------------- 系统
 class HealthResponse(BaseModel):
@@ -74,3 +77,62 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+# ---------------------------------------------------------------- 会话 / 分支 / 版本
+class CreateSessionRequest(BaseModel):
+    title: str = Field(default="新的旅行", min_length=1, max_length=100)
+
+
+class UpdateSessionRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    archived: bool | None = None
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionInfo]
+    total: int
+
+
+class SessionDetailResponse(BaseModel):
+    session: SessionInfo
+    branches: list[BranchInfo]
+    versions: dict[str, list[VersionInfo]] = Field(default_factory=dict)
+
+
+class CreateBranchRequest(BaseModel):
+    """从某个版本分叉。
+
+    - 只填 ``parent_branch_id`` 表示从该分支最新状态分叉；
+    - 填 ``fork_version_id`` 表示从指定历史版本分叉（「回到初版」场景）。
+    """
+
+    title: str = Field(default="新分支", min_length=1, max_length=50)
+    parent_branch_id: str | None = None
+    fork_version_id: str | None = None
+
+
+class BranchListResponse(BaseModel):
+    items: list[BranchInfo]
+
+
+class VersionListResponse(BaseModel):
+    items: list[VersionInfo]
+
+
+# ---------------------------------------------------------------- 对话
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000, description="用户消息")
+    session_id: str = Field(min_length=1)
+    branch_id: str | None = Field(default=None, description="不传则使用会话主分支")
+    detail_level: DetailLevel | None = Field(default=None, description="本次生成的详细度档位")
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    branch_id: str
+    version_id: str | None = None
+    status: str
+    reply: str
+    plan: str = ""
+    missing_fields: list[str] = Field(default_factory=list)

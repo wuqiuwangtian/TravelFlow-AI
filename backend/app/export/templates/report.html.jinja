@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }} · TravelFlow AI</title>
+<style>
+:root{
+  --b1:#0ea5e9;--b2:#06b6d4;--b3:#14b8a6;
+  --warn:#f59e0b;--warn-bg:#fffbeb;--warn-line:#fcd34d;
+  --ink:#0f172a;--ink2:#334155;--ink3:#64748b;
+  --bg:#f6f9fc;--card:#fff;--line:#e2e8f0;
+  --r:16px;--sh:0 1px 2px rgba(15,23,42,.04),0 8px 24px -8px rgba(15,23,42,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);line-height:1.75;-webkit-font-smoothing:antialiased}
+
+/* 顶部进度条 */
+.progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:99;
+  background:linear-gradient(90deg,var(--b1),var(--b2),var(--b3));transition:width .1s linear}
+
+/* 封面 */
+.cover{position:relative;overflow:hidden;color:#fff;padding:72px 24px 58px;text-align:center;
+  background:linear-gradient(135deg,#0284c7 0%,#0891b2 45%,#0d9488 100%)}
+.cover::after{content:"";position:absolute;width:340px;height:340px;border-radius:50%;
+  background:rgba(94,234,212,.35);filter:blur(70px);top:-130px;right:-70px}
+.cover-in{position:relative;z-index:2}
+.cover .badge{display:inline-block;font-size:12px;letter-spacing:.1em;background:rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.3);padding:5px 14px;border-radius:999px;margin-bottom:18px}
+.cover h1{font-size:clamp(26px,4.6vw,40px);font-weight:800;letter-spacing:-.02em;
+  text-shadow:0 2px 18px rgba(0,0,0,.15)}
+.cover .meta{margin-top:14px;font-size:13.5px;opacity:.9}
+.cover .warn{margin-top:18px;display:inline-block;font-size:12.5px;opacity:.92;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);
+  border-radius:10px;padding:8px 16px;max-width:640px;text-align:left}
+
+/* 布局 */
+main{max-width:860px;margin:0 auto;padding:0 20px 70px}
+section{margin-top:46px}
+.sec-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.sec-head h2{font-size:19px;font-weight:750;letter-spacing:-.01em}
+.sec-head .bar{width:4px;height:22px;border-radius:3px;
+  background:linear-gradient(180deg,var(--b1),var(--b3))}
+
+/* 滚动淡入 */
+.reveal{opacity:0;transform:translateY(22px);
+  transition:opacity .6s cubic-bezier(.2,.8,.2,1),transform .6s cubic-bezier(.2,.8,.2,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* 正文（Markdown 渲染结果） */
+.doc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 28px;box-shadow:var(--sh)}
+.doc h2{font-size:18px;font-weight:750;margin:26px 0 12px;padding-bottom:8px;
+  border-bottom:2px solid #e0f2fe}
+.doc h2:first-child{margin-top:0}
+.doc h3{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:var(--b1)}
+.doc p{font-size:14.5px;color:var(--ink2);margin-bottom:10px}
+.doc ul,.doc ol{margin:0 0 12px 22px;font-size:14.5px;color:var(--ink2)}
+.doc li{margin-bottom:5px}
+.doc a{color:var(--b1);text-decoration:none;border-bottom:1px solid #bae6fd;font-weight:600}
+.doc a:hover{border-color:var(--b1)}
+.doc blockquote{background:var(--warn-bg);border:1px solid var(--warn-line);
+  border-left:4px solid var(--warn);border-radius:12px;padding:13px 18px;margin:14px 0;
+  color:#78350f;font-size:14px}
+.doc blockquote p{color:#78350f;margin:0}
+.doc table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+.doc th{background:#f0f9ff;color:#075985;font-weight:700;text-align:left;
+  padding:9px 12px;border:1px solid var(--line)}
+.doc td{padding:9px 12px;border:1px solid var(--line);color:var(--ink2)}
+.doc tr:nth-child(even) td{background:#fafcff}
+.doc code{background:#f1f5f9;border-radius:5px;padding:1px 6px;font-size:13px;color:#0f766e}
+.doc hr{border:none;border-top:1px dashed var(--line);margin:22px 0}
+
+/* 办理与验证 */
+.todos{display:grid;gap:12px}
+.todo{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:16px 18px;box-shadow:var(--sh);display:grid;grid-template-columns:44px 1fr;gap:14px}
+.todo .ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(135deg,#e0f2fe,#ccfbf1)}
+.todo h4{font-size:14.5px;font-weight:700;margin-bottom:3px}
+.todo .when{font-size:12.5px;color:var(--ink3);margin-bottom:8px}
+.official{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.official .lb{font-size:12px;color:var(--ink3)}
+.official a,.official .ch{font-size:12.5px;text-decoration:none;border-radius:7px;padding:4px 11px;
+  background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;font-weight:600;display:inline-block}
+.official a:hover{background:var(--b1);border-color:var(--b1);color:#fff}
+.official .ch{background:#f0fdfa;border-color:#99f6e4;color:#0f766e}
+.official .nt{font-size:11.5px;color:#94a3b8;flex-basis:100%;margin-top:3px}
+
+/* 参考资料 */
+.refs{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px 22px;box-shadow:var(--sh)}
+.refs ol{list-style:none;counter-reset:r}
+.refs li{counter-increment:r;position:relative;padding-left:34px;margin-bottom:12px;font-size:13.5px}
+.refs li::before{content:"["counter(r)"]";position:absolute;left:0;top:1px;font-size:11.5px;
+  font-weight:800;color:var(--b1);background:rgba(14,165,233,.08);border-radius:5px;padding:1px 6px}
+.refs a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line)}
+.refs a:hover{color:var(--b1);border-color:var(--b1)}
+.refs .m{display:block;font-size:11.5px;color:#94a3b8;margin-top:3px}
+
+/* 免责 */
+.disclaimer{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;
+  padding:16px 20px;display:flex;gap:13px;align-items:flex-start}
+.disclaimer .di{font-size:20px;flex:none}
+.disclaimer p{font-size:13px;color:#9a3412;line-height:1.75}
+.disclaimer b{color:#7c2d12}
+
+footer{text-align:center;padding:34px 20px 56px;color:#94a3b8;font-size:12.5px}
+
+@media print{
+  .progress{display:none!important}
+  body{background:#fff}
+  .cover{padding:32px 18px 26px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::after{display:none}
+  .reveal{opacity:1!important;transform:none!important}
+  .doc,.todo,.refs,.disclaimer{box-shadow:none;break-inside:avoid}
+  section{margin-top:22px}
+  main{padding-bottom:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  .reveal{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<header class="cover">
+  <div class="cover-in">
+    <span class="badge">✈️ TravelFlow AI · 旅行路书</span>
+    <h1>{{ title }}</h1>
+    <div class="meta">信息检索时间：{{ searched_at_text }} · 共 {{ citations|length }} 个来源</div>
+    <div class="warn">⚠️ 本路书由 AI 生成，仅供参考 · 出行前请通过官方渠道核实</div>
+  </div>
+</header>
+
+<main>
+  <section class="reveal">
+    <div class="doc">{{ body_html|safe }}</div>
+  </section>
+
+  {% if todos %}
+  <section class="reveal">
+    <div class="sec-head"><span class="bar"></span><h2>需要提前办理的事项</h2></div>
+    <div class="todos">
+      {% for item in todos %}
+      <div class="todo">
+        <div class="ico">
+          {%- if item.channel.kind == 'railway' -%}🚄
+          {%- elif item.channel.kind == 'flight' -%}✈️
+          {%- elif item.channel.kind == 'ticket' -%}🎫
+          {%- elif item.channel.kind == 'reservation' -%}📅
+          {%- elif item.channel.kind == 'hotel' -%}🏨
+          {%- else -%}📌{%- endif -%}
+        </div>
+        <div>
+          <h4>{{ item.what }}</h4>
+          {% if item.when %}<div class="when">{{ item.when }}</div>{% endif %}
+          <div class="official">
+            <span class="lb">官方渠道：{{ item.channel.label }}</span>
+            {% if item.channel.url %}<a href="{{ item.channel.url }}" target="_blank" rel="noopener">{{ item.channel.url }}</a>{% endif %}
+            {% if item.channel.app %}<span class="ch">{{ item.channel.app }} App</span>{% endif %}
+            {% if item.channel.miniprogram %}<span class="ch">微信小程序「{{ item.channel.miniprogram }}」</span>{% endif %}
+            {% if item.note %}<span class="nt">{{ item.note }}</span>{% endif %}
+            {% if item.channel.note %}<span class="nt">{{ item.channel.note }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if citations %}
+  <section class="reveal">
+    <div class="sec-head"><span class="bar"></span><h2>参考资料</h2></div>
+    <div class="refs">
+      <ol>
+        {% for c in citations %}
+        <li>
+          <a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title or c.url }}</a>
+          <span class="m">{{ c.provider }} · {{ c.url }} · 抓取于 {{ c.retrieved_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="reveal">
+    <div class="disclaimer">
+      <div class="di">⚠️</div>
+      <p>
+        <b>本路书由 AI 生成，仅供参考。</b>
+        内容基于 {{ searched_at_text }} 的联网检索结果整理，票价、开放时间、预约政策等信息可能随时变动。
+        出行前请通过上方【官方渠道】核实，尤其是购票与预约类事项。
+        本工具不对信息的准确性与时效性作出承诺。
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Generated by <b>TravelFlow AI</b> · 引用链接均由系统从检索结果直接透传，未经大模型改写
+</footer>
+
+<script>
+var bar = document.getElementById('progress');
+function onScroll(){
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+}
+window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+var io = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(!e.isIntersecting) return;
+    e.target.classList.add('in');
+    io.unobserve(e.target);
+  });
+},{threshold:.12, rootMargin:'0px 0px -30px 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+</script>
+</body>
+</html>

@@ -124,3 +124,50 @@ class PlannedRoute(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     detail_level: DetailLevel = DetailLevel.L2_STANDARD
     searched_at: datetime | None = None
+
+
+# ============================================================ 会话 / 分支 / 版本
+class SessionInfo(BaseModel):
+    """一个旅行会话。"""
+
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    archived: bool = False
+    branch_count: int = 0
+
+
+class BranchInfo(BaseModel):
+    """一条规划演化线。``id`` 同时作为 LangGraph 的 ``thread_id``。"""
+
+    id: str
+    session_id: str
+    title: str
+    created_at: datetime
+    parent_branch_id: str | None = None
+    fork_version_id: str | None = None
+    is_primary: bool = False
+
+
+class VersionInfo(BaseModel):
+    """分支上的一个历史版本，对应一个 LangGraph checkpoint。"""
+
+    id: str
+    branch_id: str
+    seq: int
+    summary: str = ""
+    detail_level: str = DetailLevel.L2_STANDARD.value
+    trigger: str = "user_message"  # user_message / fork / regenerate
+    checkpoint_id: str | None = None
+    created_at: datetime
+
+
+class VersionDetail(BaseModel):
+    """版本详情：元信息 + 路书内容。"""
+
+    version: VersionInfo
+    markdown: str = ""
+    citations: list[Citation] = Field(default_factory=list)
+    todos: list[TodoItem] = Field(default_factory=list)
+    searched_at: datetime | None = None

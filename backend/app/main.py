@@ -12,35 +12,62 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_system
+from app.agents.checkpoint import open_checkpointer
+from app.agents.graph import build_graph
+from app.api import routes_chat, routes_export, routes_session, routes_system
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, new_trace_id, set_trace_id, setup_logging
+from app.llm.factory import create_llm_provider
+from app.search.factory import create_search_provider
+from app.storage.database import create_connection
+from app.storage.session_store import SessionStore
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """应用生命周期：启动时初始化日志并做配置自检。"""
+    """启动时准备资源，关闭时释放。
+
+    **关键设计**：即使模型或检索尚未配置，服务也必须能启动 ——
+    此时前端仍可打开设置页完成配置。因此编排图的构建失败只记警告，不阻断启动。
+    """
     settings = get_settings()
     setup_logging(settings.app_log_level, json_output=settings.app_log_json)
 
     logger.info("%s v%s 启动中…", settings.app_name, settings.app_version)
-    logger.info(
-        "配置加载完成: llm=%s search=%s",
-        settings.llm_provider,
-        settings.search_provider,
-    )
+    logger.info("配置加载完成: llm=%s search=%s", settings.llm_provider, settings.search_provider)
     for warning in settings.startup_warnings():
         logger.warning("配置提示: %s", warning)
 
-    yield
+    async with AsyncExitStack() as stack:
+        # ---- 业务数据库 ----
+        conn = await create_connection(settings.session_db_path)
+        stack.push_async_callback(conn.close)
+        app.state.db = conn
+        app.state.store = SessionStore(conn)
+
+        # ---- 编排图（依赖模型与检索配置）----
+        app.state.graph = None
+        try:
+            llm = create_llm_provider(settings)
+            search = create_search_provider(settings)
+            checkpointer = await stack.enter_async_context(
+                open_checkpointer(settings.session_db_path)
+            )
+            app.state.checkpointer = checkpointer
+            app.state.graph = build_graph(llm, search, checkpointer=checkpointer)
+            logger.info("编排图已就绪")
+        except Exception as exc:  # 未配置 Key 属正常情况
+            logger.warning("编排图未就绪（不影响启动，请完成配置后重启）: %s", exc)
+
+        yield
 
     logger.info("服务已停止")
 
@@ -86,7 +113,11 @@ def create_app() -> FastAPI:
         return response
 
     register_exception_handlers(app)
+
     app.include_router(routes_system.router)
+    app.include_router(routes_session.router)
+    app.include_router(routes_chat.router)
+    app.include_router(routes_export.router)
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:

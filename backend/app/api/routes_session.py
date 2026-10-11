@@ -1,0 +1,182 @@
+"""会话、分支与版本接口（规划 §9.2）。"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+
+from app.core.deps import get_store
+from app.core.errors import BranchNotFound, InvalidRequest, SessionNotFound
+from app.domain.schemas import (
+    BranchListResponse,
+    CreateBranchRequest,
+    CreateSessionRequest,
+    SessionDetailResponse,
+    SessionListResponse,
+    UpdateSessionRequest,
+    VersionListResponse,
+)
+from app.storage.session_store import SessionStore
+
+router = APIRouter(prefix="/api", tags=["session"])
+
+
+async def _require_session(store: SessionStore, session_id: str):
+    session = await store.get_session(session_id)
+    if session is None:
+        raise SessionNotFound()
+    return session
+
+
+# ============================================================ 会话
+@router.get("/sessions", response_model=SessionListResponse, summary="会话列表")
+async def list_sessions(
+    archived: bool = False,
+    q: str | None = Query(None, description="按标题搜索"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    store: SessionStore = Depends(get_store),
+) -> SessionListResponse:
+    items = await store.list_sessions(
+        archived=archived, query=q, limit=page_size, offset=(page - 1) * page_size
+    )
+    return SessionListResponse(items=items, total=len(items))
+
+
+@router.post("/sessions", response_model=SessionDetailResponse, summary="新建会话")
+async def create_session(
+    payload: CreateSessionRequest,
+    store: SessionStore = Depends(get_store),
+) -> SessionDetailResponse:
+    """新建会话，并自动创建一个主分支。"""
+    session = await store.create_session(payload.title)
+    branch = await store.create_branch(session.id, "主方案", is_primary=True)
+    refreshed = await store.get_session(session.id)
+    return SessionDetailResponse(
+        session=refreshed or session, branches=[branch], versions={branch.id: []}
+    )
+
+
+@router.get("/sessions/{session_id}", response_model=SessionDetailResponse, summary="会话详情")
+async def get_session(
+    session_id: str,
+    store: SessionStore = Depends(get_store),
+) -> SessionDetailResponse:
+    session = await _require_session(store, session_id)
+    branches = await store.list_branches(session_id)
+    versions = {branch.id: await store.list_versions(branch.id) for branch in branches}
+    return SessionDetailResponse(session=session, branches=branches, versions=versions)
+
+
+@router.patch("/sessions/{session_id}", response_model=SessionDetailResponse, summary="更新会话")
+async def update_session(
+    session_id: str,
+    payload: UpdateSessionRequest,
+    store: SessionStore = Depends(get_store),
+) -> SessionDetailResponse:
+    await _require_session(store, session_id)
+
+    if payload.title is not None:
+        await store.rename_session(session_id, payload.title)
+    if payload.archived is not None:
+        await store.set_archived(session_id, payload.archived)
+
+    return await get_session(session_id, store)
+
+
+@router.delete("/sessions/{session_id}", summary="删除会话")
+async def delete_session(
+    session_id: str,
+    store: SessionStore = Depends(get_store),
+) -> dict[str, bool]:
+    await _require_session(store, session_id)
+    return {"deleted": await store.delete_session(session_id)}
+
+
+# ============================================================ 分支
+@router.get(
+    "/sessions/{session_id}/branches", response_model=BranchListResponse, summary="分支列表"
+)
+async def list_branches(
+    session_id: str,
+    store: SessionStore = Depends(get_store),
+) -> BranchListResponse:
+    await _require_session(store, session_id)
+    return BranchListResponse(items=await store.list_branches(session_id))
+
+
+@router.post(
+    "/sessions/{session_id}/branches", response_model=BranchListResponse, summary="新建分支"
+)
+async def create_branch(
+    session_id: str,
+    payload: CreateBranchRequest,
+    store: SessionStore = Depends(get_store),
+) -> BranchListResponse:
+    """从某个版本（或某个分支的最新状态）分叉出一条新分支。"""
+    await _require_session(store, session_id)
+
+    parent_id = payload.parent_branch_id
+    if payload.fork_version_id and not parent_id:
+        version = await store.get_version(payload.fork_version_id)
+        if version is None:
+            raise InvalidRequest("指定的版本不存在")
+        parent_id = version.branch_id
+
+    await store.create_branch(
+        session_id,
+        payload.title,
+        parent_branch_id=parent_id,
+        fork_version_id=payload.fork_version_id,
+    )
+    return BranchListResponse(items=await store.list_branches(session_id))
+
+
+@router.post(
+    "/branches/{branch_id}/primary", response_model=BranchListResponse, summary="设为主分支"
+)
+async def set_primary_branch(
+    branch_id: str,
+    store: SessionStore = Depends(get_store),
+) -> BranchListResponse:
+    branch = await store.get_branch(branch_id)
+    if branch is None:
+        raise BranchNotFound()
+    await store.set_primary_branch(branch.session_id, branch_id)
+    return BranchListResponse(items=await store.list_branches(branch.session_id))
+
+
+@router.delete("/branches/{branch_id}", summary="删除分支")
+async def delete_branch(
+    branch_id: str,
+    store: SessionStore = Depends(get_store),
+) -> dict[str, bool]:
+    branch = await store.get_branch(branch_id)
+    if branch is None:
+        raise BranchNotFound()
+    if branch.is_primary:
+        raise InvalidRequest("主分支不可删除")
+    return {"deleted": await store.delete_branch(branch_id)}
+
+
+# ============================================================ 版本
+@router.get(
+    "/branches/{branch_id}/versions", response_model=VersionListResponse, summary="版本列表"
+)
+async def list_versions(
+    branch_id: str,
+    store: SessionStore = Depends(get_store),
+) -> VersionListResponse:
+    if await store.get_branch(branch_id) is None:
+        raise BranchNotFound()
+    return VersionListResponse(items=await store.list_versions(branch_id))
+
+
+@router.get("/versions/{version_id}", summary="版本详情")
+async def get_version(
+    version_id: str,
+    store: SessionStore = Depends(get_store),
+) -> dict:
+    detail = await store.get_version_detail(version_id)
+    if detail is None:
+        raise InvalidRequest("版本不存在")
+    return detail.model_dump(mode="json")
