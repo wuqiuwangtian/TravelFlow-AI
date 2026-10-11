@@ -25,7 +25,7 @@
 | **M3** | Agent 编排重构（修复 refiner 闭环、并行检索、会话持久化） | ✅ **完成** |
 | **M4** | 会话 / 分支 / 版本 / 双格式导出 | ✅ **完成** |
 | **M5** | 前端多页面（Next.js 16 + React 19 + Tailwind 4） | ✅ **完成** |
-| M6 | 打包与部署（源码脚本 + Docker） | ⏳ |
+| **M6** | 打包与部署（一键脚本 + Docker Compose） | ✅ **完成** |
 | M7 | 测试与加固 | ⏳ |
 
 > **旧代码已全部删除**（`server.py`、`core/`、`requirement.txt`、旧 `Dockerfile`）。
@@ -82,36 +82,87 @@
 
 ## 🚀 快速开始
 
-> **开发进行中**：M1 骨架已可运行，完整业务功能待 M2~M7 完成。一键启动脚本将在 M6 提供。
+三种方式任选其一。**未配置 API Key 也能启动** —— 打开界面后在「设置」里填即可。
 
-### 开发者：本地启动后端
+### 方式一：一键脚本（最简单）
 
 ```bash
-cd backend
-cp .env.example .env        # 按需填写 API Key；也可留空，先看自检提示
-uv sync                     # 安装依赖（自动创建 Python 3.13 环境）
-uv run uvicorn app.main:app --reload
+git clone https://github.com/wuqiuwangtian/TravelFlow-AI.git
+cd TravelFlow-AI
+./start.sh          # macOS / Linux / WSL
+start.bat           # Windows：双击运行
 ```
 
-启动后可用：
+脚本会自动检查环境 → 安装依赖 → 拉起前后端 → 打开浏览器；按 `Ctrl+C` 同时停止。
+
+**前置要求**：[uv](https://docs.astral.sh/uv/)（Python 依赖管理器）与 [Node.js](https://nodejs.org/) 20+。
+缺少时脚本会直接告诉你安装命令，不会静默失败。
+
+### 方式二：Docker Compose
+
+```bash
+cp .env.example .env      # 可选：填写 API Key
+docker compose up -d
+```
+
+访问 <http://localhost:3000>。
+
+**可选：自带检索服务**（不依赖任何第三方 Key）
+
+```bash
+docker compose --profile searxng up -d
+# 然后把 .env 里的 SEARCH_PROVIDER 改为 searxng
+```
+
+> ⚠️ **Docker 构建尚未在本机实测**：当前环境的 Docker Desktop 未对本 WSL 发行版开启集成
+> （见 [环境约束](docs/01b-decision-inputs.md)）。compose 文件已通过 YAML 校验，
+> 但 `docker compose up` 需在开启集成后验证。**请以阶段④的实测结果为准。**
+
+### 方式三：手动分别启动（开发用）
+
+```bash
+# 终端 1 —— 后端
+cd backend
+cp .env.example .env
+uv sync
+uv run uvicorn app.main:app --reload           # http://127.0.0.1:8000
+
+# 终端 2 —— 前端
+cd frontend
+pnpm install
+pnpm dev                                        # http://127.0.0.1:3000
+```
+
+### 启动之后
 
 | 地址 | 说明 |
 | :--- | :--- |
-| http://127.0.0.1:8000/api/system/health | 健康检查 |
-| http://127.0.0.1:8000/api/system/config | 配置自检（含**可操作**的提示，而非一句报错） |
-| http://127.0.0.1:8000/api/system/providers | 支持的模型与检索服务商 |
-| http://127.0.0.1:8000/docs | 交互式 API 文档 |
+| <http://127.0.0.1:3000> | 界面：工作台 / 对话规划 / 分支对比 / 会话 / 设置 / 帮助 |
+| <http://127.0.0.1:8000/docs> | 交互式 API 文档 |
+| <http://127.0.0.1:8000/api/system/health> | 健康检查 |
+| <http://127.0.0.1:8000/api/system/config> | 配置自检（含**可操作**的提示，而非一句报错） |
 
-```bash
-uv run pytest               # 运行测试
-uv run ruff check app       # 代码检查
-```
+**第一次使用**：按界面顶部黄色提示条进入「设置」，选一个模型服务商并填 Key；
+不想注册任何服务就直接选「本地 Ollama」。
+检索若也不想注册，把检索源改成 **DuckDuckGo**（无需 Key）即可零成本跑通全流程。
 
-**未配置密钥时不会阻止启动**，而是给出可操作的提示，例如：
+**未配置密钥时不会阻止启动**，而是给出可操作的提示：
 
 ```
 配置提示: 未配置 LLM_API_KEY，请在 .env 中填写（服务商：deepseek），或改用本地模型（LLM_PROVIDER=ollama，需先启动 Ollama）
 配置提示: 未配置 SEARCH_API_KEY（检索服务：tavily），可改用 SEARCH_PROVIDER=ddg 免密钥检索
+```
+
+### 开发者
+
+```bash
+cd backend
+uv run pytest              # 运行测试
+uv run ruff check app      # 代码检查
+
+cd ../frontend
+pnpm typecheck             # 类型检查
+pnpm build                 # 生产构建
 ```
 
 ---

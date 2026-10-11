@@ -1,0 +1,13 @@
+# 后端构建上下文排除项
+.venv/
+.venv-verify/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+data/
+tests/
+.env
+.env.*
+!.env.example
