@@ -39,6 +39,7 @@
 | [阶段① 旧项目拆解报告](docs/01-legacy-analysis.md) | 技术栈、分层结构、数据流、22 项缺陷、5 组实测证据 |
 | [决策输入与环境约束](docs/01b-decision-inputs.md) | 本机环境实测数据、D1~D8 决策依据 |
 | [**阶段② 升级规划**](docs/02-upgrade-plan.md) | **当前设计稿**：架构、选型、API 契约、部署方案 |
+| [阶段② Prompt 设计](docs/02b-prompt-design.md) | 四个节点的完整 Prompt、结构化输出契约、防幻觉闭环 |
 | [历史产出样例](docs/legacy-samples/) | 从 git 历史还原的 3 份真实路书，作为回归基线 |
 
 ---

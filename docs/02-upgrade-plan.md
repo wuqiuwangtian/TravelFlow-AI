@@ -3,6 +3,7 @@
 > **状态：待用户验证** —— 验证通过后方可进入编码实施。
 > 本文档是阶段②的**规划交付物**，不含任何已落地的代码改动。
 > 制定依据：阶段①拆解报告（`docs/01-legacy-analysis.md`）+ 决策输入（`docs/01b-decision-inputs.md`）+ 用户下达的项目目标。
+> **配套设计材料**：`docs/02b-prompt-design.md`（四个节点的完整 Prompt 设计与防幻觉闭环实现）。
 
 ---
 
@@ -431,6 +432,8 @@ class PlanState(TypedDict):
 | `refiner` | 原路书 + 修改意见 | 新路书（增量修改，**不重检索**） | LLM |
 
 > 对照阶段① P1-6：`researcher` 的多次检索改为 `asyncio.gather` 并行，预计从 6~15s 降至 2~5s。
+
+> **Prompt 详细设计**见配套文档 [`docs/02b-prompt-design.md`](02b-prompt-design.md)：含四个节点的完整 Prompt 文本、结构化输出契约、以及「LLM 只写编号、程序替换 URL」的防幻觉闭环（已实测验证，能检出 LLM 编造的引用编号）。
 
 ---
 
