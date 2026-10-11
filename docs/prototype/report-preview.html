@@ -139,6 +139,32 @@ cite{font-style:normal;font-size:11.5px;color:var(--brand-1);font-weight:700;
 .refs a:hover{color:var(--brand-1);border-color:var(--brand-1)}
 .refs .meta{display:block;font-size:11.5px;color:#94a3b8;margin-top:3px}
 
+/* ---------- 办理与验证（官方渠道） ---------- */
+.todos{display:grid;gap:12px}
+.todo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  box-shadow:var(--shadow);display:grid;grid-template-columns:46px 1fr;gap:14px;align-items:start;
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.todo:hover{transform:translateY(-3px);box-shadow:var(--shadow-hover)}
+.todo .ico{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:21px;
+  background:linear-gradient(135deg,#e0f2fe,#ccfbf1)}
+.todo h4{font-size:14.5px;font-weight:700;margin-bottom:3px}
+.todo .when{font-size:12.5px;color:var(--ink-3);margin-bottom:2px}
+.todo .hint{font-size:12.5px;color:var(--ink-3);margin-bottom:9px}
+.official{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.official .lb{font-size:12px;color:var(--ink-3);margin-right:2px}
+.official a,.official .ch{font-size:12.5px;text-decoration:none;border-radius:7px;padding:4px 11px;
+  background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;font-weight:600;transition:.18s;display:inline-block}
+.official a:hover{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
+.official .ch{background:#f0fdfa;border-color:#99f6e4;color:#0f766e}
+.official .note{font-size:11.5px;color:#94a3b8;width:100%;margin-top:3px}
+
+/* ---------- 免责声明 ---------- */
+.disclaimer{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:16px 20px;
+  display:flex;gap:13px;align-items:flex-start;box-shadow:0 2px 12px -6px rgba(234,88,12,.3)}
+.disclaimer .di{font-size:20px;line-height:1.25;flex:none}
+.disclaimer p{font-size:13px;color:#9a3412;line-height:1.75}
+.disclaimer b{color:#7c2d12}
+
 footer{text-align:center;padding:40px 20px 60px;color:#94a3b8;font-size:12.5px}
 footer strong{color:var(--brand-1)}
 
@@ -180,6 +206,7 @@ footer strong{color:var(--brand-1)}
       <span class="chip">🚄 北京出发</span>
     </div>
     <p class="stamp">信息检索时间：2026-10-11 15:32 · 共引用 6 个来源</p>
+    <p class="stamp" style="margin-top:7px;opacity:.88">⚠️ 本路书由 AI 生成，仅供参考 · 出行前请通过官方渠道核实</p>
   </div>
 </header>
 
@@ -295,9 +322,59 @@ footer strong{color:var(--brand-1)}
     </div>
   </section>
 
-  <!-- ④ 避雷贴士 -->
+  <!-- ④ 办理与验证（官方渠道） -->
   <section class="reveal">
-    <div class="sec-head"><div class="sec-num">4</div><h2>避雷与实用贴士</h2></div>
+    <div class="sec-head"><div class="sec-num">4</div><h2>需要提前办理的事项</h2></div>
+    <div class="todos">
+
+      <div class="todo">
+        <div class="ico">🚄</div>
+        <div>
+          <h4>火车票 · 北京 → 重庆</h4>
+          <div class="when">建议提前 15 天购票</div>
+          <div class="hint">高铁二等座参考价 500 元（以购票时实际价格为准）</div>
+          <div class="official">
+            <span class="lb">官方渠道：</span>
+            <a href="#" onclick="return false">www.12306.cn</a>
+            <span class="ch">铁路12306 App</span>
+            <span class="ch">微信小程序「铁路12306」</span>
+            <div class="note">铁路售票唯一官方渠道，请勿通过第三方代购</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="todo">
+        <div class="ico">🎫</div>
+        <div>
+          <h4>景点门票 · 长江索道</h4>
+          <div class="hint">可现场购票，建议错峰（从南站/上新街站上车排队更少）</div>
+          <div class="official">
+            <span class="lb">官方渠道：</span>
+            <span class="ch">微信搜索「长江索道」官方公众号</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="todo">
+        <div class="ico">📅</div>
+        <div>
+          <h4>场馆预约 · 重庆中国三峡博物馆</h4>
+          <div class="hint">本次检索到的政策：免费入馆（预约要求可能已调整）</div>
+          <div class="official">
+            <span class="lb">官方渠道：</span>
+            <span class="ch">微信搜索「重庆中国三峡博物馆」公众号</span>
+            <a href="#" onclick="return false">博物馆官网</a>
+            <div class="note">各地博物馆预约政策近年多次调整，出行前请以官方公告为准</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ⑤ 避雷贴士 -->
+  <section class="reveal">
+    <div class="sec-head"><div class="sec-num">5</div><h2>避雷与实用贴士</h2></div>
     <div class="tips">
       <div class="tip"><h4>⚠️ 拒绝「金西梅」</h4>
         <p>洪崖洞、磁器口等景区路边颜色鲜艳的「金西梅」是色素腌制品，不好吃也不健康，不要购买。<cite title="来源 5">[5]</cite></p></div>
@@ -310,9 +387,9 @@ footer strong{color:var(--brand-1)}
     </div>
   </section>
 
-  <!-- ⑤ 参考资料 -->
+  <!-- ⑥ 参考资料 -->
   <section class="reveal">
-    <div class="sec-head"><div class="sec-num">5</div><h2>参考资料</h2></div>
+    <div class="sec-head"><div class="sec-num">6</div><h2>参考资料</h2></div>
     <div class="refs">
       <ol>
         <li><a href="#" onclick="return false">重庆市内十大必去旅游景点游玩攻略</a>
@@ -328,6 +405,19 @@ footer strong{color:var(--brand-1)}
         <li><a href="#" onclick="return false">2026 重庆旅游攻略 · 本地人避坑</a>
           <span class="meta">检索结果 · 抓取于 2026-10-11 15:31</span></li>
       </ol>
+    </div>
+  </section>
+
+  <!-- ⑦ 免责声明 -->
+  <section class="reveal">
+    <div class="disclaimer">
+      <div class="di">⚠️</div>
+      <p>
+        <b>本路书由 AI 生成，仅供参考。</b>
+        内容基于 <b>2026-10-11 15:32</b> 的联网检索结果整理，票价、开放时间、预约政策等信息可能随时变动。
+        出行前请通过上方【官方渠道】核实，尤其是购票与预约类事项。
+        本工具不对信息的准确性与时效性作出承诺。
+      </p>
     </div>
   </section>
 

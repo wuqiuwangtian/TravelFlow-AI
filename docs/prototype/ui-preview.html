@@ -183,6 +183,8 @@ tbody tr:hover{background:#f8fafc}
   font-size:13.5px;font-family:inherit;outline:none;background:#fff}
 .field input:focus,.field select:focus{border-color:var(--b1);box-shadow:0 0 0 3px rgba(14,165,233,.12)}
 .field .hint{font-size:11.5px;color:var(--ink3);margin-top:3px}
+.field .hint a{color:var(--b1);text-decoration:none;border-bottom:1px solid #bae6fd}
+.field .hint a:hover{border-color:var(--b1)}
 .ok{color:#059669;font-size:12.5px;font-weight:600}
 .bad{color:var(--danger);font-size:12.5px;font-weight:600}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
@@ -207,6 +209,10 @@ tbody tr:hover{background:#f8fafc}
 .faq details[open] summary::after{content:"▴"}
 .faq .ans{padding:0 16px 15px;font-size:13px;color:var(--ink2)}
 .faq .ans code{background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:12px;color:#0f766e}
+.faq .ans ul{margin:8px 0 8px 20px;padding:0}
+.faq .ans li{margin-bottom:3px}
+.faq .ans a{color:var(--b1);text-decoration:none;border-bottom:1px solid #bae6fd;transition:.18s}
+.faq .ans a:hover{border-color:var(--b1);color:#0284c7}
 
 .note{font-size:12px;color:var(--ink3);text-align:center;padding:26px 16px 0;line-height:1.8}
 </style>
@@ -514,7 +520,7 @@ tbody tr:hover{background:#f8fafc}
           <label>API Key</label>
           <div>
             <input type="password" value="sk-••••••••••••••••">
-            <div class="hint">DeepSeek 官网可申请，注意不要泄露</div>
+            <div class="hint">可在 <a href="#" onclick="return false">DeepSeek 官方平台 ↗</a> 申请；密钥仅保存在本机，不会上传</div>
           </div>
         </div>
         <div class="field">
@@ -531,10 +537,11 @@ tbody tr:hover{background:#f8fafc}
         <div class="field">
           <label>检索服务</label>
           <div>
-            <select><option>Tavily（质量优先）</option><option>百度千帆（国内、每天免费100次）</option>
+            <select><option>Tavily（质量优先）</option><option>百度千帆（国内）</option>
               <option>博查 Bocha（国内）</option><option>SearXNG（自建）</option>
               <option>DuckDuckGo（无需 Key）</option></select>
-            <div class="hint">DuckDuckGo 无需任何 Key，可零配置开始使用</div>
+            <div class="hint">DuckDuckGo 无需任何 Key，可零配置开始使用；
+              各家额度与计费以 <a href="#" onclick="return false">官方文档 ↗</a> 为准，本项目不做承诺</div>
           </div>
         </div>
         <div class="field"><label>API Key</label><div><input type="password" value="tvly-••••••••••"></div></div>
@@ -584,10 +591,15 @@ tbody tr:hover{background:#f8fafc}
         <div class="ans">Key 相当于模型服务的「门票」。推荐 <b>DeepSeek</b>（性价比高，官网可申请，充 10 元能用很久）。<br>
         如果你完全不想注册任何服务，可以在设置里选「本地 Ollama」，模型跑在自己电脑上，完全免费。</div></details>
       <details><summary>检索服务要花钱吗？</summary>
-        <div class="ans">有三种免费方案：<br>
-        ① <b>DuckDuckGo</b>：完全免费，不需要任何 Key，直接在设置里选它就能用；<br>
-        ② <b>百度千帆</b>：每天免费 100 次，个人用完全够；<br>
-        ③ <b>Tavily</b>：每月免费 1000 额度，约能生成 166 份路书。</div></details>
+        <div class="ans">各家服务的<b>免费额度与计费方式由其官方制定，可能随时调整</b>，本项目不做承诺，请以官方页面为准：
+        <ul>
+          <li>DuckDuckGo（无需 Key）→ <a href="#" onclick="return false">官方页面 ↗</a></li>
+          <li>百度千帆 → <a href="#" onclick="return false">官方控制台 ↗</a></li>
+          <li>Tavily → <a href="#" onclick="return false">官方定价页 ↗</a></li>
+          <li>博查 Bocha → <a href="#" onclick="return false">官方文档 ↗</a></li>
+          <li>SearXNG → 自建，无额度限制</li>
+        </ul>
+        <b>提示</b>：即使某家的额度政策变化，本项目也不会因此用不了 —— 你随时可以在设置里一键切换到其他检索源。</div></details>
       <details><summary>为什么生成一份路书要等十几秒？</summary>
         <div class="ans">系统需要实时联网检索交通、景点和避雷信息（3 路并行检索），再让模型基于这些<b>真实资料</b>生成内容。
         这是为了保证信息真实，而不是让模型凭空编造。</div></details>
