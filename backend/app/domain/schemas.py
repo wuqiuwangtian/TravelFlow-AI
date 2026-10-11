@@ -53,6 +53,18 @@ class ConfigCheckResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ConnectionTestResponse(BaseModel):
+    """连接测试结果。
+
+    始终返回 HTTP 200，用 ``ok`` 字段表达成败 —— 设置页的「测试连接」
+    按钮据此直接渲染结果，无需处理异常分支。
+    """
+
+    ok: bool
+    provider: str
+    message: str
+
+
 # ---------------------------------------------------------------- 错误
 class ErrorDetail(BaseModel):
     code: str

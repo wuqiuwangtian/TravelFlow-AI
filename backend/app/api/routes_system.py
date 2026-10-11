@@ -13,15 +13,19 @@ import time
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
+from app.core.errors import ConfigError
 from app.core.providers import LLM_PROVIDERS, SEARCH_PROVIDERS, ProviderInfo
 from app.domain.schemas import (
     ConfigCheckResponse,
+    ConnectionTestResponse,
     HealthResponse,
     LLMConfigCheck,
     ProviderItem,
     ProvidersResponse,
     SearchConfigCheck,
 )
+from app.llm.factory import create_llm_provider
+from app.search.factory import create_search_provider
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -80,4 +84,42 @@ async def providers() -> ProvidersResponse:
     return ProvidersResponse(
         llm=[_to_item(p) for p in LLM_PROVIDERS],
         search=[_to_item(p) for p in SEARCH_PROVIDERS],
+    )
+
+
+@router.post("/test-llm", response_model=ConnectionTestResponse, summary="测试模型连接")
+async def test_llm(settings: Settings = Depends(get_settings)) -> ConnectionTestResponse:
+    """实际发一个极小请求验证模型连通性。
+
+    配置有误时也返回 200，由 ``ok`` 字段表达结果，方便设置页直接渲染。
+    """
+    try:
+        provider = create_llm_provider(settings)
+    except ConfigError as exc:
+        return ConnectionTestResponse(ok=False, provider=settings.llm_provider, message=exc.message)
+
+    ok, message = await provider.health_check()
+    return ConnectionTestResponse(ok=ok, provider=settings.llm_provider, message=message)
+
+
+@router.post("/test-search", response_model=ConnectionTestResponse, summary="测试检索连接")
+async def test_search(settings: Settings = Depends(get_settings)) -> ConnectionTestResponse:
+    """实际发一次检索请求验证连通性。"""
+    try:
+        provider = create_search_provider(settings)
+    except ConfigError as exc:
+        return ConnectionTestResponse(
+            ok=False, provider=settings.search_provider, message=exc.message
+        )
+
+    try:
+        results = await provider.search("重庆 旅游", max_results=1)
+    except Exception as exc:  # 领域异常已在 Provider 内统一包装
+        message = getattr(exc, "message", str(exc))
+        return ConnectionTestResponse(ok=False, provider=settings.search_provider, message=message)
+
+    return ConnectionTestResponse(
+        ok=True,
+        provider=settings.search_provider,
+        message=f"连接正常，返回 {len(results)} 条结果",
     )

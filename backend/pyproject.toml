@@ -10,12 +10,15 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "python-dotenv==1.2.4",
     "httpx==0.28.1",
+    "langchain-openai==1.7.0",
+    "ddgs>=9.16.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.0",
     "pytest-asyncio>=1.2.0",
+    "respx>=0.22.0",
     "ruff>=0.14.0",
 ]
 

@@ -21,7 +21,7 @@
 | 里程碑 | 内容 | 状态 |
 | :--- | :--- | :--- |
 | **M1** | 工程基线（骨架 / 配置 / 日志 / 错误体系 / 自检接口） | ✅ **完成** |
-| M2 | LLM 与检索抽象层（多模型 + 可插拔检索） | ⏳ |
+| **M2** | LLM 与检索抽象层（多模型 + 可插拔检索） | ✅ **完成** |
 | M3 | Agent 编排重构（修复 refiner 闭环、并行检索、会话持久化） | ⏳ |
 | M4 | 会话 / 分支 / 版本 / 双格式导出 | ⏳ |
 | M5 | 前端多页面 | ⏳ |
@@ -73,9 +73,9 @@
 
 ## 🛠️ 技术栈
 
-**后端**：Python 3.13.13 · FastAPI 0.143.0 · uvicorn 0.54.0 · Pydantic 2.14.0 · uv（依赖已锁定，提交 `uv.lock`）
+**后端**：Python 3.13.13 · FastAPI 0.143.0 · uvicorn 0.54.0 · Pydantic 2.14.0 · langchain-openai 1.7.0 · uv（依赖已锁定，提交 `uv.lock`）
 **前端**：Next.js 16 · React 19 · TailwindCSS 4 · TypeScript 5.9 · pnpm
-**后续引入**：LangGraph 1.x · langchain-openai（M2 加入）
+**后续引入**：LangGraph 1.x（M3 加入）
 
 > 完整版本锁定表见 [升级规划 第 3 章](docs/02-upgrade-plan.md#3-技术栈与版本锁定)。
 
