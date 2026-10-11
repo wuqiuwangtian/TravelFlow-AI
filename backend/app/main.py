@@ -46,6 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("%s v%s 启动中…", settings.app_name, settings.app_version)
     logger.info("配置加载完成: llm=%s search=%s", settings.llm_provider, settings.search_provider)
+    # 严格模式下白名单与前端端口不一致会导致「连不上后端」，因此明示生效的白名单
+    if settings.app_cors_strict:
+        logger.info("跨域白名单（严格模式）: %s", ", ".join(settings.cors_origin_list) or "（空）")
+    else:
+        logger.info("跨域为宽松模式：放行任意本机端口")
     for warning in settings.startup_warnings():
         logger.warning("配置提示: %s", warning)
 

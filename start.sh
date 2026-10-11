@@ -67,7 +67,10 @@ uv sync --quiet
 ok "后端依赖就绪"
 
 info "启动后端（端口 $BACKEND_PORT）…"
-uv run uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" >/tmp/travelflow-backend.log 2>&1 &
+# 按实际前端端口注入跨域白名单 —— 后端默认严格模式，
+# 这样既安全（只放行指定来源），又不会因改端口而「连不上后端」
+APP_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT" \
+  uv run uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" >/tmp/travelflow-backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 

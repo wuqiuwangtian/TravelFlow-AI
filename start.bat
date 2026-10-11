@@ -50,7 +50,9 @@ call uv sync --quiet
 echo [OK] 后端依赖就绪
 
 echo [*] 启动后端（端口 %BACKEND_PORT%）...
-start "TravelFlow Backend" cmd /k "uv run uvicorn app.main:app --host 127.0.0.1 --port %BACKEND_PORT%"
+REM 按实际前端端口注入跨域白名单，避免严格模式下「连不上后端」
+set APP_CORS_ORIGINS=http://localhost:%FRONTEND_PORT%,http://127.0.0.1:%FRONTEND_PORT%
+start "TravelFlow Backend" cmd /k "set APP_CORS_ORIGINS=%APP_CORS_ORIGINS% && uv run uvicorn app.main:app --host 127.0.0.1 --port %BACKEND_PORT%"
 cd ..
 
 REM ---------------- 前端 ----------------

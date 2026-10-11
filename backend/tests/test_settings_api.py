@@ -52,7 +52,7 @@ def test_get_settings_reports_env_path(client_with_env_file: TestClient) -> None
     body = client_with_env_file.get("/api/system/settings").json()
 
     assert body["env_path"].endswith(".env")
-    assert body["cors_strict"] is False
+    assert body["cors_strict"] is True, "默认应为严格模式"
 
 
 def test_put_settings_writes_to_env_file(client_with_env_file: TestClient, tmp_path: Path) -> None:

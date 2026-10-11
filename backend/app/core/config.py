@@ -39,17 +39,20 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
     # 默认输出人类可读日志；设为 true 则输出 JSON 行（便于日志采集）
     app_log_json: bool = False
-    # 默认不使用 "*"，对照阶段①缺陷 P2-1
-    app_cors_origins: str = "http://localhost:3000"
+    # 跨域来源白名单。默认只放行本机前端（端口 3100）。
+    app_cors_origins: str = "http://localhost:3100,http://127.0.0.1:3100"
 
     # 跨域严格模式（安全相关）：
-    #   默认（false）放行**任意本机来源**（localhost/127.0.0.1 的任意端口），
-    #   这样用户改前端端口不会出现「连不上后端」；
-    #   设为 true 时**只**放行 APP_CORS_ORIGINS 中列出的来源，更严格但改端口需同步配置。
+    #   true（默认）= **只**放行上面 APP_CORS_ORIGINS 里列出的来源；
+    #   false        = 额外放行任意本机来源（localhost/127.0.0.1 的任意端口）。
     #
-    # 取舍说明：本项目的真实边界是「只监听 127.0.0.1」——
-    # 该开关影响的是「本机其它端口的页面能否读取本 API」，属纵深防御而非主要防线。
-    app_cors_strict: bool = False
+    # 为什么默认严格：本地服务虽然只监听 127.0.0.1，但同机其它端口的页面
+    # 若能跨域读取本 API，就可能读走会话数据、或消耗你的模型额度。
+    #
+    # 便利性如何保证：**启动脚本会按实际前端端口自动注入白名单**，
+    # 因此你改 FRONTEND_PORT 不会出现「连不上后端」。
+    # 手动启动时若改了端口，请同步改 APP_CORS_ORIGINS。
+    app_cors_strict: bool = True
 
     # ---------------- 数据 ----------------
     session_db_path: Path = Path("./data/travelflow.db")
@@ -154,8 +157,10 @@ class Settings(BaseSettings):
         if not self.app_cors_strict:
             warnings.append(
                 "跨域当前为宽松模式（放行任意本机端口）。"
-                "如需只允许指定来源，请设置 APP_CORS_STRICT=true"
+                "如需只允许白名单来源，请设置 APP_CORS_STRICT=true"
             )
+        elif not self.cors_origin_list:
+            warnings.append("APP_CORS_ORIGINS 为空，前端将无法调用本接口")
 
         return warnings
 
