@@ -15,7 +15,7 @@ warn() { printf "${YELLOW}!${NC} %s\n" "$*"; }
 fail() { printf "${RED}✗${NC} %s\n" "$*" >&2; exit 1; }
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
-FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+FRONTEND_PORT="${FRONTEND_PORT:-3100}"
 BACKEND_PID=""; FRONTEND_PID=""
 
 cleanup() {

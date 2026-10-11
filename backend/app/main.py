@@ -30,6 +30,9 @@ from app.storage.session_store import SessionStore
 
 logger = get_logger(__name__)
 
+# 本机来源：localhost / 127.0.0.1 / [::1]，端口任意
+LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -83,10 +86,19 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS：默认只允许前端开发地址，不使用通配符（对照阶段①缺陷 P2-1）
+    # CORS
+    #
+    # 这是一个**本地工具**：页面可能跑在 3000 / 3100 / 5173 等任意端口上，
+    # 用户改端口后如果忘了同步白名单，看到的现象是「前端连不上后端」，
+    # 排查成本很高（浏览器不会告诉你真实原因是 CORS）。
+    #
+    # 因此这里用正则**放行任意本机来源（不限端口）**，
+    # 既不像 ``allow_origins=["*"]`` 那样对全网开放，也不会有改端口就失效的问题。
+    # 需要额外来源时仍可通过 APP_CORS_ORIGINS 追加。
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        allow_origin_regex=LOCAL_ORIGIN_REGEX,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

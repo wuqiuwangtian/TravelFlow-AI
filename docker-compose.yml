@@ -26,7 +26,8 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: "8000"
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
-      APP_CORS_ORIGINS: http://localhost:3000
+      # 后端已自动放行任意本机来源（含任意端口），此处仅作补充
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:3000}
       SESSION_DB_PATH: /app/data/travelflow.db
 
       # ---- 大模型（留空也可启动，之后在界面「设置」中填写）----

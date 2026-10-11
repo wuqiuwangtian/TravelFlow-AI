@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 if "%BACKEND_PORT%"=="" set BACKEND_PORT=8000
-if "%FRONTEND_PORT%"=="" set FRONTEND_PORT=3000
+if "%FRONTEND_PORT%"=="" set FRONTEND_PORT=3100
 
 echo.
 echo TravelFlow AI 启动中...
