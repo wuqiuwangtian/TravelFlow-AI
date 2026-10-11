@@ -38,7 +38,7 @@
 | :--- | :--- |
 | [阶段① 旧项目拆解报告](docs/01-legacy-analysis.md) | 技术栈、分层结构、数据流、22 项缺陷、5 组实测证据 |
 | [决策输入与环境约束](docs/01b-decision-inputs.md) | 本机环境实测数据、D1~D8 决策依据 |
-| [**阶段② 决策摘要**](docs/02c-decision-summary.md) | **一页纸**：已拍板 9 项 + 待确认 8 项 + 实测结论 |
+| [**阶段② 决策摘要**](docs/02c-decision-summary.md) | **一页纸**：9 项已拍板 + 8 项定型 + 实测结论 |
 | [阶段② 升级规划](docs/02-upgrade-plan.md) | 完整设计稿：架构、选型、API 契约、部署方案 |
 | [阶段② Prompt 设计](docs/02b-prompt-design.md) | 四个节点的完整 Prompt、结构化输出契约、防幻觉闭环 |
 | [阶段② 会话与体验设计](docs/02d-session-ux-design.md) | 会话分支对比、多页面结构、详细度档位、HTML 呈现 |

@@ -473,25 +473,122 @@ class ResearchBundle(BaseModel):
 
 ### 9.2 API 契约
 
-| 方法 | 路径 | 说明 |
-| :--- | :--- | :--- |
-| `POST` | `/api/chat` | 发送消息，返回本轮完整结果 |
-| `POST` | `/api/chat/stream` | **SSE 流式**返回（节点进度 + token 流） |
-| `GET` | `/api/sessions` | 会话列表 |
-| `GET` | `/api/sessions/{id}` | 会话详情 |
-| `DELETE` | `/api/sessions/{id}` | 删除会话 |
-| `GET` | `/api/sessions/{id}/export?format=md\|html` | 导出文件 |
-| `GET` | `/api/system/health` | 健康检查 |
-| `GET` | `/api/system/config` | 当前配置自检（**不回显密钥**） |
-| `GET` | `/api/system/providers` | 可用 LLM / 检索 Provider 列表 |
+**通用约定**
 
-**统一错误响应**（对照阶段①「无错误契约」）：
+| 项 | 约定 |
+| :--- | :--- |
+| 前缀 | `/api` |
+| 内容类型 | `application/json`（导出接口除外） |
+| 分页 | `?page=1&page_size=20` → `{ items, total, page, page_size }` |
+| 命名 | 路径 kebab-case，字段 snake_case |
+| 幂等 | `GET` / `PUT` / `DELETE` 幂等；`POST` 非幂等 |
+
+**统一错误响应**（对照阶段①「无错误契约」）
 
 ```json
 { "error": { "code": "SEARCH_PROVIDER_UNAVAILABLE",
              "message": "检索服务暂时不可用，请检查网络或稍后重试",
              "trace_id": "..." } }
 ```
+
+**错误码表**
+
+| HTTP | code | 含义 | 前端建议提示 |
+| :--- | :--- | :--- | :--- |
+| 400 | `INVALID_REQUEST` | 参数校验失败 | 请检查输入 |
+| 404 | `SESSION_NOT_FOUND` | 会话不存在 | 该会话已被删除 |
+| 404 | `BRANCH_NOT_FOUND` | 分支不存在 | 该分支已被删除 |
+| 409 | `BRANCH_CONFLICT` | 分支操作冲突 | 请刷新后重试 |
+| 422 | `LLM_OUTPUT_INVALID` | 模型输出不符合 schema（已自动重试仍失败） | 模型返回异常，请重试或更换模型 |
+| 502 | `LLM_UNAVAILABLE` | 模型服务不可达 | 模型连不上，请检查配置与网络 |
+| 502 | `SEARCH_PROVIDER_UNAVAILABLE` | 检索服务不可达 | 检索连不上，可点击重试 |
+| 504 | `LLM_TIMEOUT` | 模型调用超时 | 模型响应超时，请重试 |
+
+**接口清单**
+
+*① 会话*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/sessions` | 列表，支持 `?status=active\|archived&q=关键词&page=&page_size=` |
+| `POST` | `/api/sessions` | 新建会话 → `{ session }` |
+| `GET` | `/api/sessions/{sid}` | 详情，**含分支树概要** |
+| `PATCH` | `/api/sessions/{sid}` | 改标题 / 归档 / 恢复 |
+| `DELETE` | `/api/sessions/{sid}` | 删除（级联删除分支与版本，**需二次确认**） |
+
+*② 分支*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/sessions/{sid}/branches` | 该会话的全部分支（含血缘） |
+| `POST` | `/api/sessions/{sid}/branches` | **创建分支（fork）** |
+| `GET` | `/api/branches/{bid}` | 分支详情 |
+| `PATCH` | `/api/branches/{bid}` | 改名 |
+| `POST` | `/api/branches/{bid}/primary` | 设为当前主分支 |
+| `DELETE` | `/api/branches/{bid}` | 删除分支（主分支不可删） |
+| `POST` | `/api/sessions/{sid}/candidates` | **一次生成 N 个候选分支**（对比用） |
+
+fork 请求体：
+
+```json
+{ "parent_branch_id": "b-1",
+  "fork_version_id": "v-3",
+  "title": "亲子版",
+  "overrides": { "preferences": ["亲子"], "detail_level": "L3_detailed" } }
+```
+
+`overrides` 为可选：不填则完全继承分叉点状态（用于「回到初版」）；填了则在继承基础上覆盖需求字段（用于「同一需求换个方向」）。
+
+*③ 版本*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/branches/{bid}/versions` | 版本列表（用于版本树渲染） |
+| `GET` | `/api/versions/{vid}` | 版本详情（含路书 Markdown 与引用列表） |
+| `POST` | `/api/versions/{vid}/restore` | **回到该版本** → 实质是创建一个继承该版本的新分支（不破坏历史） |
+
+*④ 对话*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `POST` | `/api/chat` | 发送消息，返回本轮完整结果 |
+| `POST` | `/api/chat/stream` | **SSE 流式**：`event: progress` 推送节点进度，`event: token` 推送增量文本，`event: done` 收尾 |
+
+```json
+// POST /api/chat
+{ "session_id": "s-1", "branch_id": "b-1",
+  "message": "第二天太赶了，轻松点",
+  "detail_level": "L2_standard" }
+```
+
+```json
+// 200 OK
+{ "branch_id": "b-1", "version_id": "v-5", "status": "reviewing",
+  "reply": "已调整第二天，其余内容保持不变。",
+  "plan": { "markdown": "...", "citations": [...], "searched_at": "..." } }
+```
+
+*⑤ 对比与导出*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/compare?branch_ids=b1,b2,b3` | 对比数据（各分支同序号版本的路书 + 差异标记） |
+| `GET` | `/api/versions/{vid}/export?format=md\|html` | 导出单个版本，返回文件流（`Content-Disposition: attachment`） |
+| `GET` | `/api/compare/export?branch_ids=...` | 导出对比报告（Markdown） |
+
+*⑥ 系统与设置*
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/system/health` | 健康检查（供 Docker healthcheck 与启动脚本使用） |
+| `GET` | `/api/system/config` | 当前配置自检（**不回显密钥**，只回 `has_key: true/false`） |
+| `GET` | `/api/system/providers` | 可用 LLM / 检索 Provider 列表与各自必填项 |
+| `POST` | `/api/system/test-llm` | **测试模型连接**（设置页「🔌 测试连接」） |
+| `POST` | `/api/system/test-search` | **测试检索连接** |
+| `GET` | `/api/settings` | 读取当前设置 |
+| `PUT` | `/api/settings` | 更新设置（写入本地 `.env`） |
+
+> **数据表结构**（sessions / branches / versions / plans）见 [`02d §2.4`](02d-session-ux-design.md)。
 
 ---
 
