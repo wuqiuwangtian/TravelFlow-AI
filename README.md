@@ -7,28 +7,30 @@
 
 ## ⚠️ 项目状态：重构升级中
 
-本仓库正在按四阶段进行重构升级，**当前处于阶段②（重新设计升级）**。
+本仓库正在按四阶段重构升级，**当前处于阶段②，M1 工程基线已完成**。
 
 | 阶段 | 内容 | 状态 |
 | :--- | :--- | :--- |
 | ① | 拆解旧项目技术栈与抽象分层 | ✅ 已完成并验收 |
-| ② | 重新设计升级方案 | 🔄 进行中（规划待验证） |
+| ② | 重新设计升级方案 | 🔄 进行中（设计已定稿，**M1 完成**） |
 | ③ | 全面测试 | ⏳ 待开始 |
 | ④ | 重新部署上线 | ⏳ 待开始 |
 
-### 🚫 当前代码尚不可用，请勿直接部署
+### 📦 里程碑进度
 
-阶段①拆解发现旧代码存在**致命缺陷**，已在计划中修复，但**修复尚未实施**：
+| 里程碑 | 内容 | 状态 |
+| :--- | :--- | :--- |
+| **M1** | 工程基线（骨架 / 配置 / 日志 / 错误体系 / 自检接口） | ✅ **完成** |
+| M2 | LLM 与检索抽象层（多模型 + 可插拔检索） | ⏳ |
+| M3 | Agent 编排重构（修复 refiner 闭环、并行检索、会话持久化） | ⏳ |
+| M4 | 会话 / 分支 / 版本 / 双格式导出 | ⏳ |
+| M5 | 前端多页面 | ⏳ |
+| M6 | 打包与部署（源码脚本 + Docker） | ⏳ |
+| M7 | 测试与加固 | ⏳ |
 
-| 缺陷 | 后果 |
-| :--- | :--- |
-| `refiner` 节点入度为 0（不可达） | 计划的「确认 / 修改」功能完全失效，修改意见会被当作新需求触发全量重搜重生成 |
-| `Dockerfile` 引用 `requirements.txt`，实际文件名为 `requirement.txt` | Docker 镜像**必然构建失败** |
-| `frontend/` 为空 submodule 引用，无 `.gitmodules` | 前端源码已永久丢失 |
-| 依赖全部未锁版本 | 同一份代码在不同时间安装会得到跨大版本的依赖（实测已装出 LangChain 1.4.4） |
-| 检索 query 硬编码 `2024` | 产出内容生成当天即过时 |
-
-完整清单（22 项）见 [阶段①拆解报告](docs/01-legacy-analysis.md#6-缺陷清单)。
+> **旧代码已全部删除**（`server.py`、`core/`、`requirement.txt`、旧 `Dockerfile`）。
+> 旧项目的技术方案与 22 项缺陷已完整记录在 [阶段①拆解报告](docs/01-legacy-analysis.md)，git 历史亦可随时追溯。
+> 新代码从 `backend/app/` 开始，按 [M1 蓝图](docs/02e-m1-blueprint.md) 推进。
 
 ---
 
@@ -38,12 +40,14 @@
 | :--- | :--- |
 | [阶段① 旧项目拆解报告](docs/01-legacy-analysis.md) | 技术栈、分层结构、数据流、22 项缺陷、5 组实测证据 |
 | [决策输入与环境约束](docs/01b-decision-inputs.md) | 本机环境实测数据、D1~D8 决策依据 |
-| [**阶段② 决策摘要**](docs/02c-decision-summary.md) | **一页纸**：9 项已拍板 + 8 项定型 + 实测结论 |
+| [**阶段② 决策摘要**](docs/02c-decision-summary.md) | **一页纸**：已拍板事项 + 实测结论（建议先看这份） |
 | [阶段② 升级规划](docs/02-upgrade-plan.md) | 完整设计稿：架构、选型、API 契约、部署方案 |
 | [阶段② Prompt 设计](docs/02b-prompt-design.md) | 四个节点的完整 Prompt、结构化输出契约、防幻觉闭环 |
 | [阶段② 会话与体验设计](docs/02d-session-ux-design.md) | 会话分支对比、多页面结构、详细度档位、HTML 呈现 |
-| [**M1 实施蓝图**](docs/02e-m1-blueprint.md) | **编码起点**：目录结构、文件职责、完成定义、执行步骤 |
+| [**M1 实施蓝图**](docs/02e-m1-blueprint.md) | 编码起点：目录结构、文件职责、完成定义、执行步骤 |
 | [历史产出样例](docs/legacy-samples/) | 从 git 历史还原的 3 份真实路书，作为回归基线 |
+| [可点击原型 · 路书效果](docs/prototype/report-preview.html) | HTML 导出的视觉与动画效果预览 |
+| [可点击原型 · 6 个页面](docs/prototype/ui-preview.html) | 前端多页面 UI 结构预览 |
 
 ---
 
@@ -56,6 +60,8 @@
 | **多模型支持** | 云端主流模型（DeepSeek / OpenAI / 通义 / 智谱 / Kimi…）+ **本地部署模型**（Ollama / vLLM / LM Studio） |
 | **可插拔检索** | Tavily / 博查 / 百度千帆 / SearXNG / DuckDuckGo 自由切换 |
 | **可信引用** | 引用 URL 由程序从检索结果**结构化透传**，不经大模型复写 |
+| **可核验** | 购票与预约事项附**官方办理渠道**，用户可自行验证 |
+| **不误导** | AI 生成声明 + 信息时效标注；第三方政策一律链接官方，不写死数字 |
 | **会话分支对比** | 版本树可回退、可分叉；多个方案并排对比，差异高亮 |
 | **详细度档位** | 极简 / 标准 / 详细 / 保姆级，篇幅随行程天数动态伸缩 |
 | **多页面应用** | 工作台 / 对话规划 / 分支对比 / 会话管理 / 设置 / 帮助 |
@@ -65,28 +71,48 @@
 
 ---
 
-## 🛠️ 技术栈（规划中，实施后更新）
+## 🛠️ 技术栈
 
-**后端**：Python 3.13 · FastAPI · LangGraph 1.x · LangChain · SQLite · uv
-**前端**：Next.js 16 · React 19 · TailwindCSS 4 · TypeScript · pnpm
-**部署**：Docker Compose / 源码一键启动脚本
+**后端**：Python 3.13.13 · FastAPI 0.143.0 · uvicorn 0.54.0 · Pydantic 2.14.0 · uv（依赖已锁定，提交 `uv.lock`）
+**前端**：Next.js 16 · React 19 · TailwindCSS 4 · TypeScript 5.9 · pnpm
+**后续引入**：LangGraph 1.x · langchain-openai（M2 加入）
 
-> 具体版本锁定表见 [升级规划 第 3 章](docs/02-upgrade-plan.md#3-技术栈与版本锁定)。
+> 完整版本锁定表见 [升级规划 第 3 章](docs/02-upgrade-plan.md#3-技术栈与版本锁定)。
 
 ---
 
 ## 🚀 快速开始
 
-> **重构进行中，暂不可用。** 待阶段②实施完成后，本节将更新为：
+> **开发进行中**：M1 骨架已可运行，完整业务功能待 M2~M7 完成。一键启动脚本将在 M6 提供。
+
+### 开发者：本地启动后端
 
 ```bash
-# 方式一：源码部署
-git clone https://github.com/wuqiuwangtian/TravelFlow-AI.git
-cd TravelFlow-AI
-./start.sh
+cd backend
+cp .env.example .env        # 按需填写 API Key；也可留空，先看自检提示
+uv sync                     # 安装依赖（自动创建 Python 3.13 环境）
+uv run uvicorn app.main:app --reload
+```
 
-# 方式二：Docker 部署
-docker compose up -d
+启动后可用：
+
+| 地址 | 说明 |
+| :--- | :--- |
+| http://127.0.0.1:8000/api/system/health | 健康检查 |
+| http://127.0.0.1:8000/api/system/config | 配置自检（含**可操作**的提示，而非一句报错） |
+| http://127.0.0.1:8000/api/system/providers | 支持的模型与检索服务商 |
+| http://127.0.0.1:8000/docs | 交互式 API 文档 |
+
+```bash
+uv run pytest               # 运行测试
+uv run ruff check app       # 代码检查
+```
+
+**未配置密钥时不会阻止启动**，而是给出可操作的提示，例如：
+
+```
+配置提示: 未配置 LLM_API_KEY，请在 .env 中填写（服务商：deepseek），或改用本地模型（LLM_PROVIDER=ollama，需先启动 Ollama）
+配置提示: 未配置 SEARCH_API_KEY（检索服务：tavily），可改用 SEARCH_PROVIDER=ddg 免密钥检索
 ```
 
 ---

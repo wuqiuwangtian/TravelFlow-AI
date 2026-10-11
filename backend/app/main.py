@@ -1,0 +1,104 @@
+"""FastAPI 应用装配。
+
+本模块**只做装配**：生命周期、中间件、异常处理、路由挂载。
+不含任何业务逻辑 —— 对照阶段①缺陷：旧项目在 ``server.py`` 里写业务、建 LLM 客户端。
+
+启动方式::
+
+    cd backend && uv run uvicorn app.main:app --reload
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api import routes_system
+from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
+from app.core.logging import get_logger, new_trace_id, set_trace_id, setup_logging
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """应用生命周期：启动时初始化日志并做配置自检。"""
+    settings = get_settings()
+    setup_logging(settings.app_log_level, json_output=settings.app_log_json)
+
+    logger.info("%s v%s 启动中…", settings.app_name, settings.app_version)
+    logger.info(
+        "配置加载完成: llm=%s search=%s",
+        settings.llm_provider,
+        settings.search_provider,
+    )
+    for warning in settings.startup_warnings():
+        logger.warning("配置提示: %s", warning)
+
+    yield
+
+    logger.info("服务已停止")
+
+
+def create_app() -> FastAPI:
+    """构建并返回 FastAPI 实例（工厂函数，便于测试中重复创建）。"""
+    settings = get_settings()
+
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        description="本地旅行助手 —— 多轮对话收集需求、联网检索真实信息、生成可执行路书",
+        lifespan=lifespan,
+    )
+
+    # CORS：默认只允许前端开发地址，不使用通配符（对照阶段①缺陷 P2-1）
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.middleware("http")
+    async def trace_middleware(request: Request, call_next) -> Response:
+        """为每个请求注入 trace_id，并在响应头回传，便于排障。"""
+        trace_id = request.headers.get("X-Trace-Id") or new_trace_id()
+        set_trace_id(trace_id)
+
+        started = time.perf_counter()
+        response: Response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+
+        response.headers["X-Trace-Id"] = trace_id
+        logger.info(
+            "%s %s -> %d",
+            request.method,
+            request.url.path,
+            response.status_code,
+            extra={"extra_fields": {"ms": round(elapsed_ms, 1)}},
+        )
+        return response
+
+    register_exception_handlers(app)
+    app.include_router(routes_system.router)
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> dict[str, str]:
+        """根路径：给出可用的入口提示，而不是 404。"""
+        return {
+            "name": settings.app_name,
+            "version": settings.app_version,
+            "docs": "/docs",
+            "health": "/api/system/health",
+        }
+
+    return app
+
+
+app = create_app()

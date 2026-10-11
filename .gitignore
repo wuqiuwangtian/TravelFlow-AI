@@ -13,10 +13,18 @@ env/
 .env.local
 .env.*.local
 
-# 运行期产出
+# 运行期数据（本地数据库，绝不入库）
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# 导出产物
+exports/
 backend/static/
 
-# 工具缓存
+# 工具与缓存
 .uv-cache/
+.uv-python/
 .pytest_cache/
 .ruff_cache/
