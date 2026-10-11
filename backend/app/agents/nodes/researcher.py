@@ -1,0 +1,100 @@
+"""节点二：联网调研（researcher）。
+
+对照阶段①的两处关键改进：
+
+* **P2-6** query 硬编码 ``2024`` → 年份改由 ``datetime.now().year`` 动态注入，
+  从根本上消除「产出当天即过时」；
+* **P1-6** 旧项目注释写"并行调用搜索工具"实则串行 → 这里真正使用
+  ``asyncio.gather``，把耗时从「三路之和」压到「最慢一路」。
+
+本节点**不使用大模型**：query 由程序构造，检索结果由程序持有（防幻觉根基）。
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+
+from app.agents.state import PlanState
+from app.core.errors import SearchUnavailable
+from app.core.logging import get_logger
+from app.domain.enums import PlanStatus
+from app.domain.models import Requirements, ResearchBundle
+from app.search.base import SearchProvider, SearchResult
+
+logger = get_logger(__name__)
+
+# 交通检索优先看官方与主流票务平台；不支持的 Provider 会自动忽略该参数
+TRANSPORT_DOMAINS = ("12306.cn", "ctrip.com", "qunar.com")
+
+
+def build_queries(requirements: Requirements, year: int) -> dict[str, str]:
+    """构造三类定向检索 query。
+
+    ``year`` 由调用方传入当前年份 —— 测试可直接断言 query 里不含硬编码年份。
+    """
+    destination = requirements.destination or ""
+    origin = requirements.origin or ""
+    return {
+        "transport": f"{origin} 到 {destination} 火车票 高铁 机票 价格 时刻表 {year}",
+        "attractions": f"{destination} 必去景点 门票价格 开放时间 {year}",
+        "reviews": f"{destination} 旅游 避雷 坑 真实体验 {year}",
+    }
+
+
+def make_researcher_node(search: SearchProvider, *, max_results: int = 5):
+    """构造 researcher 节点。"""
+
+    async def researcher(state: PlanState) -> dict:
+        requirements = state["requirements"]
+        queries = build_queries(requirements, datetime.now().year)
+
+        # ★ 三路并行；单路失败不拖垮整体
+        outcomes = await asyncio.gather(
+            search.search(queries["transport"], max_results=4, domains=TRANSPORT_DOMAINS),
+            search.search(queries["attractions"], max_results=max_results),
+            search.search(queries["reviews"], max_results=max_results),
+            return_exceptions=True,
+        )
+
+        bucket_names = ("transport", "attractions", "reviews")
+        buckets: dict[str, list[SearchResult]] = {}
+        failures = 0
+        for name, outcome in zip(bucket_names, outcomes, strict=True):
+            if isinstance(outcome, BaseException):
+                failures += 1
+                buckets[name] = []
+                logger.warning("检索「%s」失败: %s", name, outcome)
+            else:
+                buckets[name] = list(outcome)
+
+        if failures == len(bucket_names):
+            # 三路全挂才算整体失败，避免因单个来源不可用而拒绝服务
+            raise SearchUnavailable(detail=f"provider={search.name} 三路检索全部失败")
+
+        bundle = ResearchBundle(
+            transport=buckets["transport"],
+            attractions=buckets["attractions"],
+            reviews=buckets["reviews"],
+            queries=list(queries.values()),
+            searched_at=datetime.now(),
+        )
+        logger.info(
+            "检索完成",
+            extra={
+                "extra_fields": {
+                    "transport": len(bundle.transport),
+                    "attractions": len(bundle.attractions),
+                    "reviews": len(bundle.reviews),
+                    "failed": failures,
+                }
+            },
+        )
+
+        return {
+            "research": bundle,
+            "status": PlanStatus.PLANNING,
+            "updated_at": datetime.now(),
+        }
+
+    return researcher
