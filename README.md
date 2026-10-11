@@ -26,7 +26,7 @@
 | **M4** | 会话 / 分支 / 版本 / 双格式导出 | ✅ **完成** |
 | **M5** | 前端多页面（Next.js 16 + React 19 + Tailwind 4） | ✅ **完成** |
 | **M6** | 打包与部署（一键脚本 + Docker Compose） | ✅ **完成** |
-| M7 | 测试与加固 | ⏳ |
+| **M7** | 测试与加固（覆盖率 92%，164 个测试） | ✅ **完成** |
 
 > **旧代码已全部删除**（`server.py`、`core/`、`requirement.txt`、旧 `Dockerfile`）。
 > 旧项目的技术方案与 22 项缺陷已完整记录在 [阶段①拆解报告](docs/01-legacy-analysis.md)，git 历史亦可随时追溯。
@@ -114,9 +114,17 @@ docker compose --profile searxng up -d
 # 然后把 .env 里的 SEARCH_PROVIDER 改为 searxng
 ```
 
-> ⚠️ **Docker 构建尚未在本机实测**：当前环境的 Docker Desktop 未对本 WSL 发行版开启集成
-> （见 [环境约束](docs/01b-decision-inputs.md)）。compose 文件已通过 YAML 校验，
-> 但 `docker compose up` 需在开启集成后验证。**请以阶段④的实测结果为准。**
+> ⚠️ **Docker 构建尚未成功实测**：本机容器**无法访问外网**（`docker run` 内的 DNS/HTTPS 全部超时），
+> 因此 `uv sync` / `pnpm install` 会永久阻塞。判断与 Clash 的 TUN 模式冲突有关，
+> 而非 Dockerfile 本身的问题（compose 文件已通过 YAML 校验）。
+>
+> **若你遇到同样情况**：临时关闭 Clash 的 TUN 模式后重试；国内网络建议用镜像源加速：
+>
+> ```bash
+> docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+> ```
+>
+> **请以阶段④的实测结果为准**，不要假定它已验证。
 
 ### 方式三：手动分别启动（开发用）
 

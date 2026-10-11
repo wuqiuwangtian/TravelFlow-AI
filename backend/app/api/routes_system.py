@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
@@ -130,11 +129,6 @@ async def test_search(settings: Settings = Depends(get_settings)) -> ConnectionT
 
 
 # ============================================================ 设置读写
-def _env_path() -> Path:
-    """``backend/.env``（本文件位于 ``backend/app/api/``）。"""
-    return Path(__file__).resolve().parents[2] / ".env"
-
-
 @router.get("/settings", summary="读取当前设置")
 async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
     """返回可编辑的配置项。
@@ -150,12 +144,16 @@ async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
         "searxng_base_url": settings.searxng_base_url or "",
         "search_has_key": bool(settings.search_api_key),
         "default_detail_level": settings.default_detail_level,
-        "env_path": str(_env_path()),
+        "cors_strict": settings.app_cors_strict,
+        "env_path": str(settings.env_file_path),
     }
 
 
 @router.put("/settings", response_model=SettingsUpdateResponse, summary="保存设置")
-async def update_settings(payload: SettingsUpdate) -> SettingsUpdateResponse:
+async def update_settings(
+    payload: SettingsUpdate,
+    settings: Settings = Depends(get_settings),
+) -> SettingsUpdateResponse:
     """把改动写回 ``.env``（仅白名单字段）。"""
     updates: dict[str, str] = {}
     for field, env_key in FIELD_TO_ENV.items():
@@ -166,7 +164,7 @@ async def update_settings(payload: SettingsUpdate) -> SettingsUpdateResponse:
     if not updates:
         return SettingsUpdateResponse(saved=False, message="没有需要保存的改动")
 
-    changed = write_env(_env_path(), updates)
+    changed = write_env(settings.env_file_path, updates)
     if not changed:
         return SettingsUpdateResponse(saved=True, message="配置没有变化")
 

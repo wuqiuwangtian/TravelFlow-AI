@@ -16,6 +16,12 @@ WORKDIR /app
 
 # ---------- 依赖层（仅当依赖变化时才重建）----------
 FROM base AS deps
+
+# 包索引：默认官方 PyPI；国内构建可覆盖为镜像源以显著提速，例如
+#   docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG UV_DEFAULT_INDEX=https://pypi.org/simple
+ENV UV_DEFAULT_INDEX=${UV_DEFAULT_INDEX}
+
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 

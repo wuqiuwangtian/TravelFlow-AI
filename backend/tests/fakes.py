@@ -29,17 +29,21 @@ class FakeLLM:
         plan: PlanOutput | None = None,
         intent: RefineIntent | None = None,
         refine_text: str = "# 修改后的路书",
+        delay: float = 0.0,
     ) -> None:
         self._collect = collect
         self._plan = plan
         self._intent = intent
         self._refine_text = refine_text
+        self._delay = delay
         self.calls: list[str] = []
 
     async def chat(
         self, messages: Sequence[ChatMessage], *, temperature: float | None = None
     ) -> str:
         self.calls.append("chat")
+        if self._delay:
+            await asyncio.sleep(self._delay)
         return self._refine_text
 
     async def structured(
@@ -50,6 +54,8 @@ class FakeLLM:
         temperature: float | None = None,
     ) -> SchemaT:
         self.calls.append(f"structured:{schema.__name__}")
+        if self._delay:
+            await asyncio.sleep(self._delay)
         if schema is CollectResult:
             assert self._collect is not None, "测试未提供 collect 结果"
             return self._collect  # type: ignore[return-value]

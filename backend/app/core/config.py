@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     session_db_path: Path = Path("./data/travelflow.db")
     session_ttl_hours: int = 168
 
+    # 配置文件路径；留空则使用 backend/.env
+    # （可配置是为了让测试能指向临时文件，避免污染真实配置）
+    app_env_file: Path | None = None
+
     # ---------------- 大模型 ----------------
     llm_provider: str = "deepseek"
     llm_model: str = "deepseek-chat"
@@ -80,6 +84,13 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         """把逗号分隔的来源串解析成列表。"""
         return [o.strip() for o in self.app_cors_origins.split(",") if o.strip()]
+
+    @property
+    def env_file_path(self) -> Path:
+        """实际使用的 ``.env`` 路径（本文件位于 ``backend/app/core/``）。"""
+        if self.app_env_file:
+            return Path(self.app_env_file)
+        return Path(__file__).resolve().parents[2] / ".env"
 
     @property
     def resolved_llm_base_url(self) -> str | None:
