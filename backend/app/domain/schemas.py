@@ -149,6 +149,17 @@ class VersionListResponse(BaseModel):
     items: list[VersionInfo]
 
 
+class ChatMessageItem(BaseModel):
+    role: str
+    content: str
+
+
+class ChatHistoryResponse(BaseModel):
+    """对话历史（存在 LangGraph checkpoint 里）。"""
+
+    messages: list[ChatMessageItem] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------- 对话
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000, description="用户消息")

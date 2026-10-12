@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.deps import get_store
+from app.agents.checkpoint import thread_config
+from app.core.deps import get_graph, get_store
 from app.core.errors import BranchNotFound, InvalidRequest, SessionNotFound
 from app.domain.schemas import (
     BranchListResponse,
+    ChatHistoryResponse,
+    ChatMessageItem,
     CreateBranchRequest,
     CreateSessionRequest,
     SessionDetailResponse,
@@ -182,3 +185,37 @@ async def get_version(
     if detail is None:
         raise InvalidRequest("版本不存在")
     return detail.model_dump(mode="json")
+
+
+@router.get(
+    "/branches/{branch_id}/messages",
+    response_model=ChatHistoryResponse,
+    summary="对话历史",
+)
+async def get_branch_messages(
+    branch_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> ChatHistoryResponse:
+    """读取该分支的完整对话历史。
+
+    历史存在 LangGraph 的 checkpoint 中（``messages`` 字段）。
+    没有这个接口，用户刷新页面就会看到「空对话」——
+    数据明明存着，却像丢了一样。
+    """
+    if await store.get_branch(branch_id) is None:
+        raise BranchNotFound()
+
+    snapshot = await graph.aget_state(thread_config(branch_id))
+    raw_messages = (snapshot.values or {}).get("messages", []) if snapshot else []
+
+    items: list[ChatMessageItem] = []
+    for message in raw_messages:
+        # 只回传纯文本消息（工具调用等中间态对用户没有意义）
+        content = getattr(message, "content", "")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        role = "user" if getattr(message, "type", "") == "human" else "assistant"
+        items.append(ChatMessageItem(role=role, content=content))
+
+    return ChatHistoryResponse(messages=items)

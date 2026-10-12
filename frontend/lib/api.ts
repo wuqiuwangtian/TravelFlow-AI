@@ -124,6 +124,11 @@ export const api = {
   listVersions: (branchId: string) =>
     request<{ items: VersionInfo[] }>(`/api/branches/${branchId}/versions`),
   getVersion: (versionId: string) => request<VersionDetail>(`/api/versions/${versionId}`),
+  /** 读取该分支的对话历史（存在后端的 checkpoint 里）。 */
+  getMessages: (branchId: string) =>
+    request<{ messages: { role: string; content: string }[] }>(
+      `/api/branches/${branchId}/messages`,
+    ),
 
   // ---- 对话 ----
   chat: (payload: {

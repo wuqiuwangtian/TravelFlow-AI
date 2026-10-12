@@ -199,6 +199,53 @@ def test_us5_rename_session(app_client: TestClient) -> None:
     assert app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"] == "重庆 3 天"
 
 
+# ============================================================ 对话历史持久化
+def test_chat_history_survives_reload(app_client: TestClient) -> None:
+    """回归：重新打开对话必须能看到之前的记录。
+
+    后端一直把消息存在 LangGraph checkpoint 里，但曾**没有接口读回来**，
+    于是用户每次打开都看到一个空对话 —— 数据明明在，却像丢了。
+    """
+    session_id, branch_id = _new_session(app_client)
+
+    app_client.post(
+        "/api/chat",
+        json={"message": FIRST_MESSAGE, "session_id": session_id, "branch_id": branch_id},
+    )
+    app_client.post(
+        "/api/chat",
+        json={"message": "第二天轻松点", "session_id": session_id, "branch_id": branch_id},
+    )
+
+    history = app_client.get(f"/api/branches/{branch_id}/messages").json()["messages"]
+
+    assert [m["role"] for m in history][:2] == ["user", "assistant"]
+    assert FIRST_MESSAGE in history[0]["content"]
+    assert len(history) >= 4, f"两轮对话应有至少 4 条消息，实际 {len(history)}"
+
+
+def test_chat_history_is_empty_for_new_branch(app_client: TestClient) -> None:
+    """新分支应当干净，不能串到别的分支的历史。"""
+    session_id, branch_id = _new_session(app_client)
+    app_client.post(
+        "/api/chat",
+        json={"message": FIRST_MESSAGE, "session_id": session_id, "branch_id": branch_id},
+    )
+
+    created = app_client.post(
+        f"/api/sessions/{session_id}/branches", json={"title": "全新分支"}
+    ).json()
+    new_branch = next(b for b in created["items"] if b["title"] == "全新分支")
+
+    history = app_client.get(f"/api/branches/{new_branch['id']}/messages").json()
+
+    assert history["messages"] == []
+
+
+def test_chat_history_404_for_unknown_branch(app_client: TestClient) -> None:
+    assert app_client.get("/api/branches/nope/messages").status_code == 404
+
+
 # ============================================================ 配置自检
 def test_system_endpoints_work_without_configuration(app_client: TestClient) -> None:
     """没配 Key 时，系统类接口仍应全部可用（否则用户连设置页都打不开）。"""

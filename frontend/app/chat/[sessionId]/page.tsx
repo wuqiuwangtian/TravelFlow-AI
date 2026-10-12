@@ -78,23 +78,44 @@ export default function ChatPage() {
     void load();
   }, [load]);
 
-  // 切换分支时载入该分支最新版本的路书
+  // 切换分支时：载入该分支的对话历史与最新版本路书
+  //
+  // 注意「对话历史」这一步曾经缺失 —— 后端一直有存（LangGraph checkpoint），
+  // 但前端没读回来，于是用户刷新页面就看到一个空对话，像是数据丢了。
   useEffect(() => {
-    const list = activeBranchId ? (detail?.versions[activeBranchId] ?? []) : [];
+    if (!activeBranchId) return;
+    let cancelled = false;
+
+    void api
+      .getMessages(activeBranchId)
+      .then((result) => {
+        if (cancelled) return;
+        setMessages(
+          result.messages.map((m) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([]);
+      });
+
+    const list = detail?.versions[activeBranchId] ?? [];
     const latest = list[list.length - 1];
     if (!latest) {
       setVersionDetail(null);
-      return;
+    } else {
+      void api
+        .getVersion(latest.id)
+        .then((data) => {
+          if (!cancelled) setVersionDetail(data);
+        })
+        .catch(() => {
+          if (!cancelled) setVersionDetail(null);
+        });
     }
-    let cancelled = false;
-    void api
-      .getVersion(latest.id)
-      .then((data) => {
-        if (!cancelled) setVersionDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) setVersionDetail(null);
-      });
+
     return () => {
       cancelled = true;
     };
