@@ -1,2 +1,10 @@
+# pnpm 12 起，这些设置**不再从 package.json 读取**，必须放在本文件。
+#
+# 为什么要显式允许：pnpm 10+ 默认不运行依赖的构建脚本（防供应链攻击）。
+# 但 unrs-resolver（eslint-config-next 的传递依赖）需要编译原生二进制，
+# 不允许的话 `pnpm install` 会直接以 ERR_PNPM_IGNORED_BUILDS 失败 ——
+# 对只想把项目跑起来的人来说，这个报错完全无从下手。
+#
+# 由 `pnpm approve-builds unrs-resolver` 生成。
 allowBuilds:
-  unrs-resolver: set this to true or false
+  unrs-resolver: true
