@@ -22,6 +22,7 @@ from app.agents.detail_levels import detail_name, target_length_text
 from app.agents.nodes.utils import last_user_text
 from app.agents.prompt_loader import render_prompt
 from app.agents.state import PlanState
+from app.agents.streaming import emit_progress, emit_token, is_streaming
 from app.core.logging import get_logger
 from app.domain.enums import DetailLevel, PlanStatus
 from app.llm.base import ChatMessage, LLMProvider
@@ -43,6 +44,7 @@ def make_refiner_node(llm: LLMProvider):
     """构造 refiner 节点。"""
 
     async def refiner(state: PlanState) -> dict:
+        emit_progress("refine")
         user_text = last_user_text(state)
         plan_markdown = state.get("plan_markdown", "")
         research = state.get("research")
@@ -89,12 +91,18 @@ def make_refiner_node(llm: LLMProvider):
             detail_name=detail_name(level),
             target_length=target_length_text(level, requirements.duration_days),
         )
-        new_plan = await llm.chat(
-            [
-                ChatMessage(role="system", content=prompt),
-                ChatMessage(role="user", content="请按上述意见修改路书。"),
-            ]
-        )
+        messages = [
+            ChatMessage(role="system", content=prompt),
+            ChatMessage(role="user", content="请按上述意见修改路书。"),
+        ]
+        if is_streaming():
+            parts: list[str] = []
+            async for piece in llm.stream(messages):
+                parts.append(piece)
+                emit_token(piece)
+            new_plan = "".join(parts).strip()
+        else:
+            new_plan = await llm.chat(messages)
 
         return {
             "plan_markdown": new_plan,

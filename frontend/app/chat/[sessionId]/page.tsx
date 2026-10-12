@@ -15,7 +15,7 @@ import {
 import ReactMarkdown from "react-markdown";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, chatStream } from "@/lib/api";
 import type {
   BranchInfo,
   DetailLevel,
@@ -43,6 +43,10 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   // 会话标题行内编辑
   const [editingTitle, setEditingTitle] = useState(false);
+  // 流式：当前阶段提示 / 正在逐字生成的路书 / 过程中的提示
+  const [progress, setProgress] = useState<string | null>(null);
+  const [streamingPlan, setStreamingPlan] = useState("");
+  const [notices, setNotices] = useState<string[]>([]);
   const [level, setLevel] = useState<DetailLevel>("L2_standard");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -152,19 +156,42 @@ export default function ChatPage() {
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     });
     setSending(true);
+    setProgress(null);
+    setStreamingPlan("");
+    setNotices([]);
+
+    let reply = "";
+    let finalPlan = "";
     try {
-      const result = await api.chat({
-        message: text,
-        session_id: sessionId,
-        branch_id: activeBranchId,
-        detail_level: level,
-      });
-      setMessages((prev) => [...prev, { role: "assistant", content: result.reply }]);
+      // 流式：进度与增量文本实时显示，避免 30~40 秒一直干等
+      await chatStream(
+        {
+          message: text,
+          session_id: sessionId,
+          branch_id: activeBranchId,
+          detail_level: level,
+        },
+        {
+          onProgress: (message) => setProgress(message),
+          onNotice: (message) => setNotices((prev) => [...prev, message]),
+          onToken: (piece) => {
+            // 开始出文本时就撤掉「正在撰写」的提示，改看正文
+            setProgress(null);
+            finalPlan += piece;
+            setStreamingPlan(finalPlan);
+          },
+          onDone: (result) => {
+            reply = result.reply;
+            finalPlan = result.plan || finalPlan;
+          },
+        },
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply || "（无回复内容）" },
+      ]);
       await load();
-      if (result.version_id) {
-        const fresh = await api.getVersion(result.version_id);
-        setVersionDetail(fresh);
-      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -172,6 +199,9 @@ export default function ChatPage() {
       ]);
     } finally {
       setSending(false);
+      setProgress(null);
+      // 稍后清空流式正文：等 load() 把正式版本渲染出来再撤，避免闪一下空白
+      setTimeout(() => setStreamingPlan(""), 300);
     }
   }
 
@@ -355,10 +385,19 @@ export default function ChatPage() {
               </div>
             ))}
 
+            {notices.map((notice) => (
+              <div
+                key={notice}
+                className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700"
+              >
+                ⚠️ {notice}
+              </div>
+            ))}
+
             {sending && (
               <div className="flex items-center gap-2 text-xs text-brand-600">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                正在检索并生成路书，通常需要数秒…
+                {progress ?? "正在处理…"}
               </div>
             )}
             <div ref={bottomRef} />
@@ -424,7 +463,13 @@ export default function ChatPage() {
           </div>
 
           <div className="max-h-[460px] min-h-[300px] flex-1 overflow-y-auto p-4">
-            {versionDetail?.markdown ? (
+            {streamingPlan ? (
+              // 流式生成中：先把已到达的正文显示出来，让用户看到「正在写」
+              <div className="prose-report">
+                <ReactMarkdown>{streamingPlan}</ReactMarkdown>
+                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand-400 align-text-bottom" />
+              </div>
+            ) : versionDetail?.markdown ? (
               <div className="prose-report">
                 <ReactMarkdown
                   // 安全：路书内容来自模型 + 外部检索结果，可能被注入

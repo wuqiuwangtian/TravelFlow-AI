@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.agents.nodes.utils import last_user_text
 from app.agents.prompt_loader import render_prompt
 from app.agents.state import PlanState
+from app.agents.streaming import emit_progress
 from app.core.logging import get_logger
 from app.domain.enums import PlanStatus
 from app.domain.models import Requirements
@@ -37,6 +38,7 @@ def make_collector_node(llm: LLMProvider):
     """构造 collector 节点。"""
 
     async def collector(state: PlanState) -> dict:
+        emit_progress("collect")
         current = state.get("requirements") or Requirements()
         user_text = last_user_text(state)
 

@@ -73,9 +73,12 @@ async def open_checkpointer(db_path: str | Path) -> AsyncIterator[AsyncSqliteSav
         await conn.close()
 
 
-def thread_config(branch_id: str) -> dict[str, dict[str, str]]:
+def thread_config(branch_id: str, **extra: object) -> dict[str, dict[str, object]]:
     """构造某个分支（thread）的调用配置。
 
     **分支即独立 thread**：各分支状态完全隔离，血缘关系记录在业务表中（规划 §2.5）。
+
+    ``extra`` 会并入 ``configurable``，节点里可经 ``get_config()`` 读到 ——
+    用于显式告知节点「本次是流式调用」（见 ``agents/streaming.py``）。
     """
-    return {"configurable": {"thread_id": branch_id}}
+    return {"configurable": {"thread_id": branch_id, **extra}}

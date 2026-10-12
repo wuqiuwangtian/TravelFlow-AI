@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -73,7 +74,8 @@ class ChatService:
         detail_level: DetailLevel | None = None,
     ) -> ChatOutcome:
         """把用户消息送入图，并把产出记录为一个新版本。"""
-        config = thread_config(branch_id)
+        # 显式声明「非流式」：节点据此选择结构化输出而非逐字流
+        config = thread_config(branch_id, stream_llm=False)
 
         # 只传「本次输入」：历史状态由 checkpointer 自动恢复，
         # messages 通过 add_messages reducer 追加。
@@ -95,6 +97,55 @@ class ChatService:
             version_id=version_id,
             missing_fields=list(values.get("missing_fields") or []),
         )
+
+    async def send_stream(
+        self,
+        *,
+        session_id: str,
+        branch_id: str,
+        message: str,
+        detail_level: DetailLevel | None = None,
+    ) -> AsyncIterator[dict]:
+        """流式版本：边执行边产出事件，最后给出与 ``send`` 相同的结果。
+
+        产出的事件（``event`` 字段）：
+        - ``custom`` —— 节点内部推送的进度 / 增量文本
+        - ``node``   —— 某个节点刚刚执行完
+        - ``done``   —— 全部完成，``data`` 是 ``ChatOutcome`` 的字典形式
+
+        为什么最后要重新取一次 state：``stream_mode="updates"`` 只给每个节点的
+        增量，拿不到完整状态；而版本落库需要完整的 ``plan_markdown`` 与检索结果。
+        """
+        config = thread_config(branch_id, stream_llm=True)
+
+        payload: dict = {"messages": [HumanMessage(content=message)]}
+        if detail_level is not None:
+            payload["detail_level"] = detail_level
+
+        async for mode, chunk in self._graph.astream(
+            payload, config, stream_mode=["custom", "updates"]
+        ):
+            if mode == "custom":
+                yield {"event": "custom", "data": chunk}
+            elif mode == "updates" and isinstance(chunk, dict):
+                for node_name in chunk:
+                    yield {"event": "node", "data": {"node": node_name}}
+
+        snapshot = await self._graph.aget_state(config)
+        values = dict(snapshot.values or {})
+
+        version_id = await self._record_version(branch_id, values, config)
+        await self._store.touch_session(session_id)
+
+        outcome = ChatOutcome(
+            branch_id=branch_id,
+            status=str(values.get("status") or PlanStatus.COLLECTING),
+            reply=_last_ai_text(values) or "（无回复内容）",
+            plan_markdown=values.get("plan_markdown") or "",
+            version_id=version_id,
+            missing_fields=list(values.get("missing_fields") or []),
+        )
+        yield {"event": "done", "data": outcome}
 
     async def _record_version(self, branch_id: str, values: dict, config: dict) -> str | None:
         """有路书产出时，落一个版本记录（供版本树与导出使用）。"""

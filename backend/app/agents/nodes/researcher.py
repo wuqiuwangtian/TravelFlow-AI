@@ -16,6 +16,7 @@ import asyncio
 from datetime import datetime
 
 from app.agents.state import PlanState
+from app.agents.streaming import emit_notice, emit_progress
 from app.core.errors import SearchUnavailable
 from app.core.logging import get_logger
 from app.domain.enums import PlanStatus
@@ -46,6 +47,7 @@ def make_researcher_node(search: SearchProvider, *, max_results: int = 5):
     """构造 researcher 节点。"""
 
     async def researcher(state: PlanState) -> dict:
+        emit_progress("research")
         requirements = state["requirements"]
         queries = build_queries(requirements, datetime.now().year)
 
@@ -77,6 +79,10 @@ def make_researcher_node(search: SearchProvider, *, max_results: int = 5):
                 "可在「设置」中改用百度千帆 / 博查，或自建 SearXNG。",
                 detail=f"provider={search.name} 三路检索全部失败",
             )
+
+        if failures:
+            # 部分失败不阻断，但要如实告知 —— 否则用户会以为信息是全的
+            emit_notice(f"有 {failures} 路检索未成功，路书会基于其余结果生成，可能不够全面。")
 
         bundle = ResearchBundle(
             transport=buckets["transport"],
