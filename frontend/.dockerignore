@@ -1,9 +1,0 @@
-# 前端构建上下文排除项
-node_modules/
-.next/
-out/
-.turbo/
-npm-debug.log*
-.env*.local
-*.tsbuildinfo
-next-env.d.ts

@@ -60,11 +60,6 @@ frontend/.turbo/
 frontend/.vercel/
 frontend/.pnpm-store/
 
-# ---------------- 部署运行期产物 ----------------
-# SearXNG 容器会在挂载目录里生成运行期文件（如 limiter 状态）
-deploy/searxng/*.log
-deploy/searxng/uwsgi.ini
-
 # ---------------- 本地开发笔记（仅供作者本人，不发布）----------------
 # 阶段拆解、设计规划、测试报告、部署报告、原型、测试代码等过程材料。
 # 使用者需要的是 README 与 CHANGELOG，这些过程记录不属于交付物。

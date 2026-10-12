@@ -51,7 +51,6 @@
 ### 部署
 
 - 一键脚本：`start.sh`（Linux / macOS / WSL）与 `start.bat`（Windows）
-- Docker Compose，含可选的 SearXNG 检索服务
 - 手动部署：前后端分别启动
 - 未配置任何密钥时也能正常启动，在界面里补配置即可
 

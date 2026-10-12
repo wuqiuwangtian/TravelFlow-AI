@@ -15,7 +15,7 @@
 
 ## 🚀 快速开始
 
-三种方式**任选其一**。
+两种方式**任选其一**。
 
 > 💡 **没配 API Key 也能先启动** —— 打开界面后在「设置」里填即可。
 
@@ -34,50 +34,7 @@ start.bat         # Windows：双击运行
 **需要先装**：[uv](https://docs.astral.sh/uv/) 和 [Node.js](https://nodejs.org/) 20 以上。
 缺了的话脚本会直接告诉你安装命令，不会默默失败。
 
-### 方式二：Docker
-
-```bash
-cp .env.example .env      # 可选：在这里填 API Key
-
-docker compose up -d
-```
-
-然后访问 <http://localhost:3100>。
-
-<details>
-<summary>构建时拉不到镜像怎么办</summary>
-
-Docker 需要能访问镜像仓库。若你在中国大陆且直连较慢，可配置镜像加速器：
-
-Docker Desktop → **Settings → Docker Engine**，加入：
-
-```json
-{
-  "registry-mirrors": ["https://docker.m.daocloud.io"]
-}
-```
-
-同时建议用国内源加速 Python 依赖：
-
-```bash
-docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-</details>
-
-<details>
-<summary>可选：自带检索服务（不用申请任何 Key）</summary>
-
-SearXNG 是一个开源的元搜索服务，自己跑一个就不依赖第三方检索 API：
-
-```bash
-docker compose --profile searxng up -d
-# 然后把 .env 里的 SEARCH_PROVIDER 改成 searxng
-```
-
-</details>
-
-### 方式三：手动启动（适合开发调试）
+### 方式二：手动启动（适合开发调试）
 
 ```bash
 # 终端 1 —— 后端
@@ -104,7 +61,7 @@ pnpm dev -p 3100
 2. 选模型服务商 → 填 API Key → 点「**获取可用模型**」挑一个（不用手写模型名）
 3. 保存
 
-也可以直接改 `backend/.env`（写法参考 `backend/.env.example` 的注释）。
+也可以直接改环境文件 `backend/.env`（写法参考 `backend/.env.example` 的注释）。
 
 ### 大模型
 
@@ -126,11 +83,12 @@ pnpm dev -p 3100
 | :--- | :--- | :--- |
 | **Tavily** | 需要 | 默认选项，专为 AI 优化的搜索 API |
 | **博查 / 百度千帆** | 需要 | 国内直连，无需代理 |
-| **SearXNG** | 不需要 | 自建元搜索，见上方 `--profile searxng` |
+| **SearXNG** | 不需要 | 需自行部署一个 SearXNG 实例，把地址填进设置即可 |
 | **DuckDuckGo** | 不需要 | 零配置，但在中国大陆**需要代理** |
 
 > 不确定选哪个？国内网络建议用**百度千帆**或**博查**（申请免费额度即可）；
-> 不想申请任何 Key 就用自建的 **SearXNG**。
+> 不想申请任何 Key，可自行部署 [SearXNG](https://docs.searxng.org/)（开源元搜索），
+> 然后在设置里把检索源选为 SearXNG 并填入地址。
 
 ---
 
@@ -156,7 +114,7 @@ pnpm dev -p 3100
 <summary><b>提示「连接不上后端服务」</b></summary>
 
 1. 先确认后端在运行：访问 <http://localhost:8000/api/system/health>，应返回 `{"status":"ok",...}`
-2. 若前端改了端口，后端要放行对应来源：在 `backend/.env` 改 `APP_CORS_ORIGINS`，加上前端地址
+2. 若前端改了端口，后端要放行对应来源：在 `backend/.env` 里改 `APP_CORS_ORIGINS`，加上前端地址
    - 用 `start.sh` / `start.bat` 启动时会**自动处理**，无需手动改
 3. **在 WSL 里请用 `localhost` 而不是 `127.0.0.1`** —— WSL2 的端口转发保证 `localhost` 可用
 
@@ -181,7 +139,7 @@ pnpm dev -p 3100
 <details>
 <summary><b>我的数据存在哪？</b></summary>
 
-- 配置：`backend/.env`（含 API Key，权限已设为仅本人可读）
+- 配置：`backend/.env`——含有 API Key，请勿提交或分享
 - 会话与路书：`backend/data/travelflow.db`（SQLite）
 
 都只在你本机，不会上传。删掉数据库文件即可清空全部记录。
@@ -223,10 +181,8 @@ TravelFlow-AI/
 │       ├── storage/  # SQLite 持久化
 │       └── export/   # Markdown / HTML 导出
 ├── frontend/         # Next.js 界面
-├── deploy/           # SearXNG 等部署配置
 ├── start.sh          # Linux / macOS / WSL 一键启动
-├── start.bat         # Windows 一键启动
-└── docker-compose.yml
+└── start.bat         # Windows 一键启动
 ```
 
 ---
