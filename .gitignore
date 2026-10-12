@@ -22,6 +22,12 @@ data/
 .venv*/
 node_modules/
 .next/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# 测试覆盖率报告
+.coverage
+htmlcov/
 
 # Python 缓存
 __pycache__/
