@@ -129,3 +129,19 @@ def test_saving_incomplete_config_reports_runtime_state(
     assert result["saved"] is True
     if not result["reloaded"]:
         assert result["runtime_error"], "未就绪时必须给出原因"
+
+
+# ============================================================ 模型列表接口
+def test_models_endpoint_reports_missing_key(
+    client_with_env_file: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """没配 Key 时给出可读原因，而不是 500。"""
+    monkeypatch.setenv("LLM_API_KEY", "")
+    get_settings.cache_clear()
+
+    response = client_with_env_file.get("/api/system/models")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["models"] == []
+    assert body["message"]

@@ -1,38 +1,84 @@
-# Python
+# ============================================================
+#  TravelFlow AI · Git 忽略规则
+#
+#  原则：**运行期产物与个人配置一律不入库**，
+#        尤其是 .env（里面有 API Key）。
+# ============================================================
+
+# ---------------- Python ----------------
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
 
-# 虚拟环境
+# ---------------- 虚拟环境 ----------------
 .venv*/
 venv/
 env/
+ENV/
 
-# 环境变量（切勿提交密钥）
+# ---------------- 环境变量（切勿提交密钥）----------------
 .env
 .env.local
 .env.*.local
+# 示例文件必须保留，供他人复制
+!.env.example
+!backend/.env.example
 
-# 运行期数据（本地数据库，绝不入库）
+# ---------------- 运行期数据（本地数据库，绝不入库）----------------
 data/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
-# 导出产物
+# ---------------- 导出产物 ----------------
 exports/
 backend/static/
 
-# 工具与缓存
+# ---------------- 工具与缓存 ----------------
 .uv-cache/
 .uv-python/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
-# 前端（Next.js）
+# ---------------- 前端（Next.js）----------------
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/next-env.d.ts
 frontend/*.tsbuildinfo
 frontend/.turbo/
+frontend/.vercel/
+frontend/.pnpm-store/
+
+# ---------------- 部署运行期产物 ----------------
+# SearXNG 容器会在挂载目录里生成运行期文件（如 limiter 状态）
+deploy/searxng/*.log
+deploy/searxng/uwsgi.ini
+
+# ---------------- 编辑器与操作系统 ----------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------- 日志与临时文件 ----------------
+*.log
+npm-debug.log*
+pnpm-debug.log*
+*.tmp
+*.bak
+*.orig
+*.rej

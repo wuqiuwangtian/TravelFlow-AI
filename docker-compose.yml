@@ -4,7 +4,10 @@
 #  用法：
 #    cp .env.example .env      # 填写 API Key（也可留空，启动后在界面里配）
 #    docker compose up -d
-#    浏览器访问 http://localhost:3000
+#    浏览器访问 http://localhost:3100
+#
+#  注意：前端对外的 3100 必须与下面的 APP_CORS_ORIGINS 一致，
+#        否则浏览器会被跨域拦住，表现为「连不上后端」。
 #
 #  可选：自带 SearXNG 检索服务（无需任何第三方 Key）
 #    docker compose --profile searxng up -d
@@ -33,7 +36,7 @@ services:
 
       # ---- 大模型（留空也可启动，之后在界面「设置」中填写）----
       LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
 
@@ -68,7 +71,8 @@ services:
     container_name: travelflow-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # 宿主 3100 -> 容器 3000（Next.js 在容器内监听 3000）
+      - "3100:3000"
     depends_on:
       backend:
         condition: service_healthy

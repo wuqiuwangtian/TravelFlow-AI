@@ -108,7 +108,7 @@ cp .env.example .env      # 可选：填写 API Key
 docker compose up -d
 ```
 
-访问 <http://localhost:3000>。
+访问 <http://localhost:3100>。
 
 **可选：自带检索服务**（不依赖任何第三方 Key）
 
@@ -117,17 +117,34 @@ docker compose --profile searxng up -d
 # 然后把 .env 里的 SEARCH_PROVIDER 改为 searxng
 ```
 
-> ⚠️ **Docker 构建尚未成功实测**：本机容器**无法访问外网**（`docker run` 内的 DNS/HTTPS 全部超时），
-> 因此 `uv sync` / `pnpm install` 会永久阻塞。判断与 Clash 的 TUN 模式冲突有关，
-> 而非 Dockerfile 本身的问题（compose 文件已通过 YAML 校验）。
+> ⚠️ **Docker 方式尚未在本机验证通过**。实测报错已定位到确切原因：
 >
-> **若你遇到同样情况**：临时关闭 Clash 的 TUN 模式后重试；国内网络建议用镜像源加速：
+> ```
+> dialing registry-1.docker.io:443 ... connectex: A connection attempt failed
+> because Docker Desktop has no HTTPS proxy
+> ```
+>
+> **Docker Desktop 没有配置代理**，无法直连 Docker Hub 拉取基础镜像。
+> 项目文件本身没有问题（compose 与两个 Dockerfile 均已校验）。
+>
+> **修复方式**（二选一，改完需重启 Docker Desktop）：
+>
+> 1. **配置代理**（若使用 Clash 等工具）
+>    Settings → Resources → **Proxies** → 打开 Manual proxy configuration，
+>    HTTP 与 HTTPS 都填你的代理地址，例如 `http://127.0.0.1:7897`。
+> 2. **配置镜像加速器**
+>    Settings → Docker Engine，加入：
+>    ```json
+>    { "registry-mirrors": ["https://docker.m.daocloud.io"] }
+>    ```
+>
+> 国内网络建议同时用镜像源加速 Python 依赖：
 >
 > ```bash
 > docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 > ```
 >
-> **请以阶段④的实测结果为准**，不要假定它已验证。
+> **请以实际构建结果为准**，不要假定它已验证。
 
 ### 方式三：手动分别启动（开发用）
 
@@ -141,14 +158,14 @@ uv run uvicorn app.main:app --reload           # http://127.0.0.1:8000
 # 终端 2 —— 前端
 cd frontend
 pnpm install
-pnpm dev                                        # http://127.0.0.1:3000
+pnpm dev -p 3100                                # http://localhost:3100
 ```
 
 ### 启动之后
 
 | 地址 | 说明 |
 | :--- | :--- |
-| <http://127.0.0.1:3000> | 界面：工作台 / 对话规划 / 分支对比 / 会话 / 设置 / 帮助 |
+| <http://localhost:3100> | 界面：工作台 / 对话规划 / 分支对比 / 会话 / 设置 / 帮助 |
 | <http://127.0.0.1:8000/docs> | 交互式 API 文档 |
 | <http://127.0.0.1:8000/api/system/health> | 健康检查 |
 | <http://127.0.0.1:8000/api/system/config> | 配置自检（含**可操作**的提示，而非一句报错） |

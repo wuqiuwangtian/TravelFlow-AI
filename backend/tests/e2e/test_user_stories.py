@@ -307,3 +307,40 @@ def test_system_endpoints_work_without_configuration(app_client: TestClient) -> 
     assert app_client.get("/api/system/config").status_code == 200
     assert app_client.get("/api/system/providers").status_code == 200
     assert app_client.get("/api/system/settings").status_code == 200
+
+
+def test_autoname_is_idempotent(app_client: TestClient) -> None:
+    """第一轮命名后，后续对话不应反复改名。"""
+    session_id, branch_id = _new_session(app_client, "新的旅行")
+
+    app_client.post(
+        "/api/chat",
+        json={"message": FIRST_MESSAGE, "session_id": session_id, "branch_id": branch_id},
+    )
+    first_title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+
+    app_client.post(
+        "/api/chat",
+        json={"message": "第二天轻松点", "session_id": session_id, "branch_id": branch_id},
+    )
+    second_title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+
+    assert first_title == second_title, "第二轮不应再改标题"
+
+
+def test_autoname_strips_newlines(app_client: TestClient) -> None:
+    """多行输入时标题不应带换行。"""
+    session_id, branch_id = _new_session(app_client, "新的旅程")
+
+    app_client.post(
+        "/api/chat",
+        json={
+            "message": "杭州三日游\n想轻松一点",
+            "session_id": session_id,
+            "branch_id": branch_id,
+        },
+    )
+
+    title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+    assert "\n" not in title
+    assert title.startswith("杭州三日游")

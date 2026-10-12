@@ -594,6 +594,44 @@ fork 请求体：
 
 > **数据表结构**（sessions / branches / versions / plans）见 [`02d §2.4`](02d-session-ux-design.md)。
 
+**实现状态（v1.0.0 核对，以代码为准）**
+
+上表是**设计蓝图**，实际落地情况如下。实时清单可访问 `GET /openapi.json` 查看。
+
+*实际已实现 22 个接口*
+
+| 分类 | 已实现 |
+| :--- | :--- |
+| 会话 | `GET/POST /api/sessions`；`GET/PATCH/DELETE /api/sessions/{sid}` |
+| 分支 | `GET/POST /api/sessions/{sid}/branches`；`POST /api/branches/{bid}/primary`；`DELETE /api/branches/{bid}` |
+| 版本 | `GET /api/branches/{bid}/versions`；`GET /api/versions/{vid}` |
+| 对话 | `POST /api/chat`；`GET /api/branches/{bid}/messages` ⭐ |
+| 导出 | `GET /api/versions/{vid}/export` |
+| 系统 | `GET /api/system/` `health`/`config`/`providers`/`models` ⭐ /`settings` |
+| 设置 | `GET/PUT /api/system/settings` ⚠️ 实际路径在 `/system` 下，与上表写法不同 |
+| 连接测试 | `POST /api/system/test-llm`；`test-search` |
+
+⭐ **实现阶段新增**（设计时未规划）：
+
+- `GET /api/branches/{bid}/messages`：读取对话历史。
+  缺失它时用户刷新页面会看到空对话 —— 数据其实存在 checkpoint 里，
+  属于「存了却取不出来」，由用户实测发现后补上。
+- `GET /api/system/models`：动态获取可用模型列表。
+  模型名会随服务商调整（DeepSeek 即多次更名），要求用户手写必然出错。
+
+*规划但尚未实现*（保留为后续工作，不影响当前使用）
+
+| 接口 | 说明 | 当前替代方案 |
+| :--- | :--- | :--- |
+| `POST /api/chat/stream` | SSE 流式输出 | 一次性返回完整结果（本地单用户可接受） |
+| `GET /api/compare` | 服务端对比数据 | 前端拉取各分支版本后对比（`/compare` 页已实现） |
+| `GET /api/compare/export` | 导出对比报告 | 分别导出各版本 |
+| `POST /api/versions/{vid}/restore` | 回到某版本 | 从该版本**分叉新分支**（`fork_version_id`） |
+| `POST /api/sessions/{sid}/candidates` | 一次生成 N 个候选 | 手动多次分叉 |
+| `GET /api/branches/{bid}` | 分支详情 | 由 `GET /api/sessions/{sid}` 的分支树覆盖 |
+| `PATCH /api/branches/{bid}` | 分支改名 | 暂不支持（影响较小） |
+
+
 ---
 
 ## 10. 前端设计
