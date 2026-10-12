@@ -117,7 +117,9 @@ def test_invalid_export_format_is_rejected(app_client: TestClient) -> None:
 
     response = app_client.get(f"/api/versions/{chat['version_id']}/export?format=pdf")
 
+    # 枚举校验失败会被统一错误契约转为 400 INVALID_REQUEST
     assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_error_responses_carry_trace_id(app_client: TestClient) -> None:

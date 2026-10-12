@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from app.core.config import Settings
 from app.core.errors import ConfigError
 from app.core.providers import find_llm_provider
@@ -45,7 +43,3 @@ def _known_ids() -> list:
     from app.core.providers import LLM_PROVIDERS
 
     return list(LLM_PROVIDERS)
-
-
-# 预留：非 OpenAI 协议的实现可注册于此
-_BUILDERS: dict[str, Callable[[Settings], LLMProvider]] = {}

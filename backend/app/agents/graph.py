@@ -67,13 +67,3 @@ def build_graph(
     workflow.add_conditional_edges("refiner", route_after_refine, {END: END})
 
     return workflow.compile(checkpointer=checkpointer)
-
-
-def graph_topology() -> dict[str, list[str]]:
-    """返回节点与出边的静态描述，供测试与自检使用。"""
-    return {
-        "collector": ["researcher", "END"],
-        "researcher": ["planner"],
-        "planner": ["END"],
-        "refiner": ["END"],
-    }

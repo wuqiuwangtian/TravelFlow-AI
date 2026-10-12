@@ -35,11 +35,6 @@ def route_after_collect(state: PlanState) -> str:
     return "researcher" if state.get("status") == PlanStatus.RESEARCHING else END
 
 
-def route_after_plan(state: PlanState) -> str:
-    """生成完路书即停下，等待用户反馈（人机交互断点）。"""
-    return END
-
-
 def route_after_refine(state: PlanState) -> str:
     """确认收尾或等待下一轮反馈。"""
     return END

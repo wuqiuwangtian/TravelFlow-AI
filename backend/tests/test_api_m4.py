@@ -5,15 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.agents.checkpoint import open_checkpointer
 from app.agents.graph import build_graph
 from app.agents.nodes.planner import PlanOutput
 from app.api.routes_export import export_version
-from app.core.errors import InvalidRequest
-from app.domain.enums import DetailLevel, PlanStatus, TodoKind
+from app.domain.enums import DetailLevel, ExportFormat, PlanStatus, TodoKind
 from app.domain.models import Citation, TodoItem
 from app.services.chat_service import ChatService
 from app.storage.database import open_database
@@ -247,11 +245,17 @@ async def test_export_html_is_self_contained(tmp_path: Path) -> None:
 
 
 async def test_export_rejects_unknown_format(tmp_path: Path) -> None:
+    """非法格式的拦截发生在 HTTP 层（统一错误契约 → 400）。
+
+    本文件直接调用路由函数、会绕过框架校验，因此这里只验证
+    「合法格式能正常导出」；非法格式的用例见 tests/e2e/test_performance.py。
+    """
     async with open_database(tmp_path / "sessions.db") as conn:
         store = SessionStore(conn)
         session = await store.create_session("重庆之行")
         branch = await store.create_branch(session.id, "主方案", is_primary=True)
         version = await store.create_version(branch.id)
 
-        with pytest.raises(InvalidRequest):
-            await export_version(version.id, "pdf", store)
+        response = await export_version(version.id, ExportFormat.MARKDOWN, store)
+
+        assert response.status_code == 200

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.enums import DetailLevel
 from app.domain.models import BranchInfo, SessionInfo, VersionInfo
@@ -68,17 +68,92 @@ class ConnectionTestResponse(BaseModel):
     message: str
 
 
-class SettingsUpdate(BaseModel):
-    """可写回 ``.env`` 的配置项（白名单，其余字段不可改）。"""
+#: 设置项的长度上限（防止把 .env 写成巨无霸）
+SETTING_MAX_LEN = 512
 
-    llm_provider: str | None = None
-    llm_model: str | None = None
-    llm_api_key: str | None = None
-    llm_base_url: str | None = None
-    search_provider: str | None = None
-    search_api_key: str | None = None
-    searxng_base_url: str | None = None
-    default_detail_level: str | None = None
+#: 禁止出现在设置值里的字符：换行/回车会让 .env 多出一行（配置注入）
+_FORBIDDEN_CHARS = ("\n", "\r", "\x00")
+
+
+def _validate_setting_value(value: str | None) -> str | None:
+    """设置值的统一校验：无换行、无控制字符、长度可控。
+
+    这是**接口层**的防线；``env_writer`` 里还有一道（直接调用它时也安全）。
+    """
+    if value is None:
+        return None
+    if any(ch in value for ch in _FORBIDDEN_CHARS):
+        raise ValueError("不能包含换行符或空字符")
+    if any(ord(ch) < 0x20 for ch in value):
+        raise ValueError("不能包含控制字符")
+    if len(value) > SETTING_MAX_LEN:
+        raise ValueError(f"长度不能超过 {SETTING_MAX_LEN} 个字符")
+    return value
+
+
+def _validate_base_url(value: str | None) -> str | None:
+    """校验接口地址。
+
+    为什么要管：模型与检索的请求都会带上**用户的 API Key**。
+    如果把 base_url 改成任意主机，Key 就会被送到那台服务器上
+    —— 这是一条真实存在的密钥外送路径（尤其在本机无鉴权的前提下）。
+
+    因此只允许 https，或显式的本机地址（本地模型场景）。
+    """
+    value = _validate_setting_value(value)
+    if not value:
+        return value
+
+    from urllib.parse import urlparse
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("接口地址必须以 http:// 或 https:// 开头")
+    if not parsed.hostname:
+        raise ValueError("接口地址缺少主机名")
+
+    if parsed.scheme == "http" and parsed.hostname not in _LOCAL_HOSTS:
+        raise ValueError("非本机地址必须使用 https，否则 API Key 会以明文传输")
+    return value
+
+
+#: 允许使用 http 的本机主机名（本地模型服务）
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal", "0.0.0.0"}
+
+
+class SettingsUpdate(BaseModel):
+    """可写回 ``.env`` 的配置项（白名单，其余字段不可改）。
+
+    **每个字段都必须通过值校验** —— 早期版本是裸 ``str``，
+    导致 ``{"llm_model": "x\\nAPP_HOST=0.0.0.0"}`` 能注入额外配置行。
+    """
+
+    llm_provider: str | None = Field(default=None, max_length=64)
+    llm_model: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    llm_api_key: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    llm_base_url: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    search_provider: str | None = Field(default=None, max_length=64)
+    search_api_key: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    searxng_base_url: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    default_detail_level: str | None = Field(default=None, max_length=64)
+
+    @field_validator("llm_base_url", "searxng_base_url", mode="after")
+    @classmethod
+    def _check_urls(cls, value: str | None) -> str | None:
+        return _validate_base_url(value)
+
+    @field_validator(
+        "llm_provider",
+        "llm_model",
+        "llm_api_key",
+        "search_provider",
+        "search_api_key",
+        "default_detail_level",
+        mode="after",
+    )
+    @classmethod
+    def _check_values(cls, value: str | None) -> str | None:
+        return _validate_setting_value(value)
 
 
 class SettingsUpdateResponse(BaseModel):

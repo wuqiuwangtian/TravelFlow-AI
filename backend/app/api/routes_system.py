@@ -214,7 +214,7 @@ async def list_models(settings: Settings = Depends(get_settings)) -> ModelListRe
         return ModelListResponse(message="当前服务商不支持自动获取模型列表，请手动填写")
 
     try:
-        models = await provider.list_models()  # type: ignore[attr-defined]
+        models = await provider.list_models()
     except Exception as exc:
         return ModelListResponse(message=getattr(exc, "message", str(exc)))
 

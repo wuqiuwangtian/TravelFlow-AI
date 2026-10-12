@@ -24,7 +24,8 @@ services:
     container_name: travelflow-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # 只绑回环：容器内的服务**没有鉴权**，绝不能发布到局域网
+      - "127.0.0.1:8000:8000"
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: "8000"
@@ -72,7 +73,8 @@ services:
     restart: unless-stopped
     ports:
       # 宿主 3100 -> 容器 3000（Next.js 在容器内监听 3000）
-      - "3100:3000"
+      # 同样只绑回环
+      - "127.0.0.1:3100:3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -84,7 +86,7 @@ services:
     restart: unless-stopped
     profiles: ["searxng"]
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./deploy/searxng:/etc/searxng:rw
     environment:

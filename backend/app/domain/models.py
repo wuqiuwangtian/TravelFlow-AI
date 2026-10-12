@@ -116,16 +116,6 @@ class TodoItem(BaseModel):
     note: str | None = None
 
 
-class PlannedRoute(BaseModel):
-    """单个版本的产出。"""
-
-    markdown: str
-    todos: list[TodoItem] = Field(default_factory=list)
-    citations: list[Citation] = Field(default_factory=list)
-    detail_level: DetailLevel = DetailLevel.L2_STANDARD
-    searched_at: datetime | None = None
-
-
 # ============================================================ 会话 / 分支 / 版本
 class SessionInfo(BaseModel):
     """一个旅行会话。"""

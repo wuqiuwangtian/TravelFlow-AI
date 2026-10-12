@@ -16,6 +16,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.agents.checkpoint import open_checkpointer
 from app.api import routes_chat, routes_export, routes_session, routes_system
@@ -30,6 +31,10 @@ logger = get_logger(__name__)
 
 # 本机来源：localhost / 127.0.0.1 / [::1]，端口任意
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+
+#: 请求体上限。本应用最大合法输入不过几千字，256KB 已非常宽松；
+#: 没有这道闸时 FastAPI 会先把整个 body 读进内存，可被用来打爆服务。
+MAX_REQUEST_BYTES = 256 * 1024
 
 
 @asynccontextmanager
@@ -107,6 +112,33 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def limit_body_size(request: Request, call_next) -> Response:
+        """拒绝过大的请求体。
+
+        为什么需要：FastAPI 会**先把整个请求体读进内存**，之后才校验
+        ``message`` 的 ``max_length``。也就是说没有这道闸时，
+        一个几百 MB 的 body 就能把服务打爆。本应用最大的合法输入
+        不过几千字，256KB 已非常宽松。
+        """
+        raw_length = request.headers.get("content-length")
+        if raw_length and raw_length.isdigit() and int(raw_length) > MAX_REQUEST_BYTES:
+            logger.warning(
+                "请求体过大已拒绝",
+                extra={"extra_fields": {"path": request.url.path, "bytes": raw_length}},
+            )
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": {
+                        "code": "PAYLOAD_TOO_LARGE",
+                        "message": f"请求内容过大（上限 {MAX_REQUEST_BYTES // 1024} KB）",
+                        "trace_id": new_trace_id(),
+                    }
+                },
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def trace_middleware(request: Request, call_next) -> Response:

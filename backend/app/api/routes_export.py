@@ -12,6 +12,7 @@ from fastapi.responses import Response
 
 from app.core.deps import get_store
 from app.core.errors import InvalidRequest
+from app.domain.enums import ExportFormat
 from app.export import (
     render_html,
     render_markdown,
@@ -26,20 +27,22 @@ router = APIRouter(prefix="/api", tags=["export"])
 @router.get("/versions/{version_id}/export", summary="导出版本")
 async def export_version(
     version_id: str,
-    format: str = "md",
+    format: ExportFormat = ExportFormat.MARKDOWN,
     store: SessionStore = Depends(get_store),
 ) -> Response:
-    """导出指定版本为 Markdown 或单文件 HTML。"""
+    """导出指定版本为 Markdown 或单文件 HTML。
+
+    用枚举而不是裸字符串：非法格式由 FastAPI 直接拦成 422，
+    不需要在函数体里手写校验，也让 OpenAPI 文档列出可选值。
+    """
     detail = await store.get_version_detail(version_id)
     if detail is None:
         raise InvalidRequest("版本不存在，无法导出")
 
-    if format not in {"md", "html"}:
-        raise InvalidRequest("导出格式只支持 md 或 html")
-
     title = await _session_title(store, detail.version.branch_id)
 
-    if format == "html":
+    # 用 == 而非 is：FastAPI 在不同版本下可能传入枚举实例或等值字符串
+    if format == ExportFormat.HTML:
         content = render_html(detail, session_title=title, todos=detail.todos)
         filename = suggest_html_filename(title)
         media_type = "text/html"

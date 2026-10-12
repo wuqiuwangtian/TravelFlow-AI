@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的重复触发取消旧任务，避免浪费
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 后端（ruff + mypy + pytest）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 安装依赖（严格锁定版本）
+        run: uv sync --frozen
+
+      - name: 代码风格检查
+        run: uv run ruff format --check app tests
+
+      - name: 静态检查
+        run: uv run ruff check app tests
+
+      - name: 类型检查
+        run: uv run mypy app
+
+      - name: 单元与端到端测试
+        run: uv run pytest -q
+
+  frontend:
+    name: 前端（typecheck + build）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: 安装依赖（严格锁定版本）
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 代码规范检查
+        run: pnpm lint
+
+      - name: 生产构建
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

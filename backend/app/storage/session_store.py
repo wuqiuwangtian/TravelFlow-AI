@@ -210,7 +210,8 @@ class SessionStore:
         cursor = await self._conn.execute(
             "SELECT COALESCE(MAX(seq), 0) + 1 FROM versions WHERE branch_id = ?", (branch_id,)
         )
-        seq = int((await cursor.fetchone())[0])
+        row = await cursor.fetchone()
+        seq = int(row[0]) if row else 1
 
         vid = version_id or uuid.uuid4().hex[:12]
         now = _now()

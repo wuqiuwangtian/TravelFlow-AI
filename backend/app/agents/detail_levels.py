@@ -62,36 +62,3 @@ def target_length_text(level: DetailLevel, duration_days: int | None) -> str:
     """给大模型的篇幅区间文本，留 ±15% 浮动空间。"""
     target = estimate_length(level, duration_days)
     return f"{int(target * 0.85)}~{int(target * 1.15)}"
-
-
-# 各档位包含哪些章节（前端展示与测试断言用）
-SECTIONS_BY_LEVEL: dict[DetailLevel, tuple[str, ...]] = {
-    DetailLevel.L1_MINIMAL: ("行程概览", "每日行程", "避雷贴士", "参考资料"),
-    DetailLevel.L2_STANDARD: (
-        "行程概览",
-        "交通建议",
-        "住宿推荐",
-        "每日行程",
-        "费用预估",
-        "避雷贴士",
-        "参考资料",
-    ),
-    DetailLevel.L3_DETAILED: (
-        "行程概览",
-        "交通建议",
-        "住宿推荐",
-        "每日行程",
-        "费用预估",
-        "避雷贴士",
-        "参考资料",
-    ),
-    DetailLevel.L4_BUTLER: (
-        "行程概览",
-        "交通建议",
-        "住宿推荐",
-        "每日行程",
-        "费用预估",
-        "避雷贴士",
-        "参考资料",
-    ),
-}

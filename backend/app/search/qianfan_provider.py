@@ -32,7 +32,7 @@ class QianfanProvider(HttpSearchProvider):
         domains: Sequence[str] | None = None,
     ) -> list[SearchResult]:
         # 千帆不支持域名白名单参数，``domains`` 降级忽略
-        payload = {
+        payload: dict[str, object] = {
             "messages": [{"role": "user", "content": query}],
             "search_source": "baidu_search_v2",
             "resource_type_filter": [{"type": "web", "top_k": max_results}],

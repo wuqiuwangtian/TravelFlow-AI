@@ -9,21 +9,6 @@ export const DETAIL_LEVEL_LABELS: Record<DetailLevel, string> = {
   L4_butler: "保姆级",
 };
 
-export type PlanStatus =
-  | "collecting"
-  | "researching"
-  | "planning"
-  | "reviewing"
-  | "finished";
-
-export const STATUS_LABELS: Record<string, string> = {
-  collecting: "需求收集中",
-  researching: "正在检索",
-  planning: "正在生成",
-  reviewing: "待确认",
-  finished: "已定稿",
-};
-
 export interface SessionInfo {
   id: string;
   title: string;

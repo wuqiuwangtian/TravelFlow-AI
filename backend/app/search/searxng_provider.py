@@ -31,7 +31,7 @@ class SearXNGProvider(HttpSearchProvider):
         max_results: int = 5,
         domains: Sequence[str] | None = None,
     ) -> list[SearchResult]:
-        params = {
+        params: dict[str, str | int] = {
             "q": query,
             "format": "json",
             "language": self._language,

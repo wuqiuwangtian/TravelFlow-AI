@@ -68,21 +68,6 @@ export function Card({
   );
 }
 
-export function SectionTitle({
-  children,
-  right,
-}: {
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-sm font-bold text-slate-700">{children}</h2>
-      {right}
-    </div>
-  );
-}
-
 export function Spinner({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-2 text-sm text-brand-600">

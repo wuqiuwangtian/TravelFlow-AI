@@ -215,9 +215,10 @@ backend/
 │   │   ├── enums.py            # 状态枚举
 │   │   └── schemas.py          # 请求/响应 DTO
 │   ├── services/
-│   │   ├── chat_service.py     # 对话编排调度
-│   │   ├── session_service.py  # 会话生命周期
-│   │   └── export_service.py   # 导出业务
+│   │   └── chat_service.py     # 对话编排调度
+│   │                           # ⚠️ 计划中的 session_service.py / export_service.py
+│   │                           #    最终未创建：会话与导出的逻辑量不足以撑起独立服务，
+│   │                           #    强行拆只会多一层空壳（详见文末「实现状态」）。
 │   ├── agents/
 │   │   ├── graph.py            # 图装配（只做拓扑）
 │   │   ├── state.py            # PlanState 定义

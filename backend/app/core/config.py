@@ -17,9 +17,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.providers import find_llm_provider, find_search_provider, is_local_llm
 
-# 本地部署的模型服务不需要 API Key（Ollama / vLLM / LM Studio 等）
-_API_KEY_OPTIONAL_LLM = {"ollama", "vllm", "lmstudio", "custom"}
-
 
 class Settings(BaseSettings):
     """从环境变量与 ``.env`` 加载的配置。"""
