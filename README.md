@@ -13,6 +13,77 @@
 
 ---
 
+## 📋 开始前：先装两个工具
+
+本项目的启动脚本依赖下面两个工具。**没装的话脚本会直接提示你缺什么**，
+但建议先按这里装好，一次到位。
+
+| 工具 | 用途 | 检查是否已装 | 版本要求 |
+| :--- | :--- | :--- | :--- |
+| [**uv**](https://docs.astral.sh/uv/) | 管理后端的 Python 依赖 | `uv --version` | 0.5 以上 |
+| [**Node.js**](https://nodejs.org/) | 运行前端界面 | `node -v` | 20 以上 |
+
+> 装完请**重开一个终端窗口**（让新装的命令生效），再运行启动脚本。
+
+<details open>
+<summary><b>Windows</b></summary>
+
+在 **PowerShell** 里执行：
+
+```powershell
+# uv
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Node.js（任选一种）
+winget install OpenJS.NodeJS.LTS          # 有 winget 的话最省事
+# 或到 https://nodejs.org/ 下载 LTS 安装包，一路下一步
+```
+
+装完**关闭并重新打开 PowerShell**，用 `uv --version` 和 `node -v` 确认。
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install uv node
+```
+
+没有 Homebrew 的话，用官方脚本装 uv：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Node.js 也可到 [nodejs.org](https://nodejs.org/) 下载安装包。
+
+</details>
+
+<details>
+<summary><b>Linux / WSL</b></summary>
+
+```bash
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Node.js：建议用发行版包管理器，或 nvm
+sudo apt install nodejs npm        # Debian / Ubuntu
+sudo dnf install nodejs            # Fedora
+```
+
+版本太旧时用 [nvm](https://github.com/nvm-sh/nvm) 装新版：
+
+```bash
+nvm install 22 && nvm use 22
+```
+
+</details>
+
+> **pnpm** 不用自己装 —— 脚本检测不到时会用 npm 自动装上。
+
+---
+
 ## 🚀 快速开始
 
 两种方式**任选其一**。
@@ -29,10 +100,10 @@ cd TravelFlow-AI
 start.bat         # Windows：双击运行
 ```
 
-脚本会自动检查环境 → 安装依赖 → 启动前后端 → 打开浏览器。按 `Ctrl+C` 同时停止。
+脚本会自动检查环境 → 安装依赖 → 启动前后端 → **等两个服务都就绪后**打开浏览器。
+按 `Ctrl+C` 同时停止（Windows 上是关闭两个服务窗口）。
 
-**需要先装**：[uv](https://docs.astral.sh/uv/) 和 [Node.js](https://nodejs.org/) 20 以上。
-缺了的话脚本会直接告诉你安装命令，不会默默失败。
+> 首次运行要装依赖、编译前端，**可能需要几分钟**，脚本会显示当前进度。
 
 ### 方式二：手动启动（适合开发调试）
 
@@ -192,6 +263,60 @@ TravelFlow-AI/
 ├── frontend/         # Next.js 界面
 ├── start.sh          # Linux / macOS / WSL 一键启动
 └── start.bat         # Windows 一键启动
+```
+
+---
+
+## 🗑 卸载
+
+本项目**不写注册表、不装系统服务、不开机自启**，也没有后台常驻进程。
+要彻底清理，按下面四步走即可。
+
+### 1. 停止服务
+
+- **脚本启动**：在脚本窗口按 `Ctrl+C`（Windows 上关闭那两个服务窗口）
+- **手动启动**：在对应终端按 `Ctrl+C`
+
+### 2. 删除项目目录
+
+```bash
+# Linux / macOS / WSL
+rm -rf ~/TravelFlow-AI          # 换成你实际的路径
+
+# Windows（PowerShell）
+Remove-Item -Recurse -Force "$HOME\TravelFlow-AI"
+```
+
+> ⚠️ **这会一并删掉你的数据** —— 所有会话、分支、路书都在
+> `backend/data/travelflow.db`，API Key 在 `backend/.env`。
+> 想留个备份的话，删之前先把它复制出去（见下方[备份说明](#-常见问题)）。
+
+### 3. 清理全局工具（可选）
+
+`uv` 和 `pnpm` 可能还被别的项目用着，**只想卸载本项目的话不用管它们**。
+确定不再需要时：
+
+```bash
+# uv
+uv self uninstall
+
+# pnpm（如果当初是脚本自动装的）
+npm uninstall -g pnpm
+```
+
+> **Node.js 一般别删** —— 很多工具都依赖它。
+
+### 4. 确认没有残留
+
+删完项目目录和上面的工具后就干净了。可以顺带检查一下：
+
+```bash
+# 确认没有残留进程占用端口
+# Linux / macOS
+lsof -i :8000 -i :3100
+
+# Windows
+netstat -ano | findstr "8000 3100"
 ```
 
 ---
