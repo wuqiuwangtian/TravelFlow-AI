@@ -83,6 +83,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  /** 向服务商查询可用模型（模型名会随官方调整，故不让用户手写）。 */
+  getModels: () => request<{ models: string[]; message: string }>("/api/system/models"),
 
   // ---- 会话 ----
   listSessions: (params?: { archived?: boolean; q?: string }) => {

@@ -68,6 +68,7 @@ class DuckDuckGoProvider(SearchProvider):
         from app.core.errors import SearchUnavailable
 
         return SearchUnavailable(
-            "检索服务（DuckDuckGo）暂时不可用，可稍后重试或在设置中更换检索源",
+            "DuckDuckGo 连不上。它在国内网络下通常需要代理；"
+            "可改用百度千帆 / 博查（需 Key），或自建 SearXNG（无需 Key）",
             detail=reason,
         )

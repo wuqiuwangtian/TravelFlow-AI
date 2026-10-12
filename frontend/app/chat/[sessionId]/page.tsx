@@ -43,6 +43,15 @@ export default function ChatPage() {
   const [level, setLevel] = useState<DetailLevel>("L2_standard");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** 输入框随内容自动增高（上限约 6 行，超出后内部滚动）。 */
+  const autoGrow = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, []);
 
   const activeBranch = useMemo(
     () => detail?.branches.find((b) => b.id === activeBranchId) ?? null,
@@ -101,6 +110,10 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput("");
+    // 发送后把输入框收回一行高度
+    requestAnimationFrame(() => {
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+    });
     setSending(true);
     try {
       const result = await api.chat({
@@ -293,14 +306,20 @@ export default function ChatPage() {
           </div>
 
           <div className="border-t border-slate-100 bg-slate-50 p-3">
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                placeholder="说出来你的想法，或回复「确认」定稿…"
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                placeholder="说出你的想法，或回复「确认」定稿…"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  autoGrow();
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // Enter 发送、Shift+Enter 换行；输入法组合中（如中文候选）不触发发送
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void send();
                   }
@@ -311,6 +330,12 @@ export default function ChatPage() {
                 <Send className="h-3.5 w-3.5" />
                 发送
               </Button>
+            </div>
+            <div className="mt-1.5 flex justify-between px-1 text-[11px] text-slate-400">
+              <span>Enter 发送 · Shift+Enter 换行</span>
+              <span className={input.length > 4000 ? "text-red-500" : undefined}>
+                {input.length} / 4000
+              </span>
             </div>
           </div>
         </Card>

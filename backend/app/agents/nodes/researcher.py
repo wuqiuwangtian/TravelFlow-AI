@@ -69,8 +69,14 @@ def make_researcher_node(search: SearchProvider, *, max_results: int = 5):
                 buckets[name] = list(outcome)
 
         if failures == len(bucket_names):
-            # 三路全挂才算整体失败，避免因单个来源不可用而拒绝服务
-            raise SearchUnavailable(detail=f"provider={search.name} 三路检索全部失败")
+            # 三路全挂才算整体失败，并给出**可操作**的提示：
+            # 只说「检索不可用」用户无从下手，必须点明是哪个源、以及能换什么。
+            raise SearchUnavailable(
+                f"检索服务（{search.name}）连不上，无法生成路书。"
+                "国内网络下 DuckDuckGo 等国外检索源通常需要代理；"
+                "可在「设置」中改用百度千帆 / 博查，或自建 SearXNG。",
+                detail=f"provider={search.name} 三路检索全部失败",
+            )
 
         bundle = ResearchBundle(
             transport=buckets["transport"],

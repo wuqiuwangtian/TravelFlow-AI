@@ -117,8 +117,32 @@ echo "  日志：/tmp/travelflow-backend.log , /tmp/travelflow-frontend.log"
 echo "  按 Ctrl+C 停止全部服务"
 echo
 
-if command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true
-elif command -v open >/dev/null 2>&1; then open "$URL" >/dev/null 2>&1 || true
+open_browser() {
+  local url="$1"
+
+  # WSL：xdg-open 通常打不开 Windows 侧浏览器，需要走 interop
+  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+    if command -v wslview >/dev/null 2>&1; then
+      wslview "$url" >/dev/null 2>&1 && return 0
+    fi
+    if command -v cmd.exe >/dev/null 2>&1; then
+      # start 的第一个引号参数是窗口标题，必须保留空串
+      cmd.exe /c start "" "$url" >/dev/null 2>&1 && return 0
+    fi
+    if command -v explorer.exe >/dev/null 2>&1; then
+      explorer.exe "$url" >/dev/null 2>&1 && return 0
+    fi
+  fi
+
+  command -v xdg-open >/dev/null 2>&1 && xdg-open "$url" >/dev/null 2>&1 && return 0
+  command -v open >/dev/null 2>&1 && open "$url" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+if open_browser "$URL"; then
+  ok "已尝试用默认浏览器打开"
+else
+  warn "未能自动打开浏览器，请手动访问：$URL"
 fi
 
 wait

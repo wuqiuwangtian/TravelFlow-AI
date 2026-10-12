@@ -29,6 +29,9 @@ export default function SettingsPage() {
     default_detail_level: "L2_standard",
   });
   const [saving, setSaving] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [modelHint, setModelHint] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [llmTest, setLlmTest] = useState<TestState>(null);
   const [searchTest, setSearchTest] = useState<TestState>(null);
   const [testing, setTesting] = useState<"llm" | "search" | null>(null);
@@ -69,10 +72,26 @@ export default function SettingsPage() {
       setLlmKey("");
       setSearchKey("");
       await load();
+      // 保存后顺便刷新可用模型列表，方便直接切换
+      void fetchModels();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** 向服务商查询可用模型 —— 模型名会随官方调整，手写极易出错。 */
+  async function fetchModels() {
+    setLoadingModels(true);
+    try {
+      const result = await api.getModels();
+      setModels(result.models);
+      setModelHint(result.message);
+    } catch (err) {
+      setModelHint(err instanceof Error ? err.message : "获取模型列表失败");
+    } finally {
+      setLoadingModels(false);
     }
   }
 
@@ -177,12 +196,25 @@ export default function SettingsPage() {
           </Field>
 
           <Field label="模型名称">
-            <input
-              className={inputClass}
-              value={form.llm_model}
-              onChange={(e) => setForm({ ...form, llm_model: e.target.value })}
-              placeholder="例如 deepseek-chat / qwen2.5:7b"
-            />
+            <div className="flex gap-2">
+              <input
+                className={inputClass}
+                value={form.llm_model}
+                onChange={(e) => setForm({ ...form, llm_model: e.target.value })}
+                placeholder="例如 deepseek-flash / qwen2.5:7b"
+                list="model-options"
+              />
+              <Button size="sm" loading={loadingModels} onClick={fetchModels}>
+                获取可用模型
+              </Button>
+            </div>
+            {/* 服务商返回的模型直接做成候选，避免手写错名字 */}
+            <datalist id="model-options">
+              {models.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            {modelHint && <Hint>{modelHint}</Hint>}
           </Field>
 
           <Field label="API Key">
@@ -322,7 +354,7 @@ export default function SettingsPage() {
           保存设置
         </Button>
         <span className="text-xs text-slate-400">
-          大模型与检索配置需重启后端服务后生效
+          保存后<strong className="font-semibold text-teal-600">立即生效</strong>，无需重启后端
         </span>
       </div>
     </div>

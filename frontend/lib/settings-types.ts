@@ -26,4 +26,7 @@ export interface SettingsSaveResult {
   saved: boolean;
   changed: string[];
   message: string;
+  /** 保存后运行时是否已成功重建（即时生效） */
+  reloaded?: boolean;
+  runtime_error?: string | null;
 }

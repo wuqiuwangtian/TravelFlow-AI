@@ -18,13 +18,11 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.checkpoint import open_checkpointer
-from app.agents.graph import build_graph
 from app.api import routes_chat, routes_export, routes_session, routes_system
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, new_trace_id, set_trace_id, setup_logging
-from app.llm.factory import create_llm_provider
-from app.search.factory import create_search_provider
+from app.core.runtime import apply_runtime, build_runtime
 from app.storage.database import create_connection
 from app.storage.session_store import SessionStore
 
@@ -62,18 +60,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.store = SessionStore(conn)
 
         # ---- 编排图（依赖模型与检索配置）----
-        app.state.graph = None
-        try:
-            llm = create_llm_provider(settings)
-            search = create_search_provider(settings)
-            checkpointer = await stack.enter_async_context(
-                open_checkpointer(settings.session_db_path)
-            )
-            app.state.checkpointer = checkpointer
-            app.state.graph = build_graph(llm, search, checkpointer=checkpointer)
+        checkpointer = await stack.enter_async_context(open_checkpointer(settings.session_db_path))
+        app.state.checkpointer = checkpointer
+
+        result = build_runtime(settings, checkpointer=checkpointer)
+        apply_runtime(app, result)
+        if result.ok:
             logger.info("编排图已就绪")
-        except Exception as exc:  # 未配置 Key 属正常情况
-            logger.warning("编排图未就绪（不影响启动，请完成配置后重启）: %s", exc)
+        else:  # 未配置 Key 属正常情况，不阻断启动
+            logger.warning("编排图未就绪（可在界面「设置」中完成配置，无需重启）: %s", result.error)
 
         yield
 

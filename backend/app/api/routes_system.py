@@ -1,8 +1,8 @@
-"""系统接口 —— 健康检查、配置自检、服务商列表。
+"""系统接口 —— 健康检查、配置自检、服务商列表、设置读写。
 
 设计约束：
-- **只读、无副作用**；
-- **不依赖任何外部服务** —— 健康检查必须永远能答（否则 Docker healthcheck 会误判）；
+- 健康检查**不依赖任何外部服务**（否则 Docker healthcheck 会误判）；
+- 系统类接口在**未配置任何 Key** 时也必须可用（否则用户打不开设置页）；
 - 服务商列表只返回名称与官方文档链接，**不含任何额度/价格信息**（规划 §19.8）。
 """
 
@@ -10,17 +10,19 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.core.config import Settings, get_settings
 from app.core.env_writer import FIELD_TO_ENV, write_env
 from app.core.errors import ConfigError
 from app.core.providers import LLM_PROVIDERS, SEARCH_PROVIDERS, ProviderInfo
+from app.core.runtime import apply_runtime, build_runtime
 from app.domain.schemas import (
     ConfigCheckResponse,
     ConnectionTestResponse,
     HealthResponse,
     LLMConfigCheck,
+    ModelListResponse,
     ProviderItem,
     ProvidersResponse,
     SearchConfigCheck,
@@ -152,9 +154,14 @@ async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
 @router.put("/settings", response_model=SettingsUpdateResponse, summary="保存设置")
 async def update_settings(
     payload: SettingsUpdate,
+    request: Request,
     settings: Settings = Depends(get_settings),
 ) -> SettingsUpdateResponse:
-    """把改动写回 ``.env``（仅白名单字段）。"""
+    """把改动写回 ``.env``，并**立即重建运行时**。
+
+    用户反馈：改完配置还要手动重启后端，那还不如直接改 ``.env`` ——
+    那样界面配置就失去意义了。因此这里保存后直接重建编排图，做到**即时生效**。
+    """
     updates: dict[str, str] = {}
     for field, env_key in FIELD_TO_ENV.items():
         value = getattr(payload, field)
@@ -168,8 +175,47 @@ async def update_settings(
     if not changed:
         return SettingsUpdateResponse(saved=True, message="配置没有变化")
 
+    # ---- 重建运行时（不必重启）----
+    get_settings.cache_clear()
+    fresh = get_settings()
+    result = build_runtime(fresh, checkpointer=getattr(request.app.state, "checkpointer", None))
+    apply_runtime(request.app, result)
+
+    if result.ok:
+        return SettingsUpdateResponse(
+            saved=True,
+            changed=changed,
+            reloaded=True,
+            message=f"已保存 {len(changed)} 项，配置已即时生效。",
+        )
+
     return SettingsUpdateResponse(
         saved=True,
         changed=changed,
-        message=f"已保存 {len(changed)} 项到 .env。大模型与检索配置需要重启后端服务后生效。",
+        reloaded=False,
+        runtime_error=result.error,
+        message=f"已保存 {len(changed)} 项，但服务尚未就绪：{result.error}",
     )
+
+
+@router.get("/models", response_model=ModelListResponse, summary="获取可用模型列表")
+async def list_models(settings: Settings = Depends(get_settings)) -> ModelListResponse:
+    """向服务商查询当前可用模型。
+
+    为什么需要：模型名会随官方调整（DeepSeek 就改过多次），
+    让用户手写极易出错，而且名字写错时的报错往往难以理解。
+    """
+    try:
+        provider = create_llm_provider(settings)
+    except ConfigError as exc:
+        return ModelListResponse(message=exc.message)
+
+    if not hasattr(provider, "list_models"):
+        return ModelListResponse(message="当前服务商不支持自动获取模型列表，请手动填写")
+
+    try:
+        models = await provider.list_models()  # type: ignore[attr-defined]
+    except Exception as exc:
+        return ModelListResponse(message=getattr(exc, "message", str(exc)))
+
+    return ModelListResponse(models=models, message=f"共 {len(models)} 个可用模型")

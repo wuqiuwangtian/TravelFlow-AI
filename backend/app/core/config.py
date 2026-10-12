@@ -64,7 +64,9 @@ class Settings(BaseSettings):
 
     # ---------------- 大模型 ----------------
     llm_provider: str = "deepseek"
-    llm_model: str = "deepseek-chat"
+    # DeepSeek 的模型名会随官方调整（如 deepseek-flash / deepseek-v4-pro），
+    # 因此设置页提供「获取可用模型」按钮（走 /v1/models），不必手写。
+    llm_model: str = "deepseek-flash"
     llm_api_key: str | None = None
     llm_base_url: str | None = None
     llm_temperature: float = 0.7

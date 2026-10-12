@@ -85,6 +85,16 @@ class SettingsUpdateResponse(BaseModel):
     saved: bool
     changed: list[str] = Field(default_factory=list)
     message: str
+    # 保存后是否成功重建运行时（图）—— 用户不必再手动重启后端
+    reloaded: bool = False
+    runtime_error: str | None = None
+
+
+class ModelListResponse(BaseModel):
+    """可用模型列表（走服务商的 ``GET /models``）。"""
+
+    models: list[str] = Field(default_factory=list)
+    message: str = ""
 
 
 # ---------------------------------------------------------------- 错误

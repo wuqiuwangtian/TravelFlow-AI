@@ -109,9 +109,23 @@ def test_put_settings_without_changes_reports_noop(client_with_env_file: TestCli
 def test_put_then_get_reflects_change_in_same_process(
     client_with_env_file: TestClient,
 ) -> None:
-    """同一个进程内 .env 已改但内存配置未刷新 —— 接口应如实告知需重启。"""
+    """保存后运行时**立即重建**，用户不必手动重启后端。"""
     result = client_with_env_file.put(
         "/api/system/settings", json={"search_provider": "ddg"}
     ).json()
 
-    assert "重启" in result["message"]
+    assert "即时生效" in result["message"]
+    assert result["saved"] is True
+
+
+def test_saving_incomplete_config_reports_runtime_state(
+    client_with_env_file: TestClient,
+) -> None:
+    """配置不完整时如实告知「尚未就绪」，而不是假装成功。"""
+    result = client_with_env_file.put(
+        "/api/system/settings", json={"llm_model": "some-model"}
+    ).json()
+
+    assert result["saved"] is True
+    if not result["reloaded"]:
+        assert result["runtime_error"], "未就绪时必须给出原因"
