@@ -1,0 +1,32 @@
+# ============================================================
+#  换行符策略
+#
+#  为什么需要：Windows 批处理（.bat）对换行敏感 ——
+#  用 LF 保存时，带 goto/标签的脚本可能执行异常，
+#  而这类问题在 WSL 里编辑文件时非常容易无意中引入。
+#  这里显式固定，避免来回改坏。
+# ============================================================
+
+# Windows 批处理必须用 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell 脚本用 LF
+*.sh text eol=lf
+
+# 其余文本文件按仓库默认处理
+*.md text
+*.py text
+*.ts text
+*.tsx text
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+
+# 二进制文件不做换行转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
