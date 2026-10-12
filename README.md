@@ -1,200 +1,240 @@
-# ✈️ TravelFlow-AI（AI 旅行助手）
+# ✈️ TravelFlow AI · AI 旅行助手
 
-> 一个**小白友好**的、通过**本地 Web 服务**启动的旅行规划助手。
-> 基于大模型 + LangGraph 智能体工作流：多轮对话收集需求 → 联网检索真实信息 → 生成结构化路书 → 交互式修改 → 导出 Markdown / HTML。
+> 一个跑在**你自己电脑上**的旅行规划助手。
+> 用大白话描述想去哪、玩几天、预算多少，它会联网查真实信息，生成一份可以照着走的行程路书。
 
----
+**为什么用它**
 
-## ✅ 项目状态：v1.0.0 已发布
-
-四阶段重构升级已全部完成，源码部署方式已实测通过。
-
-| 阶段 | 内容 | 状态 |
-| :--- | :--- | :--- |
-| ① | 拆解旧项目技术栈与抽象分层 | ✅ 已完成并验收 |
-| ② | 重新设计升级方案（M1~M7） | ✅ **已完成** |
-| ③ | 全面测试 | ✅ **已完成**（233 测试 / 覆盖率 93%） |
-| ④ | 重新部署上线 | ✅ **已完成**（v1.0.0，源码部署已实测；Docker 见下方说明） |
-
-### 📦 里程碑进度
-
-| 里程碑 | 内容 | 状态 |
-| :--- | :--- | :--- |
-| **M1** | 工程基线（骨架 / 配置 / 日志 / 错误体系 / 自检接口） | ✅ **完成** |
-| **M2** | LLM 与检索抽象层（多模型 + 可插拔检索） | ✅ **完成** |
-| **M3** | Agent 编排重构（修复 refiner 闭环、并行检索、会话持久化） | ✅ **完成** |
-| **M4** | 会话 / 分支 / 版本 / 双格式导出 | ✅ **完成** |
-| **M5** | 前端多页面（Next.js 16 + React 19 + Tailwind 4） | ✅ **完成** |
-| **M6** | 打包与部署（一键脚本 + Docker Compose） | ✅ **完成** |
-| **M7** | 测试与加固 | ✅ **完成** |
-
-> **旧代码已全部删除**（`server.py`、`core/`、`requirement.txt`、旧 `Dockerfile`）。
-> 旧项目的技术方案与 22 项缺陷已完整记录在 [阶段①拆解报告](docs/01-legacy-analysis.md)，git 历史亦可随时追溯。
-> 新代码从 `backend/app/` 开始，按 [M1 蓝图](docs/02e-m1-blueprint.md) 推进。
-
----
-
-## 📚 项目文档
-
-| 文档 | 说明 |
-| :--- | :--- |
-| [阶段① 旧项目拆解报告](docs/01-legacy-analysis.md) | 技术栈、分层结构、数据流、22 项缺陷、5 组实测证据 |
-| [决策输入与环境约束](docs/01b-decision-inputs.md) | 本机环境实测数据、D1~D8 决策依据 |
-| [**阶段② 决策摘要**](docs/02c-decision-summary.md) | **一页纸**：已拍板事项 + 实测结论（建议先看这份） |
-| [阶段② 升级规划](docs/02-upgrade-plan.md) | 完整设计稿：架构、选型、API 契约、部署方案 |
-| [阶段② Prompt 设计](docs/02b-prompt-design.md) | 四个节点的完整 Prompt、结构化输出契约、防幻觉闭环 |
-| [阶段② 会话与体验设计](docs/02d-session-ux-design.md) | 会话分支对比、多页面结构、详细度档位、HTML 呈现 |
-| [**M1 实施蓝图**](docs/02e-m1-blueprint.md) | 编码起点：目录结构、文件职责、完成定义、执行步骤 |
-| [**阶段③ 测试报告**](docs/03-test-report.md) | 194 个测试 / 覆盖率 94% / 缺陷与已知限制清单 |
-| [**阶段④ 部署验收报告**](docs/04-deploy-report.md) | 源码部署实测记录、上线检查清单、Docker 待办 |
-| [**更新日志**](CHANGELOG.md) | v1.0.0 完整变更 |
-| [历史产出样例](docs/legacy-samples/) | 从 git 历史还原的 3 份真实路书，作为回归基线 |
-| [可点击原型 · 路书效果](docs/prototype/report-preview.html) | HTML 导出的视觉与动画效果预览 |
-| [可点击原型 · 6 个页面](docs/prototype/ui-preview.html) | 前端多页面 UI 结构预览 |
-
----
-
-## 🎯 目标形态
-
-| 特性 | 说明 |
-| :--- | :--- |
-| **小白友好** | 一条命令启动；配置有引导、有自检；报错说人话 |
-| **本地 Web 服务** | 前端跑在 `localhost`，数据与模型调用都在自己机器上 |
-| **多模型支持** | 云端主流模型（DeepSeek / OpenAI / 通义 / 智谱 / Kimi…）+ **本地部署模型**（Ollama / vLLM / LM Studio） |
-| **可插拔检索** | Tavily / 博查 / 百度千帆 / SearXNG / DuckDuckGo 自由切换 |
-| **可信引用** | 引用 URL 由程序从检索结果**结构化透传**，不经大模型复写 |
-| **可核验** | 购票与预约事项附**官方办理渠道**，用户可自行验证 |
-| **不误导** | AI 生成声明 + 信息时效标注；第三方政策一律链接官方，不写死数字 |
-| **会话分支对比** | 版本树可回退、可分叉；多个方案并排对比，差异高亮 |
-| **详细度档位** | 极简 / 标准 / 详细 / 保姆级，篇幅随行程天数动态伸缩 |
-| **多页面应用** | 工作台 / 对话规划 / 分支对比 / 会话管理 / 设置 / 帮助 |
-| **双格式导出** | Markdown 与单文件 HTML（图文并茂、带动画、可打印为 PDF） |
-| **双部署方式** | 源码一键脚本 / Docker Compose |
-| **数据全本地** | 无账号体系，所有会话与路书存于本机 SQLite 单文件 |
-
----
-
-## 🛠️ 技术栈
-
-**后端**：Python 3.13.13 · FastAPI 0.143.0 · LangGraph 1.2.14 · langchain-openai 1.7.0 · Pydantic 2.14.0 · SQLite（LangGraph Checkpointer）· uv
-**前端**：Next.js 16 · React 19 · TailwindCSS 4 · TypeScript 5.9 · pnpm
-
-> 完整版本锁定表见 [升级规划 第 3 章](docs/02-upgrade-plan.md#3-技术栈与版本锁定)。
+- 🏠 **数据只在你本地** —— 会话和路书存在自己的电脑上，不上传任何服务器
+- 🔍 **联网查真实信息** —— 不是凭记忆编造，而是检索后再生成，并附上信息来源
+- 💰 **自己掌控模型** —— 用你自己的 API Key，或接本地模型（Ollama 等），不经过第三方
+- 📄 **能带走的成品** —— 导出 Markdown 或精美单页 HTML，手机电脑都能看
+- 🎚️ **详略可调** —— 从「极简」到「保姆级」四档，一日游和一周行程篇幅自然不同
 
 ---
 
 ## 🚀 快速开始
 
-三种方式任选其一。**未配置 API Key 也能启动** —— 打开界面后在「设置」里填即可。
+三种方式**任选其一**。
 
-### 方式一：一键脚本（最简单）
+> 💡 **没配 API Key 也能先启动** —— 打开界面后在「设置」里填即可。
+
+### 方式一：一键脚本（最简单，推荐）
 
 ```bash
 git clone https://github.com/wuqiuwangtian/TravelFlow-AI.git
 cd TravelFlow-AI
-./start.sh          # macOS / Linux / WSL
-start.bat           # Windows：双击运行
+
+./start.sh        # macOS / Linux / WSL
+start.bat         # Windows：双击运行
 ```
 
-脚本会自动检查环境 → 安装依赖 → 拉起前后端 → 打开浏览器；按 `Ctrl+C` 同时停止。
+脚本会自动检查环境 → 安装依赖 → 启动前后端 → 打开浏览器。按 `Ctrl+C` 同时停止。
 
-**前置要求**：[uv](https://docs.astral.sh/uv/)（Python 依赖管理器）与 [Node.js](https://nodejs.org/) 20+。
-缺少时脚本会直接告诉你安装命令，不会静默失败。
+**需要先装**：[uv](https://docs.astral.sh/uv/) 和 [Node.js](https://nodejs.org/) 20 以上。
+缺了的话脚本会直接告诉你安装命令，不会默默失败。
 
-### 方式二：Docker Compose
+### 方式二：Docker
 
 ```bash
-cp .env.example .env      # 可选：填写 API Key
+cp .env.example .env      # 可选：在这里填 API Key
+
 docker compose up -d
 ```
 
-访问 <http://localhost:3100>。
+然后访问 <http://localhost:3100>。
 
-**可选：自带检索服务**（不依赖任何第三方 Key）
+<details>
+<summary>构建时拉不到镜像怎么办</summary>
+
+Docker 需要能访问镜像仓库。若你在中国大陆且直连较慢，可配置镜像加速器：
+
+Docker Desktop → **Settings → Docker Engine**，加入：
+
+```json
+{
+  "registry-mirrors": ["https://docker.m.daocloud.io"]
+}
+```
+
+同时建议用国内源加速 Python 依赖：
+
+```bash
+docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+</details>
+
+<details>
+<summary>可选：自带检索服务（不用申请任何 Key）</summary>
+
+SearXNG 是一个开源的元搜索服务，自己跑一个就不依赖第三方检索 API：
 
 ```bash
 docker compose --profile searxng up -d
-# 然后把 .env 里的 SEARCH_PROVIDER 改为 searxng
+# 然后把 .env 里的 SEARCH_PROVIDER 改成 searxng
 ```
 
-> ⚠️ **Docker 方式尚未在本机验证通过**。实测报错已定位到确切原因：
->
-> ```
-> dialing registry-1.docker.io:443 ... connectex: A connection attempt failed
-> because Docker Desktop has no HTTPS proxy
-> ```
->
-> **Docker Desktop 没有配置代理**，无法直连 Docker Hub 拉取基础镜像。
-> 项目文件本身没有问题（compose 与两个 Dockerfile 均已校验）。
->
-> **修复方式**（二选一，改完需重启 Docker Desktop）：
->
-> 1. **配置代理**（若使用 Clash 等工具）
->    Settings → Resources → **Proxies** → 打开 Manual proxy configuration，
->    HTTP 与 HTTPS 都填你的代理地址，例如 `http://127.0.0.1:7897`。
-> 2. **配置镜像加速器**
->    Settings → Docker Engine，加入：
->    ```json
->    { "registry-mirrors": ["https://docker.m.daocloud.io"] }
->    ```
->
-> 国内网络建议同时用镜像源加速 Python 依赖：
->
-> ```bash
-> docker compose build --build-arg UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
-> ```
->
-> **请以实际构建结果为准**，不要假定它已验证。
+</details>
 
-### 方式三：手动分别启动（开发用）
+### 方式三：手动启动（适合开发调试）
 
 ```bash
 # 终端 1 —— 后端
 cd backend
 cp .env.example .env
 uv sync
-uv run uvicorn app.main:app --reload           # http://127.0.0.1:8000
+uv run uvicorn app.main:app --reload --port 8000
 
 # 终端 2 —— 前端
 cd frontend
 pnpm install
-pnpm dev -p 3100                                # http://localhost:3100
+pnpm dev -p 3100
 ```
 
-### 启动之后
+访问 <http://localhost:3100>，接口文档在 <http://localhost:8000/docs>。
 
-| 地址 | 说明 |
+---
+
+## ⚙️ 配置
+
+推荐**用界面配置**（保存后立即生效，无需重启）：
+
+1. 打开应用 → 左侧「**设置**」
+2. 选模型服务商 → 填 API Key → 点「**获取可用模型**」挑一个（不用手写模型名）
+3. 保存
+
+也可以直接改 `backend/.env`（写法参考 `backend/.env.example` 的注释）。
+
+### 大模型
+
+支持**任何 OpenAI 兼容接口**，包括本地部署的模型：
+
+| 类型 | 服务商 | 说明 |
+| :--- | :--- | :--- |
+| 云端 | DeepSeek、月之暗面、智谱、通义千问、OpenAI、Anthropic 等 | 需要 API Key |
+| 本地 | Ollama、vLLM、LM Studio、llama.cpp、Xinference | 通常无需 Key，填本机地址即可 |
+
+> 各家的政策与模型名称可能随时调整，请以**服务商官方文档**为准。
+> 本项目的「设置」页会直接向服务商查询当前可用模型，不写死模型名。
+
+### 信息检索
+
+**需要配一个检索源**，路书才会包含真实的票价、开放时间等信息：
+
+| 检索源 | 是否需要 Key | 说明 |
+| :--- | :--- | :--- |
+| **Tavily** | 需要 | 默认选项，专为 AI 优化的搜索 API |
+| **博查 / 百度千帆** | 需要 | 国内直连，无需代理 |
+| **SearXNG** | 不需要 | 自建元搜索，见上方 `--profile searxng` |
+| **DuckDuckGo** | 不需要 | 零配置，但在中国大陆**需要代理** |
+
+> 不确定选哪个？国内网络建议用**百度千帆**或**博查**（申请免费额度即可）；
+> 不想申请任何 Key 就用自建的 **SearXNG**。
+
+---
+
+## 🧭 怎么用
+
+1. **新建一次旅行** —— 说一句「我想去重庆玩 3 天，从北京出发，预算 2000」
+2. **补齐信息** —— 目的地、出发地、天数、预算四项齐全后才会开始检索（缺了它会追问）
+3. **看路书、提修改** —— 不满意就直说「第二天太赶了，轻松点」，它只改你说的部分，不重新检索
+4. **满意就确认** —— 回复「确认」定稿
+5. **导出带走** —— Markdown 或 HTML，HTML 是单文件，双击即可打开
+
+**几个实用功能**
+
+- **多方案对比**：不满意时可以从任意版本**分叉**出新方案，两个方案各自独立演进，随时切换对比
+- **改错了能回退**：每个版本都保留，随时回到早期版本
+- **重新检索**：信息过时了一键重查
+
+---
+
+## ❓ 常见问题
+
+<details>
+<summary><b>提示「连接不上后端服务」</b></summary>
+
+1. 先确认后端在运行：访问 <http://localhost:8000/api/system/health>，应返回 `{"status":"ok",...}`
+2. 若前端改了端口，后端要放行对应来源：在 `backend/.env` 改 `APP_CORS_ORIGINS`，加上前端地址
+   - 用 `start.sh` / `start.bat` 启动时会**自动处理**，无需手动改
+3. **在 WSL 里请用 `localhost` 而不是 `127.0.0.1`** —— WSL2 的端口转发保证 `localhost` 可用
+
+</details>
+
+<details>
+<summary><b>提示「模型返回的内容格式异常」</b></summary>
+
+部分服务商（如 DeepSeek）不支持 `json_schema` 格式，会直接报错。
+本项目已做**自动降级**（改用 `json_object`）。若仍出现，请到「设置」点「测试连接」查看具体原因。
+
+</details>
+
+<details>
+<summary><b>提示「检索服务暂时不可用」</b></summary>
+
+多半是网络问题：**DuckDuckGo 在中国大陆需要代理**。
+建议改用百度千帆 / 博查（国内直连），或自建 SearXNG（无需 Key）。
+
+</details>
+
+<details>
+<summary><b>我的数据存在哪？</b></summary>
+
+- 配置：`backend/.env`（含 API Key，权限已设为仅本人可读）
+- 会话与路书：`backend/data/travelflow.db`（SQLite）
+
+都只在你本机，不会上传。删掉数据库文件即可清空全部记录。
+
+</details>
+
+---
+
+## 🔒 安全与隐私
+
+- 服务默认**只监听 `127.0.0.1`**，不对局域网开放
+- 跨域默认**严格模式**，只放行你指定的前端地址
+- API Key **永不回显**（接口只返回「是否已配置」）
+- 导出的 Markdown / HTML **禁用原始 HTML**，不会被注入脚本
+- 路书中的引用链接由**程序**填入（模型被禁止输出 URL），避免编造来源
+
+---
+
+## 🛠 技术栈
+
+| 层 | 技术 |
 | :--- | :--- |
-| <http://localhost:3100> | 界面：工作台 / 对话规划 / 分支对比 / 会话 / 设置 / 帮助 |
-| <http://127.0.0.1:8000/docs> | 交互式 API 文档 |
-| <http://127.0.0.1:8000/api/system/health> | 健康检查 |
-| <http://127.0.0.1:8000/api/system/config> | 配置自检（含**可操作**的提示，而非一句报错） |
+| 前端 | Next.js 16 · React 19 · TypeScript 5.9 · TailwindCSS 4 |
+| 后端 | Python 3.13 · FastAPI · Pydantic v2 |
+| 编排 | LangGraph（收集 → 检索 → 生成 → 修订） |
+| 存储 | SQLite（本地文件） |
+| 依赖管理 | uv（Python）· pnpm（前端），均锁定版本 |
 
-**第一次使用**：按界面顶部黄色提示条进入「设置」，选一个模型服务商并填 Key；
-不想注册任何服务就直接选「本地 Ollama」。
-检索若也不想注册，把检索源改成 **DuckDuckGo**（无需 Key）即可零成本跑通全流程。
-
-**未配置密钥时不会阻止启动**，而是给出可操作的提示：
+**项目结构**
 
 ```
-配置提示: 未配置 LLM_API_KEY，请在 .env 中填写（服务商：deepseek），或改用本地模型（LLM_PROVIDER=ollama，需先启动 Ollama）
-配置提示: 未配置 SEARCH_API_KEY（检索服务：tavily），可改用 SEARCH_PROVIDER=ddg 免密钥检索
-```
-
-### 开发者
-
-```bash
-cd backend
-uv run pytest              # 运行测试
-uv run ruff check app      # 代码检查
-
-cd ../frontend
-pnpm typecheck             # 类型检查
-pnpm build                 # 生产构建
+TravelFlow-AI/
+├── backend/          # FastAPI 服务
+│   └── app/
+│       ├── api/      # HTTP 接口
+│       ├── agents/   # LangGraph 编排与 Prompt
+│       ├── llm/      # 模型接入（OpenAI 兼容）
+│       ├── search/   # 检索源适配
+│       ├── storage/  # SQLite 持久化
+│       └── export/   # Markdown / HTML 导出
+├── frontend/         # Next.js 界面
+├── deploy/           # SearXNG 等部署配置
+├── start.sh          # Linux / macOS / WSL 一键启动
+├── start.bat         # Windows 一键启动
+└── docker-compose.yml
 ```
 
 ---
 
-## 📄 许可证
+## 📋 更新日志
 
-待定（阶段②确认）。
+见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 📄 许可
+
+个人学习项目。使用第三方模型与检索服务时，请遵守对应服务商的条款。

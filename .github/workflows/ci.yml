@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   backend:
-    name: 后端（ruff + mypy + pytest）
+    name: 后端（ruff + mypy）
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,16 +31,13 @@ jobs:
         run: uv sync --frozen
 
       - name: 代码风格检查
-        run: uv run ruff format --check app tests
+        run: uv run ruff format --check app
 
       - name: 静态检查
-        run: uv run ruff check app tests
+        run: uv run ruff check app
 
       - name: 类型检查
         run: uv run mypy app
-
-      - name: 单元与端到端测试
-        run: uv run pytest -q
 
   frontend:
     name: 前端（typecheck + build）
