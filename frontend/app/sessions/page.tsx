@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, MessageSquare, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Archive, MessageSquare, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { Badge, Button, Card, EmptyState, ErrorBanner, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -17,6 +17,8 @@ export default function SessionsPage() {
   const [query, setQuery] = useState("");
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 正在重命名的会话 id（行内编辑）
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -42,6 +44,21 @@ export default function SessionsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
+    }
+  }
+
+  /** 提交行内改名；空标题视为取消。 */
+  async function commitRename(sessionId: string, rawTitle: string) {
+    const title = rawTitle.trim();
+    setRenamingId(null);
+    const current = sessions?.find((s) => s.id === sessionId);
+    if (!title || title === current?.title) return;
+
+    try {
+      await api.updateSession(sessionId, { title });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重命名失败");
     }
   }
 
@@ -135,16 +152,32 @@ export default function SessionsPage() {
               {sessions.map((session) => (
                 <tr key={session.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
                   <td className="px-4 py-3">
-                    <button
-                      className="text-sm font-semibold text-slate-700 hover:text-brand-600"
-                      onClick={() => router.push(`/chat/${session.id}`)}
-                    >
-                      {session.title}
-                    </button>
-                    {session.archived && (
-                      <span className="ml-2">
-                        <Badge tone="slate">已归档</Badge>
-                      </span>
+                    {renamingId === session.id ? (
+                      <input
+                        autoFocus
+                        defaultValue={session.title}
+                        className="w-full max-w-[220px] rounded-md border border-brand-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-brand-100"
+                        onBlur={(e) => void commitRename(session.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                          if (e.key === "Escape") setRenamingId(null);
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          className="text-sm font-semibold text-slate-700 hover:text-brand-600"
+                          onClick={() => router.push(`/chat/${session.id}`)}
+                          title="点击打开；如需改名请用右侧「重命名」"
+                        >
+                          {session.title}
+                        </button>
+                        {session.archived && (
+                          <span className="ml-2">
+                            <Badge tone="slate">已归档</Badge>
+                          </span>
+                        )}
+                      </>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-500">{session.branch_count}</td>
@@ -155,6 +188,10 @@ export default function SessionsPage() {
                     <div className="flex justify-end gap-1.5">
                       <Button size="sm" onClick={() => router.push(`/chat/${session.id}`)}>
                         打开
+                      </Button>
+                      <Button size="sm" onClick={() => setRenamingId(session.id)}>
+                        <Pencil className="h-3 w-3" />
+                        重命名
                       </Button>
                       <Button size="sm" onClick={() => toggleArchive(session)}>
                         {session.archived ? (

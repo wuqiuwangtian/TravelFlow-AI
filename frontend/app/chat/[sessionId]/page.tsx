@@ -7,6 +7,7 @@ import {
   Download,
   GitBranch,
   Loader2,
+  Pencil,
   Send,
   Sparkles,
   Undo2,
@@ -40,6 +41,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(null);
   const [input, setInput] = useState("");
+  // 会话标题行内编辑
+  const [editingTitle, setEditingTitle] = useState(false);
   const [level, setLevel] = useState<DetailLevel>("L2_standard");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -73,6 +76,19 @@ export default function ChatPage() {
       setError(err instanceof Error ? err.message : "加载会话失败");
     }
   }, [sessionId]);
+
+  /** 提交会话改名；空标题视为取消。 */
+  async function commitTitle(rawTitle: string) {
+    setEditingTitle(false);
+    const title = rawTitle.trim();
+    if (!title || title === detail?.session.title) return;
+    try {
+      await api.updateSession(sessionId, { title });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重命名失败");
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -195,7 +211,29 @@ export default function ChatPage() {
       {/* 顶部：会话标题 + 分支切换 */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold">{detail.session.title}</h1>
+          {editingTitle ? (
+            <input
+              autoFocus
+              defaultValue={detail.session.title}
+              className="rounded-md border border-brand-300 px-2 py-1 text-lg font-bold outline-none focus:ring-2 focus:ring-brand-100"
+              onBlur={(e) => void commitTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+            />
+          ) : (
+            <h1 className="flex items-center gap-2 text-lg font-bold">
+              {detail.session.title}
+              <button
+                className="text-slate-300 transition hover:text-brand-500"
+                title="重命名这个旅行"
+                onClick={() => setEditingTitle(true)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </h1>
+          )}
           <p className="text-xs text-slate-400">
             {detail.branches.length} 个分支 · 版本历史可随时回退
           </p>

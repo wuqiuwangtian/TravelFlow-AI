@@ -246,6 +246,60 @@ def test_chat_history_404_for_unknown_branch(app_client: TestClient) -> None:
     assert app_client.get("/api/branches/nope/messages").status_code == 404
 
 
+# ============================================================ 会话命名
+def test_first_message_autonames_session(app_client: TestClient) -> None:
+    """首轮对话后自动命名。
+
+    否则会话列表里一排「新的旅行」，完全分不清哪个是哪个。
+    """
+    session_id, branch_id = _new_session(app_client, "新的旅行")
+
+    app_client.post(
+        "/api/chat",
+        json={"message": FIRST_MESSAGE, "session_id": session_id, "branch_id": branch_id},
+    )
+
+    title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+    assert title != "新的旅行"
+    assert title.startswith("我想去重庆玩3天")
+
+
+def test_short_message_becomes_exact_title(app_client: TestClient) -> None:
+    session_id, branch_id = _new_session(app_client, "新的旅程")
+
+    app_client.post(
+        "/api/chat",
+        json={"message": "杭州三日游", "session_id": session_id, "branch_id": branch_id},
+    )
+
+    title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+    assert title == "杭州三日游"
+
+
+def test_manual_title_is_never_overwritten(app_client: TestClient) -> None:
+    """用户自己起的名字不能被自动命名覆盖。"""
+    session_id, branch_id = _new_session(app_client, "我的重庆之旅")
+
+    app_client.post(
+        "/api/chat",
+        json={"message": FIRST_MESSAGE, "session_id": session_id, "branch_id": branch_id},
+    )
+
+    title = app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"]
+    assert title == "我的重庆之旅"
+
+
+def test_rename_endpoint_works(app_client: TestClient) -> None:
+    """手动重命名入口依赖的接口。"""
+    session_id, _ = _new_session(app_client)
+
+    app_client.patch(f"/api/sessions/{session_id}", json={"title": "改名后的旅行"})
+
+    assert (
+        app_client.get(f"/api/sessions/{session_id}").json()["session"]["title"] == "改名后的旅行"
+    )
+
+
 # ============================================================ 配置自检
 def test_system_endpoints_work_without_configuration(app_client: TestClient) -> None:
     """没配 Key 时，系统类接口仍应全部可用（否则用户连设置页都打不开）。"""

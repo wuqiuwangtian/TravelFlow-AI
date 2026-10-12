@@ -89,11 +89,11 @@ info "准备前端（首次安装依赖可能较慢）…"
 cd frontend
 if [ "${NODE_ENV:-}" = "production" ]; then
   pnpm install --frozen-lockfile
-  NEXT_PUBLIC_API_BASE="http://127.0.0.1:$BACKEND_PORT" pnpm build
-  NEXT_PUBLIC_API_BASE="http://127.0.0.1:$BACKEND_PORT" pnpm start -p "$FRONTEND_PORT" >/tmp/travelflow-frontend.log 2>&1 &
+  NEXT_PUBLIC_API_BASE="http://localhost:$BACKEND_PORT" pnpm build
+  NEXT_PUBLIC_API_BASE="http://localhost:$BACKEND_PORT" pnpm start -p "$FRONTEND_PORT" >/tmp/travelflow-frontend.log 2>&1 &
 else
   pnpm install
-  NEXT_PUBLIC_API_BASE="http://127.0.0.1:$BACKEND_PORT" pnpm dev -p "$FRONTEND_PORT" >/tmp/travelflow-frontend.log 2>&1 &
+  NEXT_PUBLIC_API_BASE="http://localhost:$BACKEND_PORT" pnpm dev -p "$FRONTEND_PORT" >/tmp/travelflow-frontend.log 2>&1 &
 fi
 FRONTEND_PID=$!
 cd ..
@@ -109,10 +109,10 @@ for _ in $(seq 1 60); do
 done
 
 # ---------------------------------------------------------- 打开浏览器
-URL="http://127.0.0.1:$FRONTEND_PORT"
+URL="http://localhost:$FRONTEND_PORT"
 echo
 ok "TravelFlow AI 已启动：$URL"
-echo "  后端接口文档：http://127.0.0.1:$BACKEND_PORT/docs"
+echo "  后端接口文档：http://localhost:$BACKEND_PORT/docs"
 echo "  日志：/tmp/travelflow-backend.log , /tmp/travelflow-frontend.log"
 echo "  按 Ctrl+C 停止全部服务"
 echo
