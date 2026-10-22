@@ -9,12 +9,10 @@ import {
   Car,
   Check,
   Clock,
-  ExternalLink,
   Footprints,
   Hotel,
   MapPin,
   MessageCircle,
-  Navigation,
   Plane,
   RefreshCw,
   Route,
@@ -23,6 +21,10 @@ import {
   Utensils,
 } from "lucide-react";
 import { Button, Card, ErrorBanner } from "@/components/ui";
+import { BudgetPanel } from "@/components/budget-panel";
+import { PlacePhoto } from "@/components/place-photo";
+import { PlaceNavigation } from "@/components/place-navigation";
+import { RailTicketLink } from "@/components/rail-ticket-link";
 import { TravelLedger } from "@/components/travel-ledger";
 import { OnTripControls } from "@/components/ontrip-controls";
 import { api, ApiError } from "@/lib/api";
@@ -54,21 +56,15 @@ const progressLabels: Record<ActivityProgress, string> = {
   skipped: "已跳过",
 };
 
-function navigation(
-  place: Place,
-  mode: TravelMode,
-  origin?: Place | null,
-): string {
-  const query = new URLSearchParams({
-    to: `${place.longitude},${place.latitude},${place.name}`,
-    mode: mode === "walking" ? "walk" : mode === "driving" ? "car" : "bus",
-    coordinate: "gaode",
-    src: "TravelFlowAI",
-    callnative: "1",
-  });
-  if (origin && !["rail", "flight"].includes(mode))
-    query.set("from", `${origin.longitude},${origin.latitude},${origin.name}`);
-  return `https://uri.amap.com/navigation?${query}`;
+function travelDate(
+  departure: string | null | undefined,
+  day: number,
+): string | null {
+  if (!departure) return null;
+  const date = new Date(departure + "T00:00:00Z");
+  if (Number.isNaN(date.valueOf())) return null;
+  date.setUTCDate(date.getUTCDate() + day - 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function ModeIcon({ mode }: { mode: TravelMode }) {
@@ -149,6 +145,11 @@ export function ItineraryPanel({
       );
       setNeedsModelSettings(
         err instanceof ApiError && err.code === "LLM_AUTH_FAILED",
+      );
+      requestAnimationFrame(() =>
+        document
+          .querySelector('[role="alert"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "center" }),
       );
       return false;
     } finally {
@@ -289,11 +290,13 @@ export function ItineraryPanel({
                   : "建议行程 · 可直接对话调整"}
               </span>
             </div>
-            <RouteStrip
-              day={day}
-              selected={active?.id}
-              onSelect={setSelected}
-            />
+            {advanced && (
+              <RouteStrip
+                day={day}
+                selected={active?.id}
+                onSelect={setSelected}
+              />
+            )}
             {day.replan_context && (
               <div
                 role="status"
@@ -369,6 +372,15 @@ export function ItineraryPanel({
                           aria-pressed={active?.id === activity.id}
                           className={`w-full rounded-xl border p-3.5 text-left transition ${active?.id === activity.id ? "border-teal-300 bg-teal-50/50 shadow-sm" : "border-slate-100 bg-white hover:border-teal-200"}`}
                         >
+                          {!activity.is_context_anchor &&
+                            !["station", "meal", "transport"].includes(
+                              activity.kind,
+                            ) && (
+                              <PlacePhoto
+                                versionId={detail.version.id}
+                                activity={activity}
+                              />
+                            )}
                           <div className="flex items-start gap-2.5">
                             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700">
                               <StopIcon kind={activity.kind} />
@@ -482,6 +494,25 @@ export function ItineraryPanel({
                                   ? ` · ${day.legs[index].cost_source === "estimate" ? "预计 " : ""}¥${day.legs[index].cost}${day.legs[index].cost_basis === "per_person" ? "/人" : ""}`
                                   : ""}
                               </p>
+                              {day.legs[index].mode === "rail" &&
+                                day.activities[index + 1] && (
+                                  <RailTicketLink
+                                    from={
+                                      activity.place?.name ||
+                                      activity.place_name ||
+                                      activity.title
+                                    }
+                                    to={
+                                      day.activities[index + 1].place?.name ||
+                                      day.activities[index + 1].place_name ||
+                                      day.activities[index + 1].title
+                                    }
+                                    date={travelDate(
+                                      detail.requirements?.departure_date,
+                                      day.day,
+                                    )}
+                                  />
+                                )}
                             </div>
                           </div>
                         )}
@@ -509,15 +540,7 @@ export function ItineraryPanel({
                       {active.place?.address || active.city}
                     </p>
                     {active.place && (
-                      <a
-                        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-teal-700"
-                        href={navigation(active.place, "transit")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        打开地点导航
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                      <PlaceNavigation key={active.id} place={active.place} />
                     )}
                     <div className="mt-4 border-t border-slate-100 pt-3">
                       <p className="text-xs text-slate-500">
@@ -618,12 +641,23 @@ export function ItineraryPanel({
                 </details>
               </div>
             </div>
-            <TravelLedger
+            <BudgetPanel
               detail={detail}
               day={day.day}
               disabled={!editable || disabled || busy}
               onCommit={mutate}
             />
+            <details className="mt-4 rounded-xl border border-slate-100 p-4">
+              <summary className="cursor-pointer text-xs text-slate-600">
+                消费明细、图片凭证与退款报销
+              </summary>
+              <TravelLedger
+                detail={detail}
+                day={day.day}
+                disabled={!editable || disabled || busy}
+                onCommit={mutate}
+              />
+            </details>
             {advanced && (
               <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-slate-200 p-4">
                 <label className="text-xs text-slate-500">
@@ -794,29 +828,11 @@ function DayMap({
         <div className="p-5">
           <p className="mb-4 flex items-center gap-2 text-xs font-medium text-slate-600">
             <Route className="h-4 w-4 text-teal-600" />
-            行程连线
-            <span className="font-normal text-slate-400">
-              示意 · 非地理比例
-            </span>
+            当天地图
           </p>
-          <div className="space-y-2">
-            {day.activities.map((activity, index) => (
-              <div key={activity.id} className="flex items-center gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-[10px] font-bold text-teal-700">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2 text-xs text-slate-600">
-                  {activity.place?.name ??
-                    (activity.place_name || activity.title)}
-                  {index < day.activities.length - 1 && (
-                    <span className="mt-1 block text-[10px] text-slate-400">
-                      ↓ {legText(day, index)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-xs leading-6 text-slate-500">
+            按时间轴顺序查看当天停留与交通；地点导航可在下方打开。
+          </p>
           <div className="mt-4 text-[11px] leading-relaxed text-slate-400">
             {canShow && state.loading
               ? "正在加载高德底图，线路已可查看…"

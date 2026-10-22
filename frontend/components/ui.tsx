@@ -27,8 +27,10 @@ export function Button({
   const variants = {
     primary:
       "bg-gradient-to-r from-brand-500 to-teal-500 text-white font-semibold shadow-sm hover:brightness-105 border-transparent",
-    default: "bg-white text-slate-700 border-slate-200 hover:border-brand-400 hover:text-brand-600",
-    ghost: "bg-transparent text-slate-600 border-transparent hover:bg-slate-100",
+    default:
+      "bg-white text-slate-700 border-slate-200 hover:border-brand-400 hover:text-brand-600",
+    ghost:
+      "bg-transparent text-slate-600 border-transparent hover:bg-slate-100",
     danger: "bg-white text-red-600 border-red-200 hover:bg-red-50",
   };
   const sizes = {
@@ -62,7 +64,12 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>
+    <div
+      className={cn(
+        "rounded-xl border border-slate-200 bg-white shadow-sm",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -85,7 +92,10 @@ export function ErrorBanner({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-4 py-3">
+    <div
+      role="alert"
+      className="flex items-start gap-2.5 rounded-lg border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-4 py-3"
+    >
       <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-600" />
       <p className="flex-1 text-sm text-amber-900">{message}</p>
       {onRetry && (
@@ -112,7 +122,9 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/60 px-6 py-12 text-center">
       {icon && <div className="mb-3 text-slate-300">{icon}</div>}
       <p className="text-sm font-semibold text-slate-600">{title}</p>
-      {description && <p className="mt-1 max-w-md text-xs text-slate-400">{description}</p>}
+      {description && (
+        <p className="mt-1 max-w-md text-xs text-slate-400">{description}</p>
+      )}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

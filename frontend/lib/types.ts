@@ -110,6 +110,7 @@ export interface VersionDetail {
   searched_at: string | null;
   itinerary: Itinerary | null;
   requirements: TravelRequirements | null;
+  budget_overview: BudgetOverview | null;
 }
 
 export type TravelMode =
@@ -214,6 +215,8 @@ export interface ExpenseInput {
   notes: string;
   receipt_ids?: string[];
   allow_shared_receipts?: boolean;
+  budget_item_id?: string | null;
+  settles_budget?: boolean;
 }
 
 export interface Expense {
@@ -227,6 +230,28 @@ export interface Expense {
   created_at: string;
   updated_at: string;
   receipt_ids: string[];
+  budget_item_id: string | null;
+  settles_budget: boolean;
+}
+
+export interface BudgetRow {
+  id: string;
+  title: string;
+  category: ExpenseCategory;
+  day: number | null;
+  activity_id: string | null;
+  source: "activity" | "transport" | "custom";
+  planned_cents: number | null;
+  actual_cents: number;
+  expense_ids: string[];
+  settled: boolean;
+}
+export interface BudgetOverview {
+  rows: BudgetRow[];
+  planned_cents: number;
+  projected_cents: number;
+  unknown_count: number;
+  budget_cents: number | null;
 }
 
 export interface ReceiptDraft {

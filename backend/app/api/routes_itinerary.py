@@ -80,10 +80,12 @@ async def place_photos(
     )
     if activity is None:
         raise InvalidRequest("地点不存在")
-    if not activity.place or not settings.amap_api_key:
+    if not activity.place:
         return {"photos": []}
     if activity.place.photos:
         return {"photos": activity.place.photos}
+    if not settings.amap_api_key:
+        return {"photos": []}
     async with httpx.AsyncClient(timeout=settings.amap_timeout_seconds) as client:
         place = await AmapProvider(client, settings.amap_api_key).get_place(activity.place.id)
     return {"photos": place.photos}

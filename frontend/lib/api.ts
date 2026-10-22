@@ -83,6 +83,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  deleteBudget: (versionId: string, itemId: string) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/budget-items/${encodeURIComponent(itemId)}`,
+      { method: "DELETE" },
+    ),
+  updateBudget: (versionId: string, itemId: string, amount: string | null) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/budget-items/${encodeURIComponent(itemId)}`,
+      { method: "PUT", body: JSON.stringify({ amount }) },
+    ),
+  addBudget: (
+    versionId: string,
+    payload: {
+      title: string;
+      category: string;
+      amount: string | null;
+      day: number | null;
+      request_id: string;
+    },
+  ) =>
+    request<VersionDetail>(`/api/versions/${versionId}/budget-items`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  placePhotos: (versionId: string, activityId: string) =>
+    request<{ photos: string[] }>(
+      `/api/versions/${versionId}/activities/${encodeURIComponent(activityId)}/photos`,
+    ),
+  convertLocation: (longitude: number, latitude: number) =>
+    request<Place>("/api/maps/convert-location", {
+      method: "POST",
+      body: JSON.stringify({ longitude, latitude }),
+    }),
   // ---- 系统 ----
   health: () =>
     request<{ status: string; name: string; version: string }>(
