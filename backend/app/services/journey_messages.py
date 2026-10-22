@@ -17,9 +17,26 @@ _RECORD = re.compile(
     r"(?:清除|取消|删除)预约记录|恢复未开始|跳过|不去这站|"
     r"已完成|完成了|标记完成|逛完|游览完|游完|正在游览|正在逛|开始这一站|开始游览"
 )
-_REFINEMENT = re.compile(r"调整|安排|重排|替换|换成|换一家|轻松|少走|规划")
+_REFINEMENT = re.compile(r"调整|安排|重排|替换|换成|换一家|轻松|少走|规划|保留|保持|不要改|别改")
 _DAY_ONLY = re.compile(r"第\s*(?:\d+|[一二三四五六七八九十两]+)\s*天")
 _NOT_ACTUAL = re.compile(r"如果|假如|预计|预算|估计|打算|计划|明天|能不能|能否|不要|是否|吗|[?？]")
+
+
+def _record_hint(text: str) -> bool:
+    # “保留已经预约的演出”是重排约束，不是新增预约；同样保护已完成的历史。
+    text = re.sub(
+        r"(?:保留|保持|不改动|不要改动|不改|别改)[^，,；;。\n]*"
+        r"(?:预约|已完成|进行中|已跳过)[^，,；;。\n]*",
+        "",
+        text,
+    )
+    text = re.sub(
+        r"(?:已预约|已经预约|已完成|已跳过)[^，,；;。\n]*"
+        r"(?:保留|保持|不要改|别改|别动)[^，,；;。\n]*",
+        "",
+        text,
+    )
+    return bool(_RECORD.search(text))
 
 
 @dataclass
@@ -49,7 +66,7 @@ def _clauses(text: str) -> list[str]:
         accumulated = pieces[0]
         for offset in range(1, len(pieces), 2):
             rest = "".join(pieces[offset + 1 :])
-            if _RECORD.search(accumulated) and (_RECORD.search(rest) or _REFINEMENT.search(rest)):
+            if _record_hint(accumulated) and (_record_hint(rest) or _REFINEMENT.search(rest)):
                 result.append(accumulated.strip())
                 accumulated = pieces[offset + 1]
             else:
@@ -85,7 +102,7 @@ def prepare_journey_message(
             if re.search(r"已预约|已经预约|预约好了|已经订好|已订好|记录已有预约", part)
             else part
         )
-        return bool(_RECORD.search(part) and not _NOT_ACTUAL.search(probe))
+        return bool(_record_hint(part) and not _NOT_ACTUAL.search(probe))
 
     if not any(asserted(part) for part in clauses):
         return None
@@ -106,11 +123,11 @@ def prepare_journey_message(
         if explicit is not None:
             day = explicit
         scoped = f"第{day}天，{part}" if day is not None and explicit is None else part
-        if not _RECORD.search(part):
+        if not _record_hint(part):
             tail = "，".join(clauses[index:])
             if (
                 _REFINEMENT.search(tail)
-                and not any(_RECORD.search(p) for p in clauses[index:])
+                and not any(_record_hint(p) for p in clauses[index:])
                 and result.replies
             ):
                 result.refinement = (

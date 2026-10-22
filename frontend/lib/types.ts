@@ -152,6 +152,7 @@ export interface Activity {
     | "other";
   address_hint: string;
   start_time: string | null;
+  start_day_offset: number;
   duration_minutes: number | null;
   cost: number | null;
   cost_basis: "per_person" | "total" | "unknown";
@@ -181,13 +182,16 @@ export interface ScheduledActivity extends Activity {
 
 export interface Booking {
   start_time: string;
+  start_day_offset: number;
   duration_minutes: number;
   notes: string;
 }
 export interface ReplanContext {
   activity_id: string;
   time: string;
+  start_day_offset: number;
   end_time: string | null;
+  end_day_offset: number;
   end_activity_id: string | null;
   omitted_titles: string[];
   updated_at: string;
@@ -197,7 +201,9 @@ export interface ReplanInput {
   location_name?: string;
   city?: string;
   time: string;
+  start_day_offset?: number;
   end_time: string | null;
+  end_day_offset?: number;
   end_activity_id: string | null;
 }
 

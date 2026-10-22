@@ -27,6 +27,7 @@ import { PlaceNavigation } from "@/components/place-navigation";
 import { RailTicketLink } from "@/components/rail-ticket-link";
 import { TravelLedger } from "@/components/travel-ledger";
 import { OnTripControls } from "@/components/ontrip-controls";
+import { timeLabel, dayLabel } from "@/lib/travel-time";
 import { api, ApiError } from "@/lib/api";
 import type {
   Activity,
@@ -312,9 +313,13 @@ export function ItineraryPanel({
                   {day.activities.find(
                     (a) => a.id === day.replan_context?.activity_id,
                   )?.place_name || "所选地点"}{" "}
-                  {day.replan_context.time} 出发
+                  {timeLabel(
+                    day.replan_context.time,
+                    day.replan_context.start_day_offset,
+                  )}{" "}
+                  出发
                   {day.replan_context.end_time
-                    ? `，${day.replan_context.end_time}前结束`
+                    ? `，${timeLabel(day.replan_context.end_time, day.replan_context.end_day_offset)}前结束`
                     : "，继续后续安排"}
                   。预约与前段记录已保留。
                 </p>
@@ -363,7 +368,10 @@ export function ItineraryPanel({
                     >
                       <div className="relative text-center">
                         <time className="text-xs font-semibold text-slate-600">
-                          {activity.start_time ?? "按安排"}
+                          {timeLabel(
+                            activity.start_time,
+                            activity.start_day_offset,
+                          )}
                         </time>
                         {index < day.activities.length - 1 && (
                           <span className="absolute bottom-0 left-1/2 top-8 w-px bg-teal-200" />
@@ -425,8 +433,12 @@ export function ItineraryPanel({
                           </div>
                           {activity.booking && (
                             <p className="mt-2 text-[11px] text-amber-700">
-                              已有预约 {activity.booking.start_time} · 停留{" "}
-                              {activity.booking.duration_minutes} 分钟
+                              已有预约{" "}
+                              {timeLabel(
+                                activity.booking.start_time,
+                                activity.booking.start_day_offset,
+                              )}{" "}
+                              · 停留 {activity.booking.duration_minutes} 分钟
                             </p>
                           )}
                         </button>
@@ -513,7 +525,8 @@ export function ItineraryPanel({
                                     }
                                     date={travelDate(
                                       detail.requirements?.departure_date,
-                                      day.day,
+                                      day.day +
+                                        (activity.start_day_offset ?? 0),
                                     )}
                                   />
                                 )}
@@ -749,7 +762,9 @@ function RouteStrip({
               className={`max-w-44 rounded-lg border bg-white px-3 py-2 text-left ${selected === activity.id ? "border-teal-400 shadow-sm" : "border-slate-200"}`}
             >
               <span className="mb-1 block text-[10px] text-teal-600">
-                {activity.start_time ?? `第 ${index + 1} 站`}
+                {activity.start_time
+                  ? timeLabel(activity.start_time, activity.start_day_offset)
+                  : `第 ${index + 1} 站`}
               </span>
               <span className="block max-w-40 truncate text-xs font-semibold text-slate-700">
                 {activity.place?.name ??
@@ -1010,6 +1025,27 @@ function ActivityEditor({
         </fieldset>
       )}
       <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs text-slate-500">
+          开始日期
+          <select
+            aria-label="活动开始日期"
+            className={inputClass}
+            value={draft.start_day_offset ?? 0}
+            disabled={disabled}
+            onChange={(e) =>
+              setDraft({ ...draft, start_day_offset: Number(e.target.value) })
+            }
+          >
+            {Array.from(
+              { length: Math.max(2, (draft.start_day_offset ?? 0) + 1) },
+              (_, offset) => (
+                <option key={offset} value={offset}>
+                  {dayLabel(offset)}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
         <label className="text-xs text-slate-500">
           开始时间
           <input

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CalendarClock, Route } from "lucide-react";
 import type { DayPlan, ScheduledActivity, VersionDetail } from "@/lib/types";
 import { api } from "@/lib/api";
+import { dayLabel, timeLabel } from "@/lib/travel-time";
 
 const field =
   "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs";
@@ -23,6 +24,8 @@ export function OnTripControls({
   disabled: boolean;
   onCommit: (work: () => Promise<VersionDetail>) => Promise<boolean>;
 }) {
+  const activeContext =
+    day.replan_context?.activity_id === active.id ? day.replan_context : null;
   const [mode, setMode] = useState<"booking" | "replan" | null>(null);
   const [time, setTime] = useState(
     active.booking?.start_time ?? active.start_time ?? "14:00",
@@ -32,6 +35,14 @@ export function OnTripControls({
   );
   const [notes, setNotes] = useState(active.booking?.notes ?? "");
   const [endTime, setEndTime] = useState(day.replan_context?.end_time ?? "");
+  const [startOffset, setStartOffset] = useState(
+    active.booking?.start_day_offset ?? active.start_day_offset ?? 0,
+  );
+  const [endOffset, setEndOffset] = useState(
+    day.replan_context?.end_time
+      ? day.replan_context.end_day_offset
+      : (activeContext?.start_day_offset ?? active.start_day_offset ?? 0),
+  );
   const [endId, setEndId] = useState(() => {
     const candidate = day.replan_context?.end_activity_id;
     return candidate &&
@@ -49,28 +60,45 @@ export function OnTripControls({
   function open(next: "booking" | "replan") {
     setMode(mode === next ? null : next);
     setError("");
+    setStartOffset(
+      next === "booking"
+        ? (active.booking?.start_day_offset ?? active.start_day_offset ?? 0)
+        : (activeContext?.start_day_offset ?? active.start_day_offset ?? 0),
+    );
     setTime(
       next === "booking"
         ? (active.booking?.start_time ?? active.start_time ?? "14:00")
-        : (day.replan_context?.time ?? active.start_time ?? "14:00"),
+        : (activeContext?.time ?? active.start_time ?? "14:00"),
     );
   }
   async function save() {
-    if (mode === "replan" && endTime && endTime <= time) {
-      setError("结束时间需晚于出发时间，跨日请分别安排。");
-      return;
+    if (mode === "replan" && endTime) {
+      const minutes = (clock: string, offset: number) =>
+        offset * 1440 + Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
+      const duration = minutes(endTime, endOffset) - minutes(time, startOffset);
+      if (duration <= 0 || duration > 1440) {
+        setError(
+          duration <= 0
+            ? "结束时刻需晚于出发时刻，跨午夜请选择次日。"
+            : "一次调整最多24小时，较长行程请分段调整。",
+        );
+        return;
+      }
     }
     const ok = await onCommit(() =>
       mode === "booking"
         ? api.recordBooking(versionId, day.day, active.id, {
             start_time: time,
+            start_day_offset: startOffset,
             duration_minutes: duration,
             notes,
           })
         : api.replanDay(versionId, day.day, {
             activity_id: active.id,
             time,
+            start_day_offset: startOffset,
             end_time: endTime || null,
+            end_day_offset: endTime ? endOffset : 0,
             end_activity_id: endId || null,
           }),
     );
@@ -81,8 +109,12 @@ export function OnTripControls({
       {active.booking && (
         <p className="mb-2 flex items-center gap-1 text-xs text-amber-700">
           <CalendarClock className="h-3.5 w-3.5" />
-          已有预约 {active.booking.start_time} ·{" "}
-          {active.booking.duration_minutes} 分钟
+          已有预约{" "}
+          {timeLabel(
+            active.booking.start_time,
+            active.booking.start_day_offset,
+          )}{" "}
+          · {active.booking.duration_minutes} 分钟
         </p>
       )}
       {active.booking?.notes && (
@@ -131,6 +163,49 @@ export function OnTripControls({
             </p>
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs text-slate-600">
+                {mode === "booking" ? "预约日期" : "出发日期"}
+                <select
+                  aria-label={mode === "booking" ? "预约日期" : "出发日期"}
+                  className={field}
+                  value={startOffset}
+                  onChange={(e) => setStartOffset(Number(e.target.value))}
+                >
+                  {Array.from(
+                    { length: Math.min(61, Math.max(2, startOffset + 1)) },
+                    (_, offset) => (
+                      <option key={offset} value={offset}>
+                        {dayLabel(offset)}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              {mode === "replan" && (
+                <label className="text-xs text-slate-600">
+                  结束日期
+                  <select
+                    aria-label="结束日期"
+                    className={field}
+                    value={endOffset}
+                    onChange={(e) => setEndOffset(Number(e.target.value))}
+                  >
+                    {Array.from(
+                      {
+                        length: Math.min(
+                          61,
+                          Math.max(2, startOffset + 2, endOffset + 1),
+                        ),
+                      },
+                      (_, offset) => (
+                        <option key={offset} value={offset}>
+                          {dayLabel(offset)}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+              )}
+              <label className="text-xs text-slate-600">
                 {mode === "booking" ? "预约开始时间" : "从此处出发的时间"}
                 <input
                   required
@@ -165,6 +240,10 @@ export function OnTripControls({
                 </label>
               )}
             </div>
+            <p className="text-[11px] leading-5 text-slate-400">
+              “当日”和“次日”均相对第{day.day}
+              个行程日。跨午夜的后续仍显示在本日时间轴，单次窗口最长24小时。
+            </p>
             {mode === "replan" && (
               <label className="block text-xs text-slate-600">
                 结束地点

@@ -314,3 +314,21 @@ async def test_recording_an_existing_tomorrow_booking_does_not_need_model(enviro
     assert response.status_code == 200, response.text
     detail = (await client.get(f"/api/versions/{response.json()['version_id']}")).json()
     assert detail["itinerary"]["days"][0]["activities"][1]["booking"]["start_day_offset"] == 1
+
+
+def test_existing_appointments_in_replan_request_are_constraints_not_new_records():
+    from app.services.journey_messages import prepare_journey_message
+
+    plan = night_plan()
+    assert (
+        prepare_journey_message(
+            "第1天23:00在景山，次日01:30前回酒店，保留已经预约的夜场演出。", plan, Requirements()
+        )
+        is None
+    )
+    mixed = prepare_journey_message(
+        "第1天午餐花了86元，后续轻松一点，保留已经预约的演出", plan, Requirements()
+    )
+    assert mixed.itinerary.expenses[0].amount_cents == 8600
+    assert "保留已经预约" in mixed.refinement
+    assert prepare_journey_message("已完成的站点别动，后续轻松一点", plan, Requirements()) is None
