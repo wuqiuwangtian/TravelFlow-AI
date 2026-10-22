@@ -82,6 +82,7 @@ def make_planner_node(llm: LLMProvider, settings: Settings | None = None):
             requirements,
             settings or Settings(),
             len(research.build_citations()) if research else 0,
+            previous=state.get("itinerary"),
         )
 
         logger.info(

@@ -9,6 +9,8 @@
 
 import type {
   Activity,
+  ActivityProgress,
+  ExpenseInput,
   BranchInfo,
   ChatResponse,
   ConfigCheck,
@@ -173,6 +175,33 @@ export const api = {
     request<VersionDetail>(`/api/versions/${versionId}/days/${day}/routes`, {
       method: "POST",
       body: JSON.stringify({ travel_mode: travelMode }),
+    }),
+  updateProgress: (
+    versionId: string,
+    day: number,
+    activityId: string,
+    progress: ActivityProgress,
+  ) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/days/${day}/activities/${activityId}/progress`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ progress }),
+      },
+    ),
+  addExpense: (versionId: string, expense: ExpenseInput, requestId: string) =>
+    request<VersionDetail>(`/api/versions/${versionId}/expenses`, {
+      method: "POST",
+      body: JSON.stringify({ ...expense, request_id: requestId }),
+    }),
+  editExpense: (versionId: string, expenseId: string, expense: ExpenseInput) =>
+    request<VersionDetail>(`/api/versions/${versionId}/expenses/${expenseId}`, {
+      method: "PUT",
+      body: JSON.stringify(expense),
+    }),
+  deleteExpense: (versionId: string, expenseId: string) =>
+    request<VersionDetail>(`/api/versions/${versionId}/expenses/${expenseId}`, {
+      method: "DELETE",
     }),
   dayMapUrl: (versionId: string, day: number) =>
     `${API_BASE}/api/versions/${versionId}/days/${day}/map`,

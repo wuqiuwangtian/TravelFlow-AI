@@ -31,6 +31,8 @@ from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
+from app.services.itinerary_service import sync_markdown
+from app.services.travel_messages import handle_travel_message
 
 logger = get_logger(__name__)
 
@@ -69,6 +71,19 @@ def make_refiner_node(
         requirements = state["requirements"]
         level = state.get("detail_level") or DetailLevel.L2_STANDARD
         revision = int(state.get("revision", 0))
+
+        current = state.get("itinerary")
+        action = handle_travel_message(user_text, current, requirements) if current else None
+        if action:
+            updated_itinerary = action.itinerary or current
+            assert updated_itinerary is not None
+            return {
+                "itinerary": updated_itinerary,
+                "plan_markdown": sync_markdown(plan_markdown, updated_itinerary, requirements),
+                "messages": [AIMessage(content=action.reply)],
+                "revision": revision + (1 if action.itinerary is not None else 0),
+                "updated_at": datetime.now(),
+            }
 
         # ---- 1. 意图判定 ----
         verdict = await llm.structured(
@@ -129,9 +144,15 @@ def make_refiner_node(
         prompt += "\n【更新后的需求】\n" + requirements.model_dump_json(exclude_none=True)
         current_itinerary = state.get("itinerary")
         if current_itinerary:
+            actual = sum(e.amount_cents for e in current_itinerary.expenses) / 100
             prompt += (
                 "\n【当前结构化行程，未要求修改的站点和字段必须保留】\n"
-                + current_itinerary.model_dump_json()
+                + current_itinerary.model_dump_json(exclude={"expenses"})
+            )
+            prompt += (
+                "\n已完成、进行中和已跳过的活动属于旅中历史，保持原样，只调整后续未开始的安排。"
+                "实际消费由账本管理，不可改成预算或重复计入。"
+                f"当前已记全团实付合计：{actual:.2f}元。"
             )
         prompt += (
             "\n返回完整 markdown 和 days。停留点是具体地点；抵达该点的交通放在 transport_* 字段中。"

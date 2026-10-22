@@ -180,6 +180,7 @@ async def organise(
             requirements,
             settings,
             len(detail.citations),
+            previous=detail.itinerary,
         )
         if detail.itinerary is None:
             raise InvalidRequest("未识别到每日行程，请先生成包含每日安排的路书")

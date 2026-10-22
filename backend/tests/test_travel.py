@@ -157,3 +157,118 @@ def test_money_is_validated_without_float_rounding():
     assert int(ExpenseCreate(**expense(amount="0.29")).amount * 100) == 29
     with pytest.raises(ValidationError):
         ExpenseCreate(**expense(amount=Decimal("0.001")))
+
+
+async def test_chat_records_expense_and_progress_without_calling_model(environment, monkeypatch):
+    client, _, _, _ = environment
+    sid, bid, before = await generate(client)
+
+    async def offline(*args, **kwargs):
+        raise AssertionError("旅中记录不应调用模型")
+
+    from conftest import FakeLLM
+
+    monkeypatch.setattr(FakeLLM, "structured", offline)
+    for text, expected in [("第2天第1站已完成", "已完成"), ("第2天午餐每人花了43.25元", "86.50元")]:
+        response = await client.post(
+            "/api/chat", json={"session_id": sid, "branch_id": bid, "message": text}
+        )
+        assert response.status_code == 200, response.text
+        assert expected in response.json()["reply"]
+    latest = (await client.get(f"/api/versions/{response.json()['version_id']}")).json()
+    assert latest["itinerary"]["expenses"][0]["amount_cents"] == 8650
+    assert latest["itinerary"]["days"][1]["activities"][0]["progress"] == "completed"
+    assert (
+        latest["itinerary"]["days"][0]["known_cost"] == before["itinerary"]["days"][0]["known_cost"]
+    )
+    changed = await client.post(
+        "/api/chat", json={"session_id": sid, "branch_id": bid, "message": "午餐记错了，改成80元"}
+    )
+    assert changed.status_code == 200, changed.text
+    edited = (await client.get(f"/api/versions/{changed.json()['version_id']}")).json()
+    assert len(edited["itinerary"]["expenses"]) == 1
+    assert edited["itinerary"]["expenses"][0]["amount_cents"] == 8000
+
+
+def test_travel_parser_never_converts_budget_or_question_to_actual():
+    from app.domain.models import Requirements
+    from app.services.travel_messages import handle_travel_message
+
+    itinerary = Itinerary.model_validate(
+        {
+            "days": [
+                {"day": 1, "activities": [{"id": "a", "title": "故宫", "place_name": "故宫博物院"}]}
+            ]
+        }
+    )
+    for message in [
+        "午餐预计花了86元",
+        "午餐花了86元吗？",
+        "故宫还没有逛完",
+        "故宫逛完后去哪里",
+        "午餐花了两个小时",
+    ]:
+        assert handle_travel_message(message, itinerary, Requirements()) is None
+    reply = handle_travel_message("午餐花了86元", itinerary, Requirements())
+    assert reply.itinerary.expenses[0].day is None
+    assert reply.itinerary.expenses[0].amount_cents == 8600
+    assert itinerary.expenses == []
+    invalid = handle_travel_message("午餐花了1.001元", itinerary, Requirements())
+    assert invalid.itinerary is None
+    assert "两位小数" in invalid.reply
+
+
+async def test_organise_and_regenerate_keep_actual_records(environment, monkeypatch):
+    client, _, graph, _ = environment
+    from conftest import FakeLLM
+
+    monkeypatch.setattr("app.api.routes_itinerary.create_llm_provider", lambda settings: FakeLLM())
+    sid, bid, before = await generate(client)
+    created = await client.post(f"/api/versions/{before['version']['id']}/expenses", json=expense())
+    version = created.json()["version"]["id"]
+    organised = await client.post(f"/api/versions/{version}/itinerary")
+    assert organised.status_code == 200, organised.text
+    assert organised.json()["itinerary"]["expenses"][0]["amount_cents"] == 8635
+    from app.domain.enums import PlanStatus
+
+    await graph.aupdate_state(thread_config(bid), {"status": PlanStatus.PLANNING})
+    regenerated = await client.post(
+        "/api/chat", json={"session_id": sid, "branch_id": bid, "message": "重新生成"}
+    )
+    assert regenerated.status_code == 200, regenerated.text
+    detail = (await client.get(f"/api/versions/{regenerated.json()['version_id']}")).json()
+    assert detail["itinerary"]["expenses"][0]["amount_cents"] == 8635
+
+
+def test_completed_activity_time_is_not_shifted_by_new_route():
+    from app.domain.itinerary import DayPlan
+    from app.services.itinerary_service import schedule_day
+
+    day = DayPlan.model_validate(
+        {
+            "day": 1,
+            "activities": [
+                {"id": "a", "title": "出发", "start_time": "09:00", "duration_minutes": 300},
+                {
+                    "id": "b",
+                    "title": "已逛完",
+                    "start_time": "10:00",
+                    "progress": "completed",
+                    "duration_minutes": 30,
+                },
+            ],
+        }
+    )
+    schedule_day(day)
+    assert day.activities[1].start_time == "10:00"
+
+
+def test_money_parser_handles_grouped_numbers_without_partial_amounts():
+    from app.domain.models import Requirements
+    from app.services.travel_messages import handle_travel_message
+
+    itinerary = Itinerary.model_validate({"days": [{"day": 1}]})
+    grouped = handle_travel_message("机票花了1,086.50元", itinerary, Requirements())
+    assert grouped.itinerary.expenses[0].amount_cents == 108650
+    for text in ["机票花了1e3元", "机票花了1,00元", "机票花了2.50.86元"]:
+        assert handle_travel_message(text, itinerary, Requirements()).itinerary is None

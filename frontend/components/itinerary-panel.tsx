@@ -23,9 +23,11 @@ import {
   Utensils,
 } from "lucide-react";
 import { Button, Card, ErrorBanner } from "@/components/ui";
+import { TravelLedger } from "@/components/travel-ledger";
 import { api, ApiError } from "@/lib/api";
 import type {
   Activity,
+  ActivityProgress,
   DayPlan,
   Place,
   ScheduledActivity,
@@ -44,6 +46,12 @@ const modes: Record<TravelMode, string> = {
 };
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
+const progressLabels: Record<ActivityProgress, string> = {
+  not_started: "未开始",
+  in_progress: "进行中",
+  completed: "已完成",
+  skipped: "已跳过",
+};
 
 function navigation(
   place: Place,
@@ -133,6 +141,7 @@ export function ItineraryPanel({
       const result = await work();
       setEditing(null);
       await onUpdate(result);
+      return true;
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "更新失败，当前行程已保留。",
@@ -140,6 +149,7 @@ export function ItineraryPanel({
       setNeedsModelSettings(
         err instanceof ApiError && err.code === "LLM_AUTH_FAILED",
       );
+      return false;
     } finally {
       setBusy(false);
       onBusy(false);
@@ -355,7 +365,10 @@ export function ItineraryPanel({
                               )}
                             </div>
                             <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-teal-600">
-                              {index + 1}
+                              {activity.progress &&
+                              activity.progress !== "not_started"
+                                ? progressLabels[activity.progress]
+                                : index + 1}
                             </span>
                           </div>
                         </button>
@@ -464,6 +477,46 @@ export function ItineraryPanel({
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
+                    <div className="mt-4 border-t border-slate-100 pt-3">
+                      <p className="text-xs text-slate-500">
+                        旅中状态：
+                        {progressLabels[active.progress ?? "not_started"]}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(active.progress === "completed" ||
+                        active.progress === "skipped"
+                          ? (["not_started"] as const)
+                          : (["in_progress", "completed", "skipped"] as const)
+                        )
+                          .filter((status) => status !== active.progress)
+                          .map((status) => (
+                            <button
+                              type="button"
+                              key={status}
+                              disabled={!editable || disabled || busy}
+                              className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                              onClick={() =>
+                                void mutate(() =>
+                                  api.updateProgress(
+                                    detail.version.id,
+                                    day.day,
+                                    active.id,
+                                    status,
+                                  ),
+                                )
+                              }
+                            >
+                              {status === "not_started"
+                                ? "恢复未开始"
+                                : status === "in_progress"
+                                  ? "开始这一站"
+                                  : status === "completed"
+                                    ? "标记完成"
+                                    : "跳过这一站"}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
                   </div>
                 )}
                 <div className="rounded-xl bg-slate-50 p-4">
@@ -515,6 +568,12 @@ export function ItineraryPanel({
                 </details>
               </div>
             </div>
+            <TravelLedger
+              detail={detail}
+              day={day.day}
+              disabled={!editable || disabled || busy}
+              onCommit={mutate}
+            />
             {advanced && (
               <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-slate-200 p-4">
                 <label className="text-xs text-slate-500">
@@ -743,7 +802,7 @@ function ActivityEditor({
   activity: ScheduledActivity;
   city: string;
   disabled: boolean;
-  onSave: (draft: Activity, placeId?: string) => Promise<void>;
+  onSave: (draft: Activity, placeId?: string) => Promise<unknown>;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Activity>({ ...activity, city });

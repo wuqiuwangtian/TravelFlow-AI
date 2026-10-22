@@ -172,6 +172,34 @@ export interface ScheduledActivity extends Activity {
   candidates: Place[];
   match_reason: string;
   time_is_suggested: boolean;
+  progress: ActivityProgress;
+  progress_updated_at: string | null;
+}
+
+export type ActivityProgress =
+  "not_started" | "in_progress" | "completed" | "skipped";
+export type ExpenseCategory =
+  "transport" | "lodging" | "meal" | "ticket" | "shopping" | "other";
+
+export interface ExpenseInput {
+  title: string;
+  amount: string;
+  category: ExpenseCategory;
+  day: number | null;
+  activity_id: string | null;
+  notes: string;
+}
+
+export interface Expense {
+  id: string;
+  title: string;
+  amount_cents: number;
+  category: ExpenseCategory;
+  day: number | null;
+  activity_id: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RouteLeg {
@@ -208,4 +236,5 @@ export interface DayPlan {
 export interface Itinerary {
   days: DayPlan[];
   map_status: "unconfigured" | "ready" | "partial";
+  expenses: Expense[];
 }

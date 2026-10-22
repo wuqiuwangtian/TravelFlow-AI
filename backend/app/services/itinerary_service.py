@@ -149,7 +149,11 @@ def schedule_day(day: DayPlan) -> None:
             requested = _minutes(activity.start_time)
             if requested < cursor and not activity.time_is_suggested:
                 day.warnings.append(f"「{activity.title}」固定时间与前段路程冲突，可通过对话调整。")
-            cursor = requested if not activity.time_is_suggested else max(cursor, requested)
+            cursor = (
+                requested
+                if not activity.time_is_suggested or activity.progress != "not_started"
+                else max(cursor, requested)
+            )
         if cursor >= 24 * 60:
             day.warnings.append("当天安排将跨过午夜，建议减少活动或增加一天。")
         activity.start_time = f"{min(cursor, 1439) // 60:02d}:{min(cursor, 1439) % 60:02d}"
