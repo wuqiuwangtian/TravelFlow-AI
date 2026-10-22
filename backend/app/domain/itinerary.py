@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -10,6 +11,8 @@ from pydantic import BaseModel, Field, model_validator
 TravelMode = Literal["auto", "walking", "transit", "driving", "rail", "flight", "transfer"]
 CostBasis = Literal["per_person", "total", "unknown"]
 CostSource = Literal["reference", "estimate", "manual", "unknown"]
+ActivityProgress = Literal["not_started", "in_progress", "completed", "skipped"]
+ExpenseCategory = Literal["transport", "lodging", "meal", "ticket", "shopping", "other"]
 
 
 class Place(BaseModel):
@@ -58,6 +61,33 @@ class ScheduledActivity(Activity):
     candidates: list[Place] = Field(default_factory=list)
     match_reason: str = ""
     time_is_suggested: bool = True
+    progress: ActivityProgress = "not_started"
+    progress_updated_at: datetime | None = None
+
+
+class ExpenseInput(BaseModel):
+    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
+    amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2, allow_inf_nan=False)
+    category: ExpenseCategory = "other"
+    day: int | None = Field(default=None, ge=1, le=60)
+    activity_id: str | None = Field(default=None, min_length=1, max_length=100)
+    notes: str = Field(default="", max_length=1000)
+
+
+class ExpenseCreate(ExpenseInput):
+    request_id: str = Field(min_length=8, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
+
+
+class Expense(BaseModel):
+    id: str
+    title: str
+    amount_cents: int = Field(gt=0)
+    category: ExpenseCategory = "other"
+    day: int | None = None
+    activity_id: str | None = None
+    notes: str = ""
+    created_at: datetime
+    updated_at: datetime
 
 
 class DayDraft(BaseModel):
@@ -104,6 +134,7 @@ class DayPlan(BaseModel):
 class Itinerary(BaseModel):
     days: list[DayPlan] = Field(default_factory=list, max_length=60)
     map_status: Literal["unconfigured", "ready", "partial"] = "unconfigured"
+    expenses: list[Expense] = Field(default_factory=list, max_length=2000)
 
     @model_validator(mode="after")
     def unique_days(self) -> Itinerary:

@@ -38,6 +38,7 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
     ("app.domain.itinerary", "ScheduledActivity"),
     ("app.domain.itinerary", "Place"),
     ("app.domain.itinerary", "RouteLeg"),
+    ("app.domain.itinerary", "Expense"),
     ("app.domain.models", "Requirements"),
     ("app.domain.models", "ResearchBundle"),
     ("app.domain.models", "Citation"),

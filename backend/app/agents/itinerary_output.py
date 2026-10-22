@@ -9,6 +9,7 @@ from app.domain.itinerary import DayDraft, Itinerary, ScheduledActivity
 from app.domain.models import Requirements, TodoItem
 from app.llm.base import ChatMessage, LLMProvider
 from app.services.itinerary_service import build_itinerary, enrich_itinerary, sync_markdown
+from app.services.travel_service import preserve_travel_records
 
 logger = get_logger(__name__)
 
@@ -104,6 +105,8 @@ async def prepare_itinerary(
                     activity.cost_source = "manual"
                 elif activity.cost is not None:
                     activity.cost_source = "estimate"
+    if previous:
+        preserve_travel_records(previous, itinerary)
     emit_progress("routes", "正在匹配地点并校验每日路线…")
     itinerary = await enrich_itinerary(itinerary, requirements, settings)
     return itinerary, sync_markdown(markdown, itinerary, requirements)

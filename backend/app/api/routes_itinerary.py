@@ -15,7 +15,16 @@ from app.core.config import Settings, get_settings
 from app.core.deps import get_graph, get_store
 from app.core.errors import ConflictError, InvalidRequest
 from app.domain.enums import PlanStatus
-from app.domain.itinerary import ActivityUpdate, DayPlan, ScheduledActivity, TravelMode
+from app.domain.itinerary import (
+    ActivityProgress,
+    ActivityUpdate,
+    DayPlan,
+    ExpenseCreate,
+    ExpenseInput,
+    Itinerary,
+    ScheduledActivity,
+    TravelMode,
+)
 from app.domain.models import Requirements, VersionDetail
 from app.domain.schemas import ConnectionTestResponse
 from app.llm.factory import create_llm_provider
@@ -24,6 +33,7 @@ from app.maps.assets import map_asset
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["itinerary"])
@@ -53,7 +63,12 @@ def _day(detail: VersionDetail, number: int) -> DayPlan:
 
 
 async def _save_revision(
-    store: SessionStore, graph, detail: VersionDetail, summary: str
+    store: SessionStore,
+    graph,
+    detail: VersionDetail,
+    summary: str,
+    *,
+    keep_plan_status: bool = False,
 ) -> VersionDetail:
     """同时更新图状态和版本快照，下一轮对话接着修改后的行程继续。"""
     branch_id = detail.version.branch_id
@@ -70,7 +85,9 @@ async def _save_revision(
         "requirements": requirements,
         "todos": detail.todos,
         "revision": int(values.get("revision", 0)) + 1,
-        "status": PlanStatus.REVIEWING,
+        "status": values.get("status", PlanStatus.REVIEWING)
+        if keep_plan_status
+        else PlanStatus.REVIEWING,
         "updated_at": datetime.now(),
     }
     updated = await graph.aupdate_state(config, patch, as_node="refiner")
@@ -193,6 +210,7 @@ async def update_activity(
             raise InvalidRequest("活动不存在")
         old = day.activities[index]
         activity = ScheduledActivity(id=activity_id, **payload.activity.model_dump())
+        activity.progress, activity.progress_updated_at = old.progress, old.progress_updated_at
         activity.time_is_suggested = (
             old.time_is_suggested
             if activity.start_time == old.start_time
@@ -278,3 +296,97 @@ async def day_map(
     return Response(
         data, media_type=content_type, headers={"Cache-Control": "private, max-age=300"}
     )
+
+
+def _itinerary(detail: VersionDetail) -> Itinerary:
+    if detail.itinerary is None:
+        raise InvalidRequest("请先生成或整理每日行程")
+    return detail.itinerary
+
+
+class ProgressUpdate(BaseModel):
+    progress: ActivityProgress
+
+
+@router.patch(
+    "/versions/{version_id}/days/{number}/activities/{activity_id}/progress",
+    response_model=VersionDetail,
+    summary="记录旅中活动状态",
+)
+async def update_progress(
+    version_id: str,
+    number: int,
+    activity_id: str,
+    payload: ProgressUpdate,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        set_progress(_itinerary(detail), number, activity_id, payload.progress)
+        return await _save_revision(
+            store, graph, detail, f"记录第 {number} 天活动状态", keep_plan_status=True
+        )
+
+
+@router.post(
+    "/versions/{version_id}/expenses", response_model=VersionDetail, summary="记录实际消费"
+)
+async def create_expense(
+    version_id: str,
+    payload: ExpenseCreate,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        versions = await store.list_versions(original.version.branch_id)
+        latest = await _detail(store, versions[-1].id)
+        changed = add_expense(_itinerary(latest), payload)
+        if not changed:
+            return latest  # 网络重试可使用原版本和同一 request_id，不重复记账。
+        if latest.version.id != version_id:
+            raise ConflictError("当前查看的是历史版本，请先分叉为新方案再记账")
+        return await _save_revision(
+            store, graph, latest, f"记账：{payload.title}", keep_plan_status=True
+        )
+
+
+@router.put(
+    "/versions/{version_id}/expenses/{expense_id}",
+    response_model=VersionDetail,
+    summary="更正实际消费",
+)
+async def update_expense(
+    version_id: str,
+    expense_id: str,
+    payload: ExpenseInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        edit_expense(_itinerary(detail), expense_id, payload)
+        return await _save_revision(
+            store, graph, detail, f"更正消费：{payload.title}", keep_plan_status=True
+        )
+
+
+@router.delete(
+    "/versions/{version_id}/expenses/{expense_id}",
+    response_model=VersionDetail,
+    summary="移除误记消费（保留历史版本）",
+)
+async def delete_expense(
+    version_id: str,
+    expense_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        remove_expense(_itinerary(detail), expense_id)
+        return await _save_revision(store, graph, detail, "移除误记消费", keep_plan_status=True)
