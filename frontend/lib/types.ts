@@ -212,6 +212,8 @@ export interface ExpenseInput {
   day: number | null;
   activity_id: string | null;
   notes: string;
+  receipt_ids?: string[];
+  allow_shared_receipts?: boolean;
 }
 
 export interface Expense {
@@ -224,6 +226,16 @@ export interface Expense {
   notes: string;
   created_at: string;
   updated_at: string;
+  receipt_ids: string[];
+}
+
+export interface ReceiptDraft {
+  title: string;
+  amount: string | null;
+  category: ExpenseCategory;
+  currency: "CNY" | "other" | "unknown";
+  kind: "expense" | "refund" | "reimbursement" | "unknown";
+  warnings: string[];
 }
 
 export interface RouteLeg {
@@ -262,4 +274,34 @@ export interface Itinerary {
   days: DayPlan[];
   map_status: "unconfigured" | "ready" | "partial";
   expenses: Expense[];
+  adjustments: ExpenseAdjustment[];
+  ledger_summary: LedgerSummary;
+}
+
+export interface AdjustmentInput {
+  expense_id: string;
+  kind: "refund" | "reimbursement";
+  amount: string;
+  status: "pending" | "received";
+  notes: string;
+}
+export interface ExpenseAdjustment {
+  id: string;
+  expense_id: string;
+  kind: "refund" | "reimbursement";
+  amount_cents: number;
+  status: "pending" | "received";
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface LedgerSummary {
+  paid_cents: number;
+  refunded_cents: number;
+  reimbursed_cents: number;
+  pending_refund_cents: number;
+  pending_reimbursement_cents: number;
+  net_expense_cents: number;
+  net_outlay_cents: number;
+  over_recovered_cents: number;
 }

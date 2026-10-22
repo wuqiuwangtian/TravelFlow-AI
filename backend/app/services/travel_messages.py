@@ -110,6 +110,7 @@ def handle_travel_message(
                     day=entry.day,
                     activity_id=entry.activity_id,
                     notes=entry.notes,
+                    receipt_ids=entry.receipt_ids,
                 )
                 edit_expense(result, entry.id, updated)
             except ValidationError:

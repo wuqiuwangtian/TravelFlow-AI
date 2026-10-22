@@ -10,6 +10,8 @@
 import type {
   Activity,
   ActivityProgress,
+  AdjustmentInput,
+  ReceiptDraft,
   ExpenseInput,
   Booking,
   ReplanInput,
@@ -272,6 +274,25 @@ export const api = {
     request<{ messages: { role: string; content: string }[] }>(
       `/api/branches/${branchId}/messages`,
     ),
+  addAdjustment: (
+    versionId: string,
+    data: AdjustmentInput,
+    requestId: string,
+  ) =>
+    request<VersionDetail>(`/api/versions/${versionId}/expense-adjustments`, {
+      method: "POST",
+      body: JSON.stringify({ ...data, request_id: requestId }),
+    }),
+  editAdjustment: (versionId: string, id: string, data: AdjustmentInput) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/expense-adjustments/${id}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    ),
+  deleteAdjustment: (versionId: string, id: string) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/expense-adjustments/${id}`,
+      { method: "DELETE" },
+    ),
 
   // ---- 对话 ----
   chat: (payload: {
@@ -284,6 +305,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  uploadReceipt: (versionId: string, file: File) =>
+    request<{ id: string; mime: string; width: number; height: number }>(
+      `/api/versions/${versionId}/receipts`,
+      {
+        method: "POST",
+        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+      },
+    ),
+  receiptUrl: (versionId: string, id: string, original = false) =>
+    `${API_BASE}/api/versions/${versionId}/receipts/${id}${original ? "?original=true" : ""}`,
+  recogniseReceipt: (versionId: string, id: string) =>
+    request<ReceiptDraft>(
+      `/api/versions/${versionId}/receipts/${id}/recognise`,
+      { method: "POST" },
+    ),
 
   // ---- 导出（直接触发浏览器下载）----
   exportUrl: (versionId: string, format: "md" | "html") =>

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -25,6 +26,7 @@ from app.domain.itinerary import (
     ExpenseCreate,
     ExpenseInput,
     Itinerary,
+    ReceiptDraft,
     ReplanInput,
     ScheduledActivity,
     TravelMode,
@@ -38,6 +40,7 @@ from app.services.adjustment_service import add_adjustment, edit_adjustment, rem
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.receipt_service import MAX_RECEIPT_BYTES, normalise_receipt, recognise_receipt
 from app.services.replan_service import preserve_replan_scope, record_booking, set_replan_context
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 from app.storage.session_store import SessionStore
@@ -358,6 +361,7 @@ async def create_expense(
     async with branch_guard(original.version.branch_id):
         versions = await store.list_versions(original.version.branch_id)
         latest = await _detail(store, versions[-1].id)
+        await _validate_receipts(store, latest, payload)
         changed = add_expense(_itinerary(latest), payload)
         if not changed:
             return latest  # 网络重试可使用原版本和同一 request_id，不重复记账。
@@ -383,6 +387,7 @@ async def update_expense(
     original = await _detail(store, version_id)
     async with branch_guard(original.version.branch_id):
         detail = await _editable(store, version_id)
+        await _validate_receipts(store, detail, payload, expense_id)
         edit_expense(_itinerary(detail), expense_id, payload)
         return await _save_revision(
             store, graph, detail, f"更正消费：{payload.title}", keep_plan_status=True
@@ -522,3 +527,105 @@ async def replan_day(
         return await _save_revision(
             store, graph, detail, f"从{payload.time}调整第{number}天后续安排"
         )
+
+
+async def _receipt_session(store: SessionStore, detail: VersionDetail) -> str:
+    branch = await store.get_branch(detail.version.branch_id)
+    if branch is None:
+        raise InvalidRequest("会话不存在")
+    return branch.session_id
+
+
+async def _validate_receipts(
+    store: SessionStore, detail: VersionDetail, payload: ExpenseInput, expense_id: str | None = None
+) -> None:
+    session_id = await _receipt_session(store, detail)
+    for receipt_id in payload.receipt_ids:
+        if await store.get_receipt(session_id, receipt_id) is None:
+            raise InvalidRequest("凭证不存在或不属于这次旅行")
+        if expense_id and any(
+            e.id == expense_id and receipt_id in e.receipt_ids for e in _itinerary(detail).expenses
+        ):
+            continue
+        duplicate = next(
+            (
+                e
+                for e in _itinerary(detail).expenses
+                if e.id != (expense_id or getattr(payload, "request_id", None))
+                and receipt_id in e.receipt_ids
+            ),
+            None,
+        )
+        if duplicate and not payload.allow_shared_receipts:
+            raise ConflictError(
+                f"这张凭证已关联「{duplicate.title}」，请更正原记录；确需分项记账时可选择共用凭证。"
+            )
+
+
+@router.post("/versions/{version_id}/receipts", summary="上传本地图片凭证（不自动记账）")
+async def upload_receipt(
+    version_id: str, request: Request, store: SessionStore = Depends(get_store)
+) -> dict:
+    detail = await _editable(store, version_id)
+    _itinerary(detail)
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_RECEIPT_BYTES:
+            raise InvalidRequest("请选择4MB以内的凭证图片")
+        data.extend(chunk)
+    original = bytes(data)
+    preview, mime, width, height, digest = await asyncio.to_thread(normalise_receipt, original)
+    row = await store.save_receipt(
+        await _receipt_session(store, detail), digest, original, preview, mime, width, height
+    )
+    return {
+        "id": row["id"],
+        "width": row["width"],
+        "height": row["height"],
+        "mime": row["original_mime"],
+    }
+
+
+@router.get("/versions/{version_id}/receipts/{receipt_id}", summary="查看凭证预览或下载原图")
+async def get_receipt(
+    version_id: str,
+    receipt_id: str,
+    original: bool = False,
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    detail = await _detail(store, version_id)
+    row = await store.get_receipt(await _receipt_session(store, detail), receipt_id)
+    if row is None:
+        raise InvalidRequest("凭证不存在或不属于这次旅行")
+    mime = row["original_mime"] if original else "image/jpeg"
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[mime]
+    return Response(
+        row["original_data"] if original else row["preview_data"],
+        media_type=mime,
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Content-Disposition": (
+                f"{'attachment' if original else 'inline'}; filename=receipt-{row['id']}.{ext}"
+            ),
+        },
+    )
+
+
+@router.post(
+    "/versions/{version_id}/receipts/{receipt_id}/recognise",
+    response_model=ReceiptDraft,
+    summary="将凭证发给当前模型识别为待核对草稿",
+)
+async def recognise(
+    version_id: str,
+    receipt_id: str,
+    store: SessionStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> ReceiptDraft:
+    detail = await _editable(store, version_id)
+    row = await store.get_receipt(await _receipt_session(store, detail), receipt_id)
+    if row is None:
+        raise InvalidRequest("凭证不存在或不属于这次旅行")
+    return await recognise_receipt(create_llm_provider(settings), row["preview_data"])

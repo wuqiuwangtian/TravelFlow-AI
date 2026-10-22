@@ -39,7 +39,19 @@ _ROLE_TO_MESSAGE: dict[str, type[BaseMessage]] = {
 
 
 def _to_langchain(messages: Sequence[ChatMessage]) -> list[BaseMessage]:
-    return [_ROLE_TO_MESSAGE[m.role](content=m.content) for m in messages]
+    return [
+        _ROLE_TO_MESSAGE[m.role](
+            content=(
+                [
+                    {"type": "text", "text": m.content},
+                    *[{"type": "image_url", "image_url": {"url": url}} for url in m.images],
+                ]
+                if m.images
+                else m.content
+            )
+        )
+        for m in messages
+    ]
 
 
 def _with_json_hint(messages: Sequence[ChatMessage], schema: type[BaseModel]) -> list[ChatMessage]:
@@ -56,7 +68,7 @@ def _with_json_hint(messages: Sequence[ChatMessage], schema: type[BaseModel]) ->
 
     updated = list(messages)
     if updated and updated[-1].role == "user":
-        updated[-1] = ChatMessage(role="user", content=updated[-1].content + hint)
+        updated[-1] = updated[-1].model_copy(update={"content": updated[-1].content + hint})
     else:
         updated.append(ChatMessage(role="user", content=hint.strip()))
     return updated

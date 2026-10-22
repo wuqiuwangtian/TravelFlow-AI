@@ -317,6 +317,58 @@ class SessionStore:
         )
 
     # ==================================================== 映射
+    async def save_receipt(
+        self,
+        session_id: str,
+        digest: str,
+        original: bytes,
+        preview: bytes,
+        mime: str,
+        width: int,
+        height: int,
+    ) -> dict:
+        receipt_id = uuid.uuid4().hex
+        await self._conn.execute(
+            "INSERT INTO receipt_assets(id,session_id,digest,original_data,preview_data,"
+            "original_mime,width,height,created_at) "
+            "SELECT ?,?,?,?,?,?,?,?,? WHERE "
+            "(SELECT COUNT(*) FROM receipt_assets WHERE session_id=?)<200 AND "
+            "(SELECT COALESCE(SUM(length(original_data)+length(preview_data)),0) "
+            "FROM receipt_assets WHERE session_id=?)+?<=67108864 "
+            "ON CONFLICT(session_id,digest) DO NOTHING",
+            (
+                receipt_id,
+                session_id,
+                digest,
+                original,
+                preview,
+                mime,
+                width,
+                height,
+                _now(),
+                session_id,
+                session_id,
+                len(original) + len(preview),
+            ),
+        )
+        await self._conn.commit()
+        cursor = await self._conn.execute(
+            "SELECT * FROM receipt_assets WHERE session_id=? AND digest=?", (session_id, digest)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            from app.core.errors import InvalidRequest
+
+            raise InvalidRequest("本次旅行的凭证已达到200张或64MB上限")
+        return dict(row)
+
+    async def get_receipt(self, session_id: str, receipt_id: str) -> dict | None:
+        cursor = await self._conn.execute(
+            "SELECT * FROM receipt_assets WHERE session_id=? AND id=?", (session_id, receipt_id)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
     @staticmethod
     def _to_session(row: aiosqlite.Row) -> SessionInfo:
         keys = row.keys()

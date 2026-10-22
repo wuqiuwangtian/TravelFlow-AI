@@ -20,6 +20,7 @@ def expense_values(data: ExpenseInput) -> dict:
         "day": data.day,
         "activity_id": data.activity_id,
         "notes": data.notes,
+        "receipt_ids": list(dict.fromkeys(data.receipt_ids)),
     }
 
 

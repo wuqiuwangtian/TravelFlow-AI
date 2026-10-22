@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Plus, ReceiptText, Pencil, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ExpenseReturns } from "@/components/expense-returns";
+import { ReceiptPicker, ReceiptGallery } from "@/components/receipt-picker";
 import type {
   Expense,
   ExpenseCategory,
@@ -38,6 +40,7 @@ export function TravelLedger({
   const [requestId, setRequestId] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [receiptBusy, setReceiptBusy] = useState(false);
   const itinerary = detail.itinerary;
   if (!itinerary) return null;
   const entries = itinerary.expenses ?? [];
@@ -58,7 +61,11 @@ export function TravelLedger({
           req.travelers
         ? req.budget * req.travelers
         : null;
-  const balance = budget === null ? null : Math.round(budget * 100) - actual;
+  const ledger = itinerary.ledger_summary;
+  const balance =
+    budget === null
+      ? null
+      : Math.round(budget * 100) - (ledger?.net_expense_cents ?? actual);
 
   function start(entry?: Expense) {
     setEditing(entry?.id ?? null);
@@ -77,6 +84,7 @@ export function TravelLedger({
             day: entry.day,
             activity_id: entry.activity_id,
             notes: entry.notes,
+            receipt_ids: entry.receipt_ids ?? [],
           }
         : {
             title: "",
@@ -85,6 +93,7 @@ export function TravelLedger({
             day,
             activity_id: null,
             notes: "",
+            receipt_ids: [],
           },
     );
   }
@@ -153,7 +162,7 @@ export function TravelLedger({
           </p>
         </div>
         <div className="col-span-2 rounded-xl bg-white p-3 sm:col-span-1">
-          <p className="text-[11px] text-slate-500">全团预算减已记消费</p>
+          <p className="text-[11px] text-slate-500">全团预算减已记净消费</p>
           <p
             className={`mt-1 text-base font-semibold ${balance !== null && balance < 0 ? "text-amber-700" : "text-slate-700"}`}
           >
@@ -161,6 +170,40 @@ export function TravelLedger({
           </p>
         </div>
       </div>
+      {(itinerary.adjustments?.length ?? 0) > 0 && (
+        <div
+          className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"
+          aria-label="回款汇总"
+        >
+          {[
+            ["退款已到账", ledger.refunded_cents],
+            ["报销已到账", ledger.reimbursed_cents],
+            ["净消费", ledger.net_expense_cents],
+            ["净垫付（全团）", ledger.net_outlay_cents],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-xl bg-white p-3">
+              <p className="text-slate-500">{label}</p>
+              <p className="mt-1 font-semibold text-teal-700">
+                {money(Number(value))}
+              </p>
+            </div>
+          ))}
+          <p className="col-span-2 text-slate-500 sm:col-span-4">
+            待到账退款 {money(ledger.pending_refund_cents)} · 待到账报销{" "}
+            {money(ledger.pending_reimbursement_cents)}
+            。净消费减已到账报销得到净垫付，报销不重复增加预算余量。
+          </p>
+          {ledger.over_recovered_cents > 0 && (
+            <p
+              role="status"
+              className="col-span-2 text-amber-700 sm:col-span-4"
+            >
+              部分消费的已到账回款超出原支出{" "}
+              {money(ledger.over_recovered_cents)}，请核对回款记录。
+            </p>
+          )}
+        </div>
+      )}
       <p className="mt-2 text-[11px] leading-5 text-slate-400">
         实际消费不与计划估算相加。未记支出尚未扣除；历史版本中的记录随版本保存。
       </p>
@@ -174,7 +217,7 @@ export function TravelLedger({
           }}
         >
           <fieldset
-            disabled={disabled}
+            disabled={disabled || receiptBusy}
             className="space-y-3 disabled:opacity-60"
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -206,6 +249,47 @@ export function TravelLedger({
                 />
               </label>
             </div>
+            <ReceiptPicker
+              versionId={detail.version.id}
+              ids={draft.receipt_ids ?? []}
+              disabled={disabled}
+              onBusy={setReceiptBusy}
+              onChange={(ids) =>
+                setDraft((previous) =>
+                  previous ? { ...previous, receipt_ids: ids } : previous,
+                )
+              }
+              onDraft={(result) =>
+                setDraft((previous) =>
+                  previous
+                    ? {
+                        ...previous,
+                        title: result.title || previous.title,
+                        amount: result.amount ?? previous.amount,
+                        category:
+                          result.kind === "expense"
+                            ? result.category
+                            : previous.category,
+                      }
+                    : previous,
+                )
+              }
+            />
+            {(draft.receipt_ids?.length ?? 0) > 0 && (
+              <label className="flex gap-2 text-[11px] text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={draft.allow_shared_receipts ?? false}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      allow_shared_receipts: e.target.checked,
+                    })
+                  }
+                />
+                同一张凭证包含不同消费，允许分项记账
+              </label>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs text-slate-600">
                 所属日期
@@ -361,6 +445,17 @@ export function TravelLedger({
                     {entry.notes}
                   </p>
                 )}
+                {(entry.receipt_ids?.length ?? 0) > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-teal-700">
+                      图片凭证（{entry.receipt_ids.length}张）
+                    </summary>
+                    <ReceiptGallery
+                      versionId={detail.version.id}
+                      ids={entry.receipt_ids}
+                    />
+                  </details>
+                )}
                 {removing === entry.id && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     <span className="text-slate-500">
@@ -395,6 +490,7 @@ export function TravelLedger({
           </ul>
         </details>
       )}
+      <ExpenseReturns detail={detail} disabled={disabled} onCommit={onCommit} />
     </section>
   );
 }

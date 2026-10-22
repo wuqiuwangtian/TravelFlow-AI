@@ -22,14 +22,41 @@ async function proxy(
   ).replace(/\/$/, "");
   const timeout = AbortSignal.timeout(240_000);
   try {
-    const body = ["GET", "HEAD"].includes(request.method)
-      ? undefined
-      : await request.arrayBuffer();
-    if (body && body.byteLength > 256 * 1024) {
+    const limit =
+      path.length === 4 &&
+      path[0] === "api" &&
+      path[1] === "versions" &&
+      path[3] === "receipts"
+        ? 4 * 1024 * 1024
+        : 256 * 1024;
+    const reader = request.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    if (reader) {
+      while (true) {
+        const item = await reader.read();
+        if (item.done) break;
+        size += item.value.byteLength;
+        if (size > limit) {
+          await reader.cancel();
+          break;
+        }
+        chunks.push(item.value);
+      }
+    }
+    if (size > limit) {
       return Response.json(
         { error: { code: "INVALID_REQUEST", message: "请求内容过大" } },
         { status: 413 },
       );
+    }
+    const body = request.body ? new Uint8Array(size) : undefined;
+    if (body) {
+      let offset = 0;
+      for (const chunk of chunks) {
+        body.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
     }
     const upstream = await fetch(
       `${base}/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`,
@@ -51,6 +78,8 @@ async function proxy(
       "content-disposition",
       "cache-control",
       "x-trace-id",
+      "x-content-type-options",
+      "content-security-policy",
     ]) {
       const value = upstream.headers.get(name);
       if (value) headers.set(name, value);

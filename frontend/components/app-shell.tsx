@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1">{children}</main>
 
       <footer className="py-8 text-center text-xs text-slate-400">
-        TravelFlow AI · 所有数据保存在本机，不上传云端
+        TravelFlow AI · 旅行数据保存在本机，AI 功能按需调用当前模型
       </footer>
     </div>
   );

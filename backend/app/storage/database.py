@@ -63,6 +63,21 @@ CREATE TABLE IF NOT EXISTS plans (
 CREATE INDEX IF NOT EXISTS idx_branches_session ON branches(session_id);
 CREATE INDEX IF NOT EXISTS idx_versions_branch  ON versions(branch_id, seq);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+
+-- 凭证保留原图，预览与识别使用清除元数据后的副本；删除会话时清理。
+CREATE TABLE IF NOT EXISTS receipt_assets (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    digest TEXT NOT NULL,
+    original_data BLOB NOT NULL,
+    preview_data BLOB NOT NULL,
+    original_mime TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, digest)
+);
+CREATE INDEX IF NOT EXISTS idx_receipts_session ON receipt_assets(session_id);
 """
 
 

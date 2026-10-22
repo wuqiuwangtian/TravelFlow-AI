@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Sequence
 from typing import Literal, Protocol, TypeVar, runtime_checkable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
@@ -23,6 +23,7 @@ class ChatMessage(BaseModel):
 
     role: Literal["system", "user", "assistant"]
     content: str
+    images: list[str] = Field(default_factory=list, max_length=6)
 
 
 @runtime_checkable

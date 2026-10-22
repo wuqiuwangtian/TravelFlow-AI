@@ -14,6 +14,7 @@ CostSource = Literal["reference", "estimate", "manual", "unknown"]
 ActivityProgress = Literal["not_started", "in_progress", "completed", "skipped"]
 ExpenseCategory = Literal["transport", "lodging", "meal", "ticket", "shopping", "other"]
 ClockTime = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+ReceiptId = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
 
 
 class Place(BaseModel):
@@ -106,6 +107,8 @@ class ExpenseInput(BaseModel):
     day: int | None = Field(default=None, ge=1, le=60)
     activity_id: str | None = Field(default=None, min_length=1, max_length=100)
     notes: str = Field(default="", max_length=1000)
+    receipt_ids: list[ReceiptId] = Field(default_factory=list, max_length=6)
+    allow_shared_receipts: bool = False
 
 
 class ExpenseCreate(ExpenseInput):
@@ -122,6 +125,16 @@ class Expense(BaseModel):
     notes: str = ""
     created_at: datetime
     updated_at: datetime
+    receipt_ids: list[ReceiptId] = Field(default_factory=list, max_length=6)
+
+
+class ReceiptDraft(BaseModel):
+    title: str = Field(default="", max_length=100)
+    amount: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+    category: ExpenseCategory = "other"
+    currency: Literal["CNY", "other", "unknown"] = "unknown"
+    kind: Literal["expense", "refund", "reimbursement", "unknown"] = "unknown"
+    warnings: list[str] = Field(default_factory=list, max_length=8)
 
 
 class AdjustmentInput(BaseModel):
