@@ -13,6 +13,7 @@ from typing import Annotated, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
+from app.domain.clarification import JourneyClarification
 from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.itinerary import Itinerary
 from app.domain.models import Requirements, ResearchBundle, TodoItem
@@ -37,6 +38,7 @@ class PlanState(TypedDict, total=False):
     plan_markdown: str
     todos: list[TodoItem]
     itinerary: Itinerary | None
+    pending_journey: JourneyClarification | None
 
     # 状态机
     status: PlanStatus

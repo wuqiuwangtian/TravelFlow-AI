@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from app.core.errors import AppError
+from app.domain.clarification import ClarificationKind
 from app.domain.itinerary import (
     ActivityProgress,
     ExpenseCategory,
@@ -26,6 +27,7 @@ AMOUNT_PATTERN = r"(?<![0-9A-Za-z.,，+\-])([+-]?\d+(?:\.\d+)?)\s*(?:元|块钱?
 class TravelReply:
     reply: str
     itinerary: Itinerary | None = None
+    clarification: ClarificationKind | None = None
 
 
 def _number(text: str) -> int:
@@ -80,7 +82,9 @@ def handle_travel_message(
     match_day = re.search(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", text)
     day = _number(match_day[1]) if match_day else None
     if day is not None and not any(d.day == day for d in result.days):
-        return TravelReply("这个日期不在当前行程中，请说明第几天，或先调整旅行天数。")
+        return TravelReply(
+            "这个日期不在当前行程中，请说明第几天，或先调整旅行天数。", clarification="day"
+        )
     if money_intent or ledger_edit:
         if re.search(r"退款|退了|报销", text):
             return TravelReply("退款或报销暂不作为新的消费记入；可以在消费明细中更正原记录。")
@@ -88,7 +92,8 @@ def handle_travel_message(
         deleting = ledger_edit and bool(re.search(r"删除|移除|撤销", text))
         if not deleting and len(amounts) != 1:
             return TravelReply(
-                "请给出一笔明确的实际金额，例如「午餐花了86元」；多笔消费可以分别告诉我。"
+                "请给出一笔明确的实际金额，例如「午餐花了86元」；多笔消费可以分别告诉我。",
+                clarification="amount" if not amounts else None,
             )
         if ledger_edit:
             candidates = [
@@ -96,7 +101,10 @@ def handle_travel_message(
             ]
             if len(candidates) != 1:
                 return TravelReply(
-                    "这笔消费还不能唯一确定，请说明消费名称和第几天，或在「消费明细」中更正。"
+                    "这笔消费还不能唯一确定，请说明消费名称和第几天，或在「消费明细」中更正。",
+                    clarification="day"
+                    if len(candidates) > 1 and len({e.day for e in candidates}) > 1
+                    else None,
                 )
             entry = candidates[0]
             if deleting:
@@ -116,7 +124,9 @@ def handle_travel_message(
                 )
                 edit_expense(result, entry.id, updated)
             except ValidationError:
-                return TravelReply("实际金额需大于0，最多两位小数，请重新说明金额。")
+                return TravelReply(
+                    "实际金额需大于0，最多两位小数，请重新说明金额。", clarification="amount"
+                )
             return TravelReply(
                 f"已把「{entry.title}」更正为{updated.amount:.2f}元，原预算保持不变。", result
             )
@@ -167,7 +177,9 @@ def handle_travel_message(
                 data = ExpenseCreate.model_validate(data.model_dump())
             add_expense(result, data)
         except ValidationError:
-            return TravelReply("实际金额需大于0，最多两位小数，请重新说明金额。")
+            return TravelReply(
+                "实际金额需大于0，最多两位小数，请重新说明金额。", clarification="amount"
+            )
         except AppError as exc:
             return TravelReply(exc.message)
         date_label = f"第{day}天" if day else "暂未关联日期"
@@ -193,7 +205,10 @@ def handle_travel_message(
         ]
     if len(targets) != 1:
         return TravelReply(
-            "请说明哪一天、哪一站，例如「第1天第2站已完成」，也可以点击线路中的地点标记状态。"
+            "请说明哪一天、哪一站，例如「第1天第2站已完成」，也可以点击线路中的地点标记状态。",
+            clarification="day"
+            if len(targets) > 1 and len({number for number, _ in targets}) > 1
+            else "activity",
         )
     number, activity = targets[0]
     assert progress is not None

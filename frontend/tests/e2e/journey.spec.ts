@@ -103,3 +103,46 @@ test("旧文字路书可整理，地图未配置时仍能编辑费用", async ({
     item.getByRole("button", { name: "更正实际总额", exact: true }),
   ).toBeVisible();
 });
+
+test("澄清消费刷新后仍能接上，取消不改账也不增加空版本", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "新建旅行", exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\//);
+  await send(page, "北京三日游");
+  await send(page, "第1天午餐花了86元，第2天午餐花了90元");
+  await send(page, "午餐记错了，改成80元");
+  await expect(page.getByLabel("待补充的信息", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("待补充的信息", { exact: true })).toBeVisible();
+  await send(page, "第二天");
+  await expect(page.getByLabel("待补充的信息", { exact: true })).toHaveCount(0);
+  const sid = page.url().split("/").at(-1);
+  const session = await (
+    await page.request.get(`${proxy}/api/sessions/${sid}`)
+  ).json();
+  const bid = session.branches[0].id;
+  expect(session.versions[bid]).toHaveLength(3);
+  const current = await (
+    await page.request.get(
+      `${proxy}/api/versions/${session.versions[bid].at(-1).id}`,
+    )
+  ).json();
+  expect(
+    current.itinerary.expenses.map(
+      (e: { amount_cents: number }) => e.amount_cents,
+    ),
+  ).toEqual([8600, 8000]);
+  await send(page, "午餐记错了，改成70元");
+  await page
+    .getByLabel("待补充的信息", { exact: true })
+    .getByRole("button", { name: "取消这次操作", exact: true })
+    .click();
+  await expect(page.getByLabel("待补充的信息", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "发送", exact: true }),
+  ).toBeEnabled();
+  const after = await (
+    await page.request.get(`${proxy}/api/sessions/${sid}`)
+  ).json();
+  expect(after.versions[bid]).toHaveLength(3);
+});

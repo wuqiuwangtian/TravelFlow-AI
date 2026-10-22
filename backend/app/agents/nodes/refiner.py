@@ -35,6 +35,7 @@ from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.journey_clarification import CANCEL, resume_journey_message
 from app.services.journey_messages import prepare_journey_message
 from app.services.replan_service import explicit_day, set_replan_context
 from app.services.travel_time import time_label
@@ -90,7 +91,7 @@ def make_refiner_node(
 ):
     """构造 refiner 节点。"""
 
-    async def refiner(state: PlanState) -> dict:
+    async def refine_state(state: PlanState) -> dict:
         emit_progress("refine")
         user_text = last_user_text(state)
         plan_markdown = state.get("plan_markdown", "")
@@ -100,7 +101,25 @@ def make_refiner_node(
         revision = int(state.get("revision", 0))
 
         current = state.get("itinerary")
-        batch = prepare_journey_message(user_text, current, requirements) if current else None
+        pending = state.get("pending_journey")
+        human_messages = [m for m in state.get("messages", []) if m.type == "human"]
+        if pending and CANCEL.fullmatch(user_text.strip()):
+            return {
+                "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
+                "updated_at": datetime.now(),
+            }
+        batch = None
+        if (
+            pending
+            and current
+            and len(human_messages) >= 2
+            and human_messages[-2].id == pending.after_message_id
+        ):
+            batch = resume_journey_message(user_text, pending, current, requirements)
+        if batch is None and current:
+            batch = prepare_journey_message(user_text, current, requirements)
+        if batch and batch.clarification and human_messages:
+            batch.clarification.after_message_id = human_messages[-1].id or ""
         if batch and not batch.refinement:
             updated_itinerary = batch.itinerary or current
             assert updated_itinerary is not None
@@ -113,8 +132,11 @@ def make_refiner_node(
                 )
             return {
                 "itinerary": updated_itinerary,
-                "plan_markdown": sync_markdown(plan_markdown, updated_itinerary, requirements),
+                "plan_markdown": sync_markdown(plan_markdown, updated_itinerary, requirements)
+                if batch.itinerary is not None
+                else plan_markdown,
                 "messages": [AIMessage(content=batch.reply)],
+                "pending_journey": batch.clarification,
                 "revision": revision + (1 if batch.itinerary is not None else 0),
                 "updated_at": datetime.now(),
             }
@@ -356,5 +378,10 @@ def make_refiner_node(
             "messages": [AIMessage(content=(batch.reply + "\n" if batch else "") + reply)],
             "updated_at": datetime.now(),
         }
+
+    async def refiner(state: PlanState) -> dict:
+        result = await refine_state(state)
+        result.setdefault("pending_journey", None)
+        return result
 
     return refiner

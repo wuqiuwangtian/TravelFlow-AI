@@ -29,7 +29,10 @@ def handle_adjustment_message(text: str, itinerary: Itinerary) -> TravelReply | 
     expenses = [e for e in itinerary.expenses if e.title in text and (day is None or e.day == day)]
     if len(expenses) != 1:
         return TravelReply(
-            "请说明这笔回款对应哪项原始消费，例如「第2天门票退款到账20元」；原始消费还没记时请先记入。"
+            "请说明这笔回款对应哪项原始消费，例如「第2天门票退款到账20元」；原始消费还没记时请先记入。",
+            clarification="day"
+            if len(expenses) > 1 and len({e.day for e in expenses}) > 1
+            else None,
         )
     expense = expenses[0]
     existing = [a for a in itinerary.adjustments if a.expense_id == expense.id and a.kind == kind]

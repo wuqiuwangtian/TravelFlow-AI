@@ -30,7 +30,12 @@ def handle_booking_message(text: str, itinerary: Itinerary) -> TravelReply | Non
         or (not ordinal and (a.title in text or a.place_name and a.place_name in text))
     ]
     if len(candidates) != 1:
-        return TravelReply("请说明哪一天的哪一站，例如「第2天第1站已预约16:00，停留60分钟」。")
+        return TravelReply(
+            "请说明哪一天的哪一站，例如「第2天第1站已预约16:00，停留60分钟」。",
+            clarification="day"
+            if len(candidates) > 1 and len({number for number, _ in candidates}) > 1
+            else "activity",
+        )
     number, activity = candidates[0]
     times = re.findall(r"(?<!\d)([01]?\d|2[0-3])[:：]([0-5]\d)(?!\d)", text)
     if not clear and len(times) != 1:

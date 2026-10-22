@@ -304,9 +304,10 @@ export const api = {
   },
   /** 读取该分支的对话历史（存在后端的 checkpoint 里）。 */
   getMessages: (branchId: string) =>
-    request<{ messages: { role: string; content: string }[] }>(
-      `/api/branches/${branchId}/messages`,
-    ),
+    request<{
+      messages: { role: string; content: string }[];
+      clarification?: { kind: string; prompt: string } | null;
+    }>(`/api/branches/${branchId}/messages`),
   addAdjustment: (
     versionId: string,
     data: AdjustmentInput,

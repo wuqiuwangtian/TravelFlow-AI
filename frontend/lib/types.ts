@@ -81,6 +81,7 @@ export interface ChatResponse {
   reply: string;
   plan: string;
   missing_fields: string[];
+  clarification?: { kind: string; prompt: string } | null;
 }
 
 export interface SessionDetail {

@@ -106,6 +106,7 @@ async def chat(
         reply=outcome.reply,
         plan=outcome.plan_markdown,
         missing_fields=outcome.missing_fields or [],
+        clarification=outcome.clarification,
     )
 
 
@@ -165,6 +166,7 @@ async def chat_stream(
                             "reply": outcome.reply,
                             "plan": outcome.plan_markdown,
                             "missing_fields": outcome.missing_fields or [],
+                            "clarification": outcome.clarification,
                         },
                     )
                 else:

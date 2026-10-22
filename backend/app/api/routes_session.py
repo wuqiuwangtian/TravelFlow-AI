@@ -10,6 +10,7 @@ from app.agents.checkpoint import thread_config
 from app.agents.state import initial_state
 from app.core.deps import get_graph, get_store
 from app.core.errors import BranchNotFound, ConfigError, InvalidRequest, SessionNotFound
+from app.domain.clarification import clarification_prompt
 from app.domain.enums import PlanStatus
 from app.domain.models import ResearchBundle
 from app.domain.schemas import (
@@ -184,6 +185,7 @@ async def create_branch(
         )
         if values:
             assert graph is not None
+            values["pending_journey"] = None
             config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
             vid = await ChatService(graph=graph, store=store).record_version(
                 branch.id,
@@ -287,4 +289,7 @@ async def get_branch_messages(
         role = "user" if getattr(message, "type", "") == "human" else "assistant"
         items.append(ChatMessageItem(role=role, content=content))
 
-    return ChatHistoryResponse(messages=items)
+    return ChatHistoryResponse(
+        messages=items,
+        clarification=clarification_prompt((snapshot.values or {}).get("pending_journey")),
+    )

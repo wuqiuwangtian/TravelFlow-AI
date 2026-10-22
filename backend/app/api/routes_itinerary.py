@@ -230,6 +230,7 @@ async def _save_revision(
     if detail.itinerary:
         detail.markdown = sync_markdown(detail.markdown, detail.itinerary, requirements)
     patch = {
+        "pending_journey": None,
         "plan_markdown": detail.markdown,
         "itinerary": detail.itinerary,
         "requirements": requirements,

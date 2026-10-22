@@ -44,6 +44,10 @@ export default function ChatPage() {
     null,
   );
   const [input, setInput] = useState("");
+  const [clarification, setClarification] = useState<{
+    kind: string;
+    prompt: string;
+  } | null>(null);
   // 会话标题行内编辑
   const [editingTitle, setEditingTitle] = useState(false);
   // 流式：当前阶段提示 / 正在逐字生成的路书 / 过程中的提示
@@ -110,11 +114,13 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeBranchId) return;
     let cancelled = false;
+    setClarification(null);
 
     void api
       .getMessages(activeBranchId)
       .then((result) => {
         if (cancelled) return;
+        setClarification(result.clarification ?? null);
         setMessages(
           result.messages.map((m) => ({
             role: m.role === "user" ? "user" : "assistant",
@@ -186,6 +192,7 @@ export default function ChatPage() {
             setStreamingPlan(finalPlan);
           },
           onDone: (result) => {
+            setClarification(result.clarification ?? null);
             reply = result.reply;
             finalPlan = result.plan || finalPlan;
           },
@@ -376,6 +383,23 @@ export default function ChatPage() {
             </div>
 
             <div className="border-t border-slate-100 bg-slate-50 p-3">
+              {clarification && (
+                <div
+                  role="status"
+                  aria-label="待补充的信息"
+                  className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"
+                >
+                  <p>{clarification.prompt}</p>
+                  <button
+                    type="button"
+                    disabled={sending || itineraryBusy}
+                    className="mt-1 text-amber-800 underline disabled:opacity-40"
+                    onClick={() => void send("取消这次操作")}
+                  >
+                    取消这次操作
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <textarea
                   ref={textareaRef}

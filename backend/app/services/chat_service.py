@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.checkpoint import thread_config
 from app.core.logging import get_logger
+from app.domain.clarification import clarification_prompt
 from app.domain.enums import DetailLevel, PlanStatus
 from app.services.branch_lock import branch_guard
 from app.storage.session_store import SessionStore
@@ -33,6 +34,7 @@ class ChatOutcome:
     plan_markdown: str = ""
     version_id: str | None = None
     missing_fields: list[str] | None = None
+    clarification: dict[str, str] | None = None
 
 
 def _last_ai_text(values: dict) -> str:
@@ -110,6 +112,8 @@ class ChatService:
         """把用户消息送入图，并把产出记录为一个新版本。"""
         # 显式声明「非流式」：节点据此选择结构化输出而非逐字流
         config = thread_config(branch_id, stream_llm=False)
+        before = await self._graph.aget_state(config)
+        previous_status = (before.values or {}).get("status")
 
         # 只传「本次输入」：历史状态由 checkpointer 自动恢复，
         # messages 通过 add_messages reducer 追加。
@@ -120,7 +124,9 @@ class ChatService:
         values = await self._graph.ainvoke(payload, config)
         values = dict(values)
 
-        version_id = await self.record_version(branch_id, values, config)
+        version_id = await self.record_version(
+            branch_id, values, config, previous_status=previous_status
+        )
         await self._store.touch_session(session_id)
 
         return ChatOutcome(
@@ -130,6 +136,7 @@ class ChatService:
             plan_markdown=values.get("plan_markdown") or "",
             version_id=version_id,
             missing_fields=list(values.get("missing_fields") or []),
+            clarification=clarification_prompt(values.get("pending_journey")),
         )
 
     async def _send_stream(
@@ -151,6 +158,8 @@ class ChatService:
         增量，拿不到完整状态；而版本落库需要完整的 ``plan_markdown`` 与检索结果。
         """
         config = thread_config(branch_id, stream_llm=True)
+        before = await self._graph.aget_state(config)
+        previous_status = (before.values or {}).get("status")
 
         payload: dict = {"messages": [HumanMessage(content=message)]}
         if detail_level is not None:
@@ -168,7 +177,9 @@ class ChatService:
         snapshot = await self._graph.aget_state(config)
         values = dict(snapshot.values or {})
 
-        version_id = await self.record_version(branch_id, values, config)
+        version_id = await self.record_version(
+            branch_id, values, config, previous_status=previous_status
+        )
         await self._store.touch_session(session_id)
 
         outcome = ChatOutcome(
@@ -178,6 +189,7 @@ class ChatService:
             plan_markdown=values.get("plan_markdown") or "",
             version_id=version_id,
             missing_fields=list(values.get("missing_fields") or []),
+            clarification=clarification_prompt(values.get("pending_journey")),
         )
         yield {"event": "done", "data": outcome}
 
@@ -189,11 +201,30 @@ class ChatService:
         *,
         trigger: str = "user_message",
         summary: str | None = None,
+        previous_status: str | None = None,
     ) -> str | None:
         """有路书产出时，落一个版本记录（供版本树与导出使用）。"""
         markdown = values.get("plan_markdown") or ""
         if not markdown:
             return None
+
+        # 澄清、取消和无变更回复只存对话 checkpoint，不制造相同的路书版本。
+        research = values.get("research")
+        citations = research.build_citations() if research else []
+        if trigger == "user_message" and values.get("status") == previous_status:
+            versions = await self._store.list_versions(branch_id)
+            latest = await self._store.get_version_detail(versions[-1].id) if versions else None
+            if (
+                latest
+                and latest.markdown == markdown
+                and latest.itinerary == values.get("itinerary")
+                and latest.requirements == values.get("requirements")
+                and latest.todos == list(values.get("todos") or [])
+                and latest.citations == citations
+                and latest.version.detail_level
+                == str(values.get("detail_level") or DetailLevel.L2_STANDARD.value)
+            ):
+                return latest.version.id
 
         checkpoint_id = None
         try:
@@ -202,7 +233,6 @@ class ChatService:
         except Exception:  # pragma: no cover - 仅影响历史回溯，不影响主流程
             logger.warning("未能读取 checkpoint_id，版本仍会记录")
 
-        research = values.get("research")
         version = await self._store.create_version(
             branch_id,
             summary=summary or _summarise(values),
@@ -213,7 +243,7 @@ class ChatService:
         await self._store.save_plan(
             version.id,
             markdown=markdown,
-            citations=research.build_citations() if research else [],
+            citations=citations,
             todos=list(values.get("todos") or []),
             searched_at=getattr(research, "searched_at", None),
             itinerary=values.get("itinerary"),

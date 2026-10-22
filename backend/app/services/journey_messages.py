@@ -1,9 +1,11 @@
 """按顺序校验一轮旅中操作；草稿全部成功后才交给节点统一保存。"""
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 
 from app.core.errors import AppError
+from app.domain.clarification import JourneyClarification
 from app.domain.itinerary import Itinerary
 from app.domain.models import Requirements
 from app.services.adjustment_messages import handle_adjustment_message
@@ -20,6 +22,10 @@ _RECORD = re.compile(
 _REFINEMENT = re.compile(r"调整|安排|重排|替换|换成|换一家|轻松|少走|规划|保留|保持|不要改|别改")
 _DAY_ONLY = re.compile(r"第\s*(?:\d+|[一二三四五六七八九十两]+)\s*天")
 _NOT_ACTUAL = re.compile(r"如果|假如|预计|预算|估计|打算|计划|明天|能不能|能否|不要|是否|吗|[?？]")
+
+
+def itinerary_fingerprint(itinerary: Itinerary) -> str:
+    return hashlib.sha256(itinerary.model_dump_json().encode()).hexdigest()
 
 
 def _record_hint(text: str) -> bool:
@@ -45,6 +51,7 @@ class JourneyMessage:
     replies: list[str] = field(default_factory=list)
     refinement: str = ""
     booking_days: set[int] = field(default_factory=set)
+    clarification: JourneyClarification | None = None
 
     @property
     def reply(self) -> str:
@@ -91,9 +98,21 @@ def _clauses(text: str) -> list[str]:
 
 
 def prepare_journey_message(
-    text: str, itinerary: Itinerary, requirements: Requirements
+    text: str,
+    itinerary: Itinerary,
+    requirements: Requirements,
+    *,
+    clauses: list[str] | None = None,
+    day_scopes: list[int | None] | None = None,
 ) -> JourneyMessage | None:
-    clauses = _clauses(text)
+    clauses = _clauses(text) if clauses is None else clauses
+    if day_scopes is None:
+        day_scopes = []
+        inherited = None
+        for clause in clauses:
+            explicit = explicit_day(clause)
+            inherited = explicit if explicit is not None else inherited
+            day_scopes.append(inherited)
 
     def asserted(part: str) -> bool:
         # 预约是已经发生的记录，即使票面日期在明天；未来预算仍不落账。
@@ -108,20 +127,34 @@ def prepare_journey_message(
         return None
     multiple = len(clauses) > 1
 
-    def fail(index: int, reason: str) -> JourneyMessage:
+    def fail(index: int, reason: str, action: TravelReply | None = None) -> JourneyMessage:
         prefix = f"本次没有保存任何操作，第{index + 1}项需要确认：" if multiple else ""
-        return JourneyMessage(replies=[prefix + reason])
+        pending = None
+        if action and action.clarification:
+            hint = {
+                "day": "直接回复「第2天」即可继续这次操作。",
+                "amount": "直接回复正确金额，例如「86元」，即可继续这次操作。",
+                "activity": "直接回复「第1天第2站」即可继续这次操作。",
+            }[action.clarification]
+            reason += "\n" + hint + "也可以说「取消这次操作」。"
+            pending = JourneyClarification(
+                kind=action.clarification,
+                clauses=clauses,
+                day_scopes=day_scopes,
+                index=index,
+                prompt=prefix + reason,
+                itinerary_fingerprint=itinerary_fingerprint(itinerary),
+            )
+        return JourneyMessage(replies=[prefix + reason], clarification=pending)
 
     if len(clauses) > 12:
         return fail(0, "一次最多处理12项，请缩短这条消息。")
     working = itinerary.model_copy(deep=True)
     result = JourneyMessage(itinerary=working)
-    day: int | None = None
     for index, part in enumerate(clauses):
         part = re.sub(r"^(?:并且|然后|接着|同时|另外|再|也|还|并)\s*", "", part)
         explicit = explicit_day(part)
-        if explicit is not None:
-            day = explicit
+        day = day_scopes[index]
         scoped = f"第{day}天，{part}" if day is not None and explicit is None else part
         if not _record_hint(part):
             tail = "，".join(clauses[index:])
@@ -156,7 +189,7 @@ def prepare_journey_message(
                 return None  # 单条疑问、预算或假设仍交给原有意图流程。
             return fail(index, "请明确已发生的事实和要执行的操作；疑问、否定或假设不直接落记录。")
         if action.itinerary is None:
-            return fail(index, action.reply)
+            return fail(index, action.reply, action)
         if booking:
             result.booking_days.update(
                 d.day
