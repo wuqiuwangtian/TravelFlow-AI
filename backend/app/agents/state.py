@@ -42,6 +42,7 @@ class PlanState(TypedDict, total=False):
     status: PlanStatus
     missing_fields: list[str]
     destination_ideas: list[str]
+    destination_recommendation_requested: bool
 
     # 生成偏好
     detail_level: DetailLevel

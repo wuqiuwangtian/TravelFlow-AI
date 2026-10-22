@@ -363,3 +363,43 @@ async def test_slow_map_service_keeps_places_already_resolved(monkeypatch):
     assert result.days[0].activities[0].place.id == "a"
     assert source.days[0].activities[0].place is None
     assert "较慢" in result.days[0].warnings[0]
+
+
+async def test_destination_request_survives_budget_followup(environment, monkeypatch):
+    from conftest import FakeLLM
+
+    client, _, _, _ = environment
+    original = FakeLLM.structured
+
+    async def structured(self, messages, schema, **kwargs):
+        if schema is CollectResult:
+            if "500" in messages[-1].content:
+                assert any("自然风光" in m.content for m in messages[:-1])
+                assert "已经要求推荐" in messages[0].content
+                return CollectResult(
+                    extracted=Requirements(budget=500, travelers=1),
+                    reply="需不需要我推荐？",
+                    wants_destination_ideas=False,
+                )
+            return CollectResult(
+                extracted=Requirements(origin="重庆", duration_days=2, preferences=["自然风光"]),
+                reply="预算多少？",
+                wants_destination_ideas=True,
+            )
+        if schema is DestinationOptions:
+            assert "自然风光" in messages[-1].content
+            return DestinationOptions(ideas=[DestinationIdea(city="武隆", reason="自然风光")])
+        return await original(self, messages, schema, **kwargs)
+
+    monkeypatch.setattr(FakeLLM, "structured", structured)
+    session = (await client.post("/api/sessions", json={})).json()
+    sid = session["session"]["id"]
+    first = await client.post(
+        "/api/chat", json={"session_id": sid, "message": "我在重庆，周末想看自然风光，有什么推荐？"}
+    )
+    assert "预算" in first.json()["reply"]
+    second = await client.post(
+        "/api/chat", json={"session_id": sid, "message": "我一个人，500以内"}
+    )
+    assert second.status_code == 200
+    assert "武隆" in second.json()["reply"] and "需不需要" not in second.json()["reply"]

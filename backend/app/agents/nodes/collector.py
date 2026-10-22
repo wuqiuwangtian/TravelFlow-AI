@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from langchain_core.messages import AIMessage
@@ -63,9 +64,18 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
             prompt += "\n【之前已给用户的城市候选，支持按序号选择】\n" + "、".join(
                 state["destination_ideas"]
             )
+        requested = bool(state.get("destination_recommendation_requested"))
+        if requested:
+            prompt += "\n用户已经要求推荐目的地，继续补齐必要条件后直接推荐，不要再问是否需要推荐。"
+        history = [
+            ChatMessage(role="user" if m.type == "human" else "assistant", content=m.content[:3000])
+            for m in state.get("messages", [])[:-1][-10:]
+            if m.type in {"human", "ai"} and isinstance(m.content, str)
+        ]
         result = await llm.structured(
             [
                 ChatMessage(role="system", content=prompt),
+                *history,
                 ChatMessage(role="user", content=user_text or "（用户尚未输入内容）"),
             ],
             CollectResult,
@@ -77,9 +87,21 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
 
         reply = result.reply.strip() or "请告诉我更多出行信息。"
         ideas = list(state.get("destination_ideas") or [])
+        requested = (
+            requested
+            or result.wants_destination_ideas
+            or bool(re.search(r"推荐|不知道去哪|去哪玩|哪里玩", user_text))
+        )
+        if re.search(r"不要推荐|不用推荐|不需要推荐", user_text):
+            requested = False
+        if not merged.destination and requested:
+            labels = {"origin": "从哪里出发", "duration_days": "玩几天", "budget": "预算大约多少"}
+            needed = [labels[name] for name in missing if name in labels]
+            if needed:
+                reply = "我会结合你的偏好推荐合适的目的地。还需要知道：" + "、".join(needed) + "。"
         if (
             not merged.destination
-            and result.wants_destination_ideas
+            and requested
             and not any(name in missing for name in ("origin", "duration_days", "budget"))
         ):
             emit_progress("collect", "正在根据出发地、时间与偏好寻找适合的城市…")
@@ -124,6 +146,7 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
             "requirements": merged,
             "missing_fields": missing,
             "destination_ideas": ideas,
+            "destination_recommendation_requested": requested and not bool(merged.destination),
             "messages": [AIMessage(content=reply)],
             "status": PlanStatus.RESEARCHING if ready else PlanStatus.COLLECTING,
             "updated_at": datetime.now(),
