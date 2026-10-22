@@ -13,7 +13,7 @@ from typing import Annotated, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-from app.domain.clarification import JourneyClarification
+from app.domain.clarification import JourneyClarification, PlaceClarification
 from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.itinerary import Itinerary
 from app.domain.models import Requirements, ResearchBundle, TodoItem
@@ -39,6 +39,7 @@ class PlanState(TypedDict, total=False):
     todos: list[TodoItem]
     itinerary: Itinerary | None
     pending_journey: JourneyClarification | None
+    pending_place: PlaceClarification | None
     chat_request: dict[str, str] | None
     completed_chat: dict[str, str] | None
 

@@ -235,7 +235,7 @@ class ChatHistoryResponse(BaseModel):
     """对话历史（存在 LangGraph checkpoint 里）。"""
 
     messages: list[ChatMessageItem] = Field(default_factory=list)
-    clarification: dict[str, str] | None = None
+    clarification: dict | None = None
 
 
 # ---------------------------------------------------------------- 对话
@@ -257,4 +257,4 @@ class ChatResponse(BaseModel):
     reply: str
     plan: str = ""
     missing_fields: list[str] = Field(default_factory=list)
-    clarification: dict[str, str] | None = None
+    clarification: dict | None = None

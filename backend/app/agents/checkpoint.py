@@ -35,6 +35,8 @@ _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
 
 _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
     ("app.domain.clarification", "JourneyClarification"),
+    ("app.domain.clarification", "PlaceClarification"),
+    ("app.domain.clarification", "PlaceTarget"),
     ("app.domain.itinerary", "Itinerary"),
     ("app.domain.itinerary", "DayPlan"),
     ("app.domain.itinerary", "ScheduledActivity"),

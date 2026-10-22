@@ -37,7 +37,7 @@ class ChatOutcome:
     plan_markdown: str = ""
     version_id: str | None = None
     missing_fields: list[str] | None = None
-    clarification: dict[str, str] | None = None
+    clarification: dict | None = None
 
 
 def _last_ai_text(values: dict) -> str:
@@ -247,7 +247,9 @@ class ChatService:
             plan_markdown=values.get("plan_markdown") or "",
             version_id=version_id,
             missing_fields=list(values.get("missing_fields") or []),
-            clarification=clarification_prompt(values.get("pending_journey")),
+            clarification=clarification_prompt(
+                values.get("pending_journey") or values.get("pending_place")
+            ),
         )
         if receipt:
             await self._store.save_chat_receipt(

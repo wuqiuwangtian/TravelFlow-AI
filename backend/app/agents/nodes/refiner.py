@@ -37,6 +37,7 @@ from app.search.base import SearchProvider
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.journey_clarification import CANCEL, resume_journey_message
 from app.services.journey_messages import prepare_journey_message
+from app.services.place_messages import handle_place_message
 from app.services.replan_service import explicit_day, set_replan_context
 from app.services.travel_time import time_label
 
@@ -102,12 +103,40 @@ def make_refiner_node(
 
         current = state.get("itinerary")
         pending = state.get("pending_journey")
+        pending_place = state.get("pending_place")
         human_messages = [m for m in state.get("messages", []) if m.type == "human"]
-        if pending and CANCEL.fullmatch(user_text.strip()):
+        if (pending or pending_place) and CANCEL.fullmatch(user_text.strip()):
             return {
                 "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
                 "updated_at": datetime.now(),
             }
+        if current:
+            place_reply = await handle_place_message(
+                user_text,
+                current,
+                requirements,
+                settings or Settings(),
+                pending_place
+                if pending_place
+                and len(human_messages) >= 2
+                and human_messages[-2].id == pending_place.after_message_id
+                else None,
+            )
+            if place_reply:
+                if place_reply.pending and human_messages:
+                    place_reply.pending.after_message_id = human_messages[-1].id or ""
+                return {
+                    "itinerary": place_reply.itinerary or current,
+                    "plan_markdown": sync_markdown(
+                        plan_markdown, place_reply.itinerary, requirements
+                    )
+                    if place_reply.itinerary
+                    else plan_markdown,
+                    "pending_place": place_reply.pending,
+                    "messages": [AIMessage(content=place_reply.reply)],
+                    "revision": revision + (1 if place_reply.itinerary else 0),
+                    "updated_at": datetime.now(),
+                }
         batch = None
         if (
             pending
@@ -382,6 +411,7 @@ def make_refiner_node(
     async def refiner(state: PlanState) -> dict:
         result = await refine_state(state)
         result.setdefault("pending_journey", None)
+        result.setdefault("pending_place", None)
         return result
 
     return refiner
