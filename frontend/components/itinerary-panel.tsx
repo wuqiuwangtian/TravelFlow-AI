@@ -447,6 +447,30 @@ export function ItineraryPanel({
                             {activity.notes}
                           </p>
                         )}
+                        {activity.place_status !== "matched" &&
+                          activity.kind !== "free_time" &&
+                          !activity.is_context_anchor &&
+                          !activity.booking &&
+                          (!day.replan_context ||
+                            index >
+                              day.activities.findIndex(
+                                (a) => a.id === day.replan_context?.activity_id,
+                              )) &&
+                          activity.progress === "not_started" && (
+                            <button
+                              type="button"
+                              disabled={!editable || disabled || busy}
+                              aria-label={`确认第${day.day}天第${index + 1}站的地点`}
+                              className="mt-2 mb-1 rounded-lg border border-teal-100 px-3 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                              onClick={() =>
+                                onAsk(
+                                  `确认第${day.day}天第${index + 1}站的地点`,
+                                )
+                              }
+                            >
+                              对话确认地点
+                            </button>
+                          )}
                         {advanced && !activity.is_context_anchor && (
                           <div className="py-2">
                             <Button

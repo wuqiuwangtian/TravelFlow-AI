@@ -24,6 +24,7 @@ import {
 } from "@/lib/chat-draft";
 import type {
   BranchInfo,
+  ChatClarification,
   DetailLevel,
   SessionDetail,
   VersionDetail,
@@ -55,10 +56,9 @@ export default function ChatPage() {
     message: string;
     code: string;
   } | null>(null);
-  const [clarification, setClarification] = useState<{
-    kind: string;
-    prompt: string;
-  } | null>(null);
+  const [clarification, setClarification] = useState<ChatClarification | null>(
+    null,
+  );
   // 会话标题行内编辑
   const [editingTitle, setEditingTitle] = useState(false);
   // 流式：当前阶段提示 / 正在逐字生成的路书 / 过程中的提示
@@ -475,7 +475,29 @@ export default function ChatPage() {
                   aria-label="待补充的信息"
                   className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"
                 >
-                  <p>{clarification.prompt}</p>
+                  <p className="whitespace-pre-wrap break-words">
+                    {clarification.prompt}
+                  </p>
+                  {clarification.options &&
+                    clarification.options.length > 0 && (
+                      <div
+                        role="group"
+                        aria-label="地点候选选择"
+                        className="my-2 grid max-h-64 min-w-0 gap-2 overflow-y-auto"
+                      >
+                        {clarification.options.map((option) => (
+                          <button
+                            key={option.reply}
+                            type="button"
+                            disabled={sending || itineraryBusy}
+                            className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left leading-5 break-words hover:border-amber-400 disabled:opacity-40"
+                            onClick={() => void send(option.reply)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   <button
                     type="button"
                     disabled={sending || itineraryBusy}

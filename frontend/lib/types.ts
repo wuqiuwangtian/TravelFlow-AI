@@ -73,6 +73,12 @@ export interface ConnectionTest {
   message: string;
 }
 
+export interface ChatClarification {
+  kind: string;
+  prompt: string;
+  options?: { label: string; reply: string }[];
+}
+
 export interface ChatResponse {
   session_id: string;
   branch_id: string;
@@ -81,7 +87,7 @@ export interface ChatResponse {
   reply: string;
   plan: string;
   missing_fields: string[];
-  clarification?: { kind: string; prompt: string } | null;
+  clarification?: ChatClarification | null;
 }
 
 export interface SessionDetail {

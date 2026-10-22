@@ -522,6 +522,14 @@ def render_days(itinerary: Itinerary) -> str:
             if activity.place_name:
                 name = activity.place.name if activity.place else activity.place_name
                 lines.append(f"   地点：{_text(name)}")
+                if activity.place and activity.place.address:
+                    place = activity.place
+                    prefix = " ".join(
+                        part
+                        for part in (place.city, place.district)
+                        if part and part not in place.address
+                    )
+                    lines.append(f"   地址：{_text((prefix + ' ' + place.address).strip())}")
             if activity.notes:
                 lines.append(f"   {_text(activity.notes)}")
             if activity.booking:

@@ -39,7 +39,26 @@ class PlaceReply:
 
 
 def _compact(text: str) -> str:
-    return re.sub(r"[\s，,。:：、()（）·\-]", "", unicodedata.normalize("NFKC", text)).lower()
+    return re.sub(r"[\s，,。:：、()（）·]", "", unicodedata.normalize("NFKC", text)).lower()
+
+
+def _hint_matches(place: Place, hint: str, city: str) -> bool:
+    expected, actual = city.removesuffix("市"), place.city.removesuffix("市")
+    if expected and actual and expected != actual and _compact(actual) not in _compact(hint):
+        return False
+    evidence = _compact(
+        place.name
+        + place.address
+        + place.district
+        + place.city
+        + actual
+        + "市"
+        + actual
+        + place.district
+        + place.address
+    )
+    tokens = [_compact(t) for t in re.split(r"(?<=区)|(?<=市)|(?<=县)|[\s，,]+", hint)]
+    return bool(tokens) and all(t in evidence for t in tokens if t)
 
 
 def _targets(text: str, itinerary: Itinerary) -> list[PlaceTarget]:
@@ -64,6 +83,28 @@ def _activity(itinerary: Itinerary, target: PlaceTarget) -> ScheduledActivity:
         for a in d.activities
         if a.id == target.activity_id
     )
+
+
+def _protected_ids(itinerary: Itinerary) -> set[str]:
+    protected = set()
+    for day in itinerary.days:
+        anchor = next(
+            (
+                i
+                for i, a in enumerate(day.activities)
+                if day.replan_context and a.id == day.replan_context.activity_id
+            ),
+            -1,
+        )
+        for index, activity in enumerate(day.activities):
+            if (
+                activity.booking
+                or activity.progress != "not_started"
+                or activity.is_context_anchor
+                or index <= anchor
+            ):
+                protected.add(activity.id)
+    return protected
 
 
 def _prompt(pending: PlaceClarification, itinerary: Itinerary, note: str = "") -> PlaceReply:
@@ -103,10 +144,11 @@ async def _apply(
 ) -> PlaceReply:
     working = itinerary.model_copy(deep=True)
     activity = next(a for d in working.days for a in d.activities if a.id == pending.activity_id)
-    if activity.booking or activity.progress != "not_started" or activity.is_context_anchor:
+    if activity.id in _protected_ids(working):
         return PlaceReply(
             "此站已有预约或旅中记录，地点没有改变。请先核对或更正已有记录，再修改地点。"
         )
+    moved = activity.place is not None and activity.place.id != selected.id
     activity.place = selected.model_copy(deep=True)
     activity.place_name = selected.name
     activity.city = selected.city or activity.city
@@ -118,12 +160,13 @@ async def _apply(
     if pending.replacement:
         activity.title = selected.name[:100]
         activity.cost, activity.cost_basis, activity.cost_source = None, "unknown", "unknown"
-        activity.transport_minutes, activity.transport_cost = None, None
-        activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
         activity.notes = "已按你的要求更换地点，未核实的新费用保留未知。"
     elif activity.cost is not None and activity.cost_source != "manual":
         activity.cost_source = "estimate"
         activity.notes = (activity.notes + "；地点已确认，费用沿用原估算，实际价格待核实。")[-2000:]
+    if pending.replacement or moved:
+        activity.transport_minutes, activity.transport_cost = None, None
+        activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
     updated = await enrich_itinerary(working, requirements, settings, day_number=pending.day)
     if not any(a.id == pending.activity_id for d in updated.days for a in d.activities):
         return _prompt(
@@ -210,14 +253,12 @@ async def handle_place_message(
         return None
     if pending is None or not pending.activity_id:
         if not targets and not ORDINAL.search(text) and explicit_day(text) is None:
+            protected = _protected_ids(itinerary)
             targets = [
                 PlaceTarget(day=d.day, ordinal=i, activity_id=a.id, title=a.title)
                 for d in itinerary.days
                 for i, a in enumerate(d.activities, 1)
-                if a.place is None
-                and a.kind != "free_time"
-                and not a.booking
-                and a.progress == "not_started"
+                if a.place is None and a.kind != "free_time" and a.id not in protected
             ]
         if len(targets) != 1:
             if not targets:
@@ -233,7 +274,7 @@ async def handle_place_message(
             return _prompt(draft, itinerary)
         target = targets[0]
         activity = _activity(itinerary, target)
-        if activity.booking or activity.progress != "not_started" or activity.is_context_anchor:
+        if activity.id in _protected_ids(itinerary):
             return PlaceReply(
                 "此站已有预约或旅中记录，地点没有改变。请先核对或更正已有记录，再修改地点。"
             )
@@ -259,7 +300,8 @@ async def handle_place_message(
             itinerary_fingerprint=itinerary_fingerprint(itinerary),
         )
         # 已有明确地点的核对可以直接回答，不制造新的待选择步骤。
-        if activity.place and not is_replacement:
+        correcting = bool(re.search(r"不对|更正|重新选|重新定位|(?:地点|地址)(?:是|在)", text))
+        if activity.place and not is_replacement and not correcting:
             p = activity.place
             return PlaceReply(
                 f"第{target.day}天「{activity.title}」已定位为「{p.name}」"
@@ -309,11 +351,9 @@ async def handle_place_message(
         " 。！!"
     )
     compact = _compact(hint)
-    matches = [
-        p
-        for p in pending.candidates
-        if compact and compact in _compact(p.name + p.city + p.district + p.address)
-    ]
+    if not retry and len(compact) < 2:
+        return _prompt(pending, itinerary, "请补充完整的区域、街道或店名，也可以直接选择候选编号。")
+    matches = [p for p in pending.candidates if compact and _hint_matches(p, hint, pending.city)]
     if len(matches) == 1:
         return await _apply(matches[0], pending, itinerary, requirements, settings)
     if len(matches) > 1:
@@ -323,13 +363,7 @@ async def handle_place_message(
     if (
         len(draft.candidates) == 1
         and compact
-        and compact
-        in _compact(
-            draft.candidates[0].name
-            + draft.candidates[0].city
-            + draft.candidates[0].district
-            + draft.candidates[0].address
-        )
+        and _hint_matches(draft.candidates[0], hint, draft.city)
     ):
         return await _apply(draft.candidates[0], draft, itinerary, requirements, settings)
     return _prompt(

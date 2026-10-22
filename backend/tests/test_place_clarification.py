@@ -9,7 +9,7 @@ from app.agents.state import initial_state
 from app.core.config import Settings
 from app.core.errors import ProviderError
 from app.domain.enums import PlanStatus
-from app.domain.itinerary import Booking, Place, RouteLeg
+from app.domain.itinerary import Booking, Place, ReplanContext, RouteLeg
 from app.domain.models import Requirements
 from app.maps.amap import AmapProvider
 from app.services.chat_service import ChatService
@@ -60,6 +60,9 @@ async def seed(environment, itinerary=None):
         ("朝阳区那家", "east"),
         ("地址是西城区西单路2号", "west"),
         ("示例餐厅(望京店)", "east"),
+        ("北京市朝阳区那家", "east"),
+        ("北京朝阳区那家", "east"),
+        ("地址是朝阳区望京路1号", "east"),
     ],
 )
 async def test_candidate_number_region_address_and_name_apply_without_model(
@@ -98,6 +101,7 @@ async def test_candidate_number_region_address_and_name_apply_without_model(
         exported = await client.get(f"/api/versions/{result['version_id']}/export?format={fmt}")
         assert next(p.name for p in candidates() if p.id == expected).split("(")[0] in exported.text
         assert "88.00" in exported.text and "20.00" in exported.text
+        assert next(p.address for p in candidates() if p.id == expected) in exported.text
 
 
 async def test_unknown_target_can_be_selected_then_place_chosen(environment):
@@ -339,3 +343,41 @@ async def test_fork_manual_edits_and_new_topics_clear_the_place_question(environ
     )
     assert response.status_code == 200, response.text
     assert (await graph.aget_state(thread_config(bid))).values["pending_place"] is None
+
+
+async def test_explicit_wrong_location_can_correct_a_previously_matched_place():
+    plan = place_itinerary()
+    activity = plan.days[0].activities[0]
+    activity.place = candidates()[0]
+    activity.place_status = "matched"
+    activity.transport_minutes = 60
+    result = await handle_place_message("第1天第1站的地址在西城区那家", plan, REQ, SETTINGS)
+    assert result.itinerary.days[0].activities[0].place.id == "west"
+    assert result.itinerary.days[0].activities[0].transport_minutes is None
+    assert plan.days[0].activities[0].place.id == "east"
+
+
+async def test_stops_before_the_ontrip_origin_and_too_short_hints_do_not_move():
+    plan = place_itinerary()
+    initial = await handle_place_message("确认第1天第1站的地点", plan, REQ, SETTINGS)
+    assert (
+        await handle_place_message("区", plan, REQ, SETTINGS, initial.pending)
+    ).itinerary is None
+    plan.days[0].replan_context = ReplanContext(activity_id="hotel", time="15:00")
+    reply = await handle_place_message("确认第1天第1站的地点", plan, REQ, SETTINGS)
+    assert reply.itinerary is None and reply.pending is None
+
+
+async def test_same_district_in_a_different_city_is_not_silently_selected(monkeypatch):
+    plan = place_itinerary()
+    plan.days[0].activities[0].candidates[0].city = "长春市"
+    initial = await handle_place_message("确认第1天第1站的地点", plan, REQ, SETTINGS)
+
+    async def none_found(*args):
+        return []
+
+    monkeypatch.setattr("app.services.place_messages._search", none_found)
+    result = await handle_place_message("朝阳区那家", plan, REQ, SETTINGS, initial.pending)
+    assert result.itinerary is None
+    explicit = await handle_place_message("选第一个", plan, REQ, SETTINGS, initial.pending)
+    assert explicit.itinerary.days[0].activities[0].place.city == "长春市"

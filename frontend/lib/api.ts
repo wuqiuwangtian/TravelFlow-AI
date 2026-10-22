@@ -17,6 +17,7 @@ import type {
   ReplanInput,
   BranchInfo,
   ChatResponse,
+  ChatClarification,
   ConfigCheck,
   ConnectionTest,
   DetailLevel,
@@ -306,7 +307,7 @@ export const api = {
   getMessages: (branchId: string) =>
     request<{
       messages: { role: string; content: string }[];
-      clarification?: { kind: string; prompt: string } | null;
+      clarification?: ChatClarification | null;
     }>(`/api/branches/${branchId}/messages`),
   addAdjustment: (
     versionId: string,

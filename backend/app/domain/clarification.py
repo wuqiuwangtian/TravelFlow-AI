@@ -1,5 +1,6 @@
 """分支中的待澄清操作，不保存已执行一半的账本草稿。"""
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -47,6 +48,11 @@ def clarification_prompt(
         return None
     result: dict[str, Any] = {"kind": pending.kind, "prompt": pending.prompt}
     if isinstance(pending, PlaceClarification):
+        result["prompt"] = "\n".join(
+            line
+            for line in pending.prompt.splitlines()
+            if not re.match(r"^(?:\d+\. |第\d+天第\d+站 · )", line)
+        )
         result["options"] = (
             [
                 {

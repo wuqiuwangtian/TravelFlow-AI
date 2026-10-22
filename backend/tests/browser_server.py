@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import uvicorn  # noqa: E402
 from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from place_fixtures import place_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
 from app.agents.graph import build_graph  # noqa: E402
@@ -25,6 +26,7 @@ from app.core.errors import register_exception_handlers  # noqa: E402
 from app.domain.enums import PlanStatus  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
+from app.services.itinerary_service import sync_markdown  # noqa: E402
 from app.storage.database import create_connection  # noqa: E402
 from app.storage.session_store import SessionStore  # noqa: E402
 
@@ -84,6 +86,27 @@ async def legacy():
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     values = dict(initial_state())
     values.update(requirements=requirements(), plan_markdown=MARKDOWN, status=PlanStatus.REVIEWING)
+    config = await app.state.graph.aupdate_state(
+        thread_config(branch.id), values, as_node="planner"
+    )
+    await ChatService(graph=app.state.graph, store=store).record_version(branch.id, values, config)
+    return {"session_id": session.id, "branch_id": branch.id}
+
+
+@app.post("/test/places")
+async def place_trip():
+    store = app.state.store
+    session = await store.create_session("地点候选验收")
+    branch = await store.create_branch(session.id, "主方案", is_primary=True)
+    itinerary = place_itinerary()
+    req = requirements().model_copy(update={"duration_days": 2})
+    values = {
+        **initial_state(),
+        "requirements": req,
+        "itinerary": itinerary,
+        "plan_markdown": sync_markdown(MARKDOWN.replace("[1]", ""), itinerary, req),
+        "status": PlanStatus.REVIEWING,
+    }
     config = await app.state.graph.aupdate_state(
         thread_config(branch.id), values, as_node="planner"
     )
