@@ -18,7 +18,17 @@ export function navigation(
     q.set("from", `${origin.longitude},${origin.latitude},${origin.name}`);
   return `https://uri.amap.com/navigation?${q}`;
 }
-export function PlaceNavigation({ place }: { place: Place }) {
+export function PlaceNavigation({
+  place,
+  previousPlace,
+  previousName,
+  mode = "transit",
+}: {
+  place: Place;
+  previousPlace?: Place | null;
+  previousName?: string;
+  mode?: TravelMode;
+}) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [origin, setOrigin] = useState<Place | null>(null);
@@ -66,7 +76,7 @@ export function PlaceNavigation({ place }: { place: Place }) {
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap gap-2">
         <a
-          href={navigation(place, "transit")}
+          href={navigation(place, mode, previousPlace)}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700"
@@ -84,7 +94,7 @@ export function PlaceNavigation({ place }: { place: Place }) {
       </div>
       {origin && (
         <a
-          href={navigation(place, "transit", origin)}
+          href={navigation(place, mode, origin)}
           target="_blank"
           rel="noopener noreferrer"
           className="block rounded-lg bg-teal-600 px-3 py-2 text-center text-xs font-medium text-white"
@@ -93,7 +103,12 @@ export function PlaceNavigation({ place }: { place: Place }) {
         </a>
       )}
       <p className="text-[10px] leading-5 text-slate-400">
-        仅在点击时申请定位，坐标发给高德用于本次导航，不写入旅行记录。未提供起点时，可在高德中选择。
+        {previousPlace
+          ? `默认从上一站「${previousPlace.name}」出发。`
+          : previousName
+            ? `上一站「${previousName}」尚未定位，可在高德中选择起点。`
+            : "这是当天第一站，可使用当前位置或在高德中选择起点。"}
+        点击“用我的位置导航”才申请定位，坐标仅用于本次高德导航，不写入旅行记录。
       </p>
       {error && (
         <p role="status" className="text-xs text-amber-700">

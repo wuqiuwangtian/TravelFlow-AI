@@ -284,6 +284,65 @@ export function BudgetPanel({
                         </button>
                       )}
                     </div>
+                    {editing?.row.id === row.id && (
+                      <form
+                        aria-label={
+                          editing.mode === "plan"
+                            ? "修改预估费用"
+                            : "填写实际总额"
+                        }
+                        className="mt-4 rounded-xl border border-teal-100 bg-teal-50/40 p-4"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void save();
+                        }}
+                      >
+                        <fieldset disabled={disabled}>
+                          <p className="mb-2 text-sm font-medium text-slate-700">
+                            {editing.row.title}
+                          </p>
+                          <label className="block text-xs text-slate-600">
+                            {editing.mode === "plan"
+                              ? "预估总额（元，全团；留空待核实）"
+                              : "实际总额（元，全团；确认该项已结算）"}
+                            <input
+                              className={`${field} mt-1`}
+                              inputMode="decimal"
+                              autoFocus
+                              onFocus={(event) => event.currentTarget.select()}
+                              value={editing.value}
+                              onChange={(e) =>
+                                setEditing({
+                                  ...editing,
+                                  value: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          {error && (
+                            <p
+                              role="alert"
+                              className="mt-2 text-xs text-red-600"
+                            >
+                              {error}
+                            </p>
+                          )}
+                          <div className="mt-3 flex gap-2">
+                            <button type="submit" className={button}>
+                              保存
+                              {editing.mode === "plan" ? "预估" : "实际总额"}
+                            </button>
+                            <button
+                              type="button"
+                              className={button}
+                              onClick={() => setEditing(null)}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </fieldset>
+                      </form>
+                    )}
                   </div>
                 ))}
               </div>
@@ -291,52 +350,6 @@ export function BudgetPanel({
           );
         })}
       </div>
-      {editing && (
-        <form
-          aria-label={editing.mode === "plan" ? "修改预估费用" : "填写实际总额"}
-          className="mt-4 rounded-xl border border-teal-100 bg-teal-50/40 p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <fieldset disabled={disabled}>
-            <p className="mb-2 text-sm font-medium text-slate-700">
-              {editing.row.title}
-            </p>
-            <label className="block text-xs text-slate-600">
-              {editing.mode === "plan"
-                ? "预估总额（元，全团；留空待核实）"
-                : "实际总额（元，全团；确认该项已结算）"}
-              <input
-                className={`${field} mt-1`}
-                inputMode="decimal"
-                value={editing.value}
-                onChange={(e) =>
-                  setEditing({ ...editing, value: e.target.value })
-                }
-              />
-            </label>
-            {error && (
-              <p role="alert" className="mt-2 text-xs text-red-600">
-                {error}
-              </p>
-            )}
-            <div className="mt-3 flex gap-2">
-              <button type="submit" className={button}>
-                保存{editing.mode === "plan" ? "预估" : "实际总额"}
-              </button>
-              <button
-                type="button"
-                className={button}
-                onClick={() => setEditing(null)}
-              >
-                取消
-              </button>
-            </div>
-          </fieldset>
-        </form>
-      )}
       {custom && (
         <form
           aria-label="添加自定义预算"

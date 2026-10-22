@@ -127,6 +127,10 @@ export function ItineraryPanel({
     itinerary?.days.find((d) => d.day === dayNumber) ?? itinerary?.days[0];
   const active =
     day?.activities.find((a) => a.id === selected) ?? day?.activities[0];
+  const activeIndex =
+    day?.activities.findIndex((a) => a.id === active?.id) ?? -1;
+  const previousStop =
+    activeIndex > 0 ? day?.activities[activeIndex - 1] : undefined;
   const durationKnown = day?.legs.every((leg) => leg.duration_seconds !== null);
 
   async function mutate(work: () => Promise<VersionDetail>) {
@@ -540,7 +544,15 @@ export function ItineraryPanel({
                       {active.place?.address || active.city}
                     </p>
                     {active.place && (
-                      <PlaceNavigation key={active.id} place={active.place} />
+                      <PlaceNavigation
+                        key={active.id}
+                        place={active.place}
+                        previousPlace={previousStop?.place}
+                        previousName={
+                          previousStop?.place_name || previousStop?.title
+                        }
+                        mode={day.legs[activeIndex - 1]?.mode ?? "transit"}
+                      />
                     )}
                     <div className="mt-4 border-t border-slate-100 pt-3">
                       <p className="text-xs text-slate-500">
