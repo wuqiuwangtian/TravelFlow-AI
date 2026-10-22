@@ -1,4 +1,10 @@
-import { CircleHelp, ExternalLink, KeyRound, Play, Sparkles } from "lucide-react";
+import {
+  CircleHelp,
+  ExternalLink,
+  KeyRound,
+  Play,
+  Sparkles,
+} from "lucide-react";
 
 import { Card } from "@/components/ui";
 
@@ -24,6 +30,17 @@ const STEPS = [
 
 const FAQ = [
   {
+    q: "旅途中几件事可以一起告诉 AI 吗？",
+    a: (
+      <>
+        可以，例如「第1天第1站已完成，午餐花了86元，地铁花了5元，后面安排轻松一点」。
+        用逗号或分号分开操作，后续短句会沿用最近明确的行程日期。
+        状态、消费、已有预约、退款和报销会按顺序处理，行程调整放在最后。
+        若某项不明确或调整失败，本条消息的操作都不会保存；成功后一起保存为一个新版本。
+      </>
+    ),
+  },
+  {
     q: "API Key 是什么？去哪里申请？",
     a: (
       <>
@@ -46,7 +63,8 @@ const FAQ = [
             target="_blank"
             rel="noopener noreferrer"
           >
-            DuckDuckGo（无需 Key）<ExternalLink className="h-3 w-3" />
+            DuckDuckGo（无需 Key）
+            <ExternalLink className="h-3 w-3" />
           </a>
           <a
             className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 no-underline hover:bg-brand-100"
@@ -54,7 +72,8 @@ const FAQ = [
             target="_blank"
             rel="noopener noreferrer"
           >
-            百度千帆<ExternalLink className="h-3 w-3" />
+            百度千帆
+            <ExternalLink className="h-3 w-3" />
           </a>
           <a
             className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 no-underline hover:bg-brand-100"
@@ -62,7 +81,8 @@ const FAQ = [
             target="_blank"
             rel="noopener noreferrer"
           >
-            Tavily<ExternalLink className="h-3 w-3" />
+            Tavily
+            <ExternalLink className="h-3 w-3" />
           </a>
           <a
             className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 no-underline hover:bg-brand-100"
@@ -70,7 +90,8 @@ const FAQ = [
             target="_blank"
             rel="noopener noreferrer"
           >
-            博查 Bocha<ExternalLink className="h-3 w-3" />
+            博查 Bocha
+            <ExternalLink className="h-3 w-3" />
           </a>
         </span>
         <span className="mt-2 block">
@@ -87,7 +108,8 @@ const FAQ = [
         所有事实性信息（票价、开放时间）都标注了来源编号，可以点开核对。
         引用链接由系统直接从检索结果获取，<b>不经过大模型改写</b>。
         <br />
-        涉及购票和预约的事项，路书会单独列出<b>官方办理渠道</b>，建议你出发前自己去核实一次。
+        涉及购票和预约的事项，路书会单独列出<b>官方办理渠道</b>
+        ，建议你出发前自己去核实一次。
         每份路书也会标注「信息检索时间」，因为价格和政策随时可能变。
       </>
     ),
@@ -96,8 +118,8 @@ const FAQ = [
     q: "为什么要等十几秒才能生成？",
     a: (
       <>
-        系统需要实时联网检索交通、景点和避雷信息（三路并行），
-        再让模型基于这些<b>真实资料</b>生成内容。这是为了信息真实，而不是让模型凭空编造。
+        系统需要实时联网检索交通、景点和避雷信息（三路并行）， 再让模型基于这些
+        <b>真实资料</b>生成内容。这是为了信息真实，而不是让模型凭空编造。
       </>
     ),
   },
@@ -115,8 +137,9 @@ const FAQ = [
     q: "数据会上传到云端吗？",
     a: (
       <>
-        不会。所有会话、路书、配置都保存在你电脑上的一个数据库文件里。
-        只有调用大模型和检索服务时，必要的文字才会发送出去。
+        会话、路书和凭证图片保存在本机数据库，配置保存在本地环境文件。 使用
+        AI、搜索或地图时会向对应服务发送必要内容；点击凭证识别时，
+        会将去除元数据后的图片预览发送给当前模型。
       </>
     ),
   },
@@ -142,7 +165,9 @@ export default function HelpPage() {
                 <Icon className="h-4 w-4" />
               </div>
               <h3 className="text-sm font-bold text-slate-800">{step.title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">{step.body}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                {step.body}
+              </p>
             </Card>
           );
         })}
@@ -153,10 +178,16 @@ export default function HelpPage() {
           <details key={item.q} className="group px-5 py-3.5">
             <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-700">
               {item.q}
-              <span className="text-xs text-slate-300 group-open:hidden">▾</span>
-              <span className="hidden text-xs text-slate-300 group-open:inline">▴</span>
+              <span className="text-xs text-slate-300 group-open:hidden">
+                ▾
+              </span>
+              <span className="hidden text-xs text-slate-300 group-open:inline">
+                ▴
+              </span>
             </summary>
-            <div className="mt-2.5 text-xs leading-relaxed text-slate-500">{item.a}</div>
+            <div className="mt-2.5 text-xs leading-relaxed text-slate-500">
+              {item.a}
+            </div>
           </details>
         ))}
       </Card>

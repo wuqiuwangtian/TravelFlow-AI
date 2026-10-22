@@ -130,7 +130,7 @@ export function TravelLedger({
             旅行记账
           </h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            可以直接告诉我「午餐花了 86 元」。实际消费按全团总额记录。
+            可以一次说「第1天第1站已完成，午餐花了86元，地铁花了5元」。实际消费按全团总额记录。
           </p>
         </div>
         <button
