@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -36,6 +37,7 @@ from app.search.base import SearchProvider
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.journey_messages import prepare_journey_message
 from app.services.replan_service import explicit_day, set_replan_context
+from app.services.travel_time import time_label
 
 logger = get_logger(__name__)
 
@@ -48,7 +50,16 @@ class OnTripUpdate(BaseModel):
     location_name: str = Field(default="", max_length=100)
     city: str = Field(default="", max_length=50)
     time: ClockTime
+    start_day_offset: int = Field(
+        default=0, ge=0, le=60, description="出发时刻相对该行程日的天数偏移，当日0、次日1"
+    )
     end_time: ClockTime | None = None
+    end_day_offset: int = Field(
+        default=0,
+        ge=0,
+        le=60,
+        description="结束时刻相对该行程日的天数偏移，当日0、次日1；不擅自推断跨日",
+    )
     end_location_name: str = Field(default="", max_length=100)
 
 
@@ -159,6 +170,16 @@ def make_refiner_node(
             context_days = [d for d in current.days if d.replan_context]
             if verdict.on_trip:
                 update = verdict.on_trip
+                days_mentioned = set(
+                    re.findall(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", user_text)
+                )
+                if (update.start_day_offset or update.end_day_offset) and not (
+                    re.search(r"次日|翌日|明天|[\d一二三四五六七八九十两]+天后", user_text)
+                    or len(days_mentioned) > 1
+                ):
+                    raise InvalidRequest(
+                        "跨午夜请明确说明出发和结束日期，例如「当日23:00出发，次日01:00前结束」。"
+                    )
                 active_days = [
                     d.day
                     for d in current.days
@@ -208,7 +229,9 @@ def make_refiner_node(
                         location_name=update.location_name,
                         city=update.city or requirements.destination or "",
                         time=update.time,
+                        start_day_offset=update.start_day_offset,
                         end_time=update.end_time,
+                        end_day_offset=update.end_day_offset,
                         end_activity_id=end_matches[0].id if end_matches else None,
                     ),
                 )
@@ -271,6 +294,8 @@ def make_refiner_node(
                 "\nreplan_context 是用户提供的出发地点、出发时刻与结束时限，后续行程必须从此接上；"
                 "booking 是已有预约，不能改时间、地点、时长或遗漏。若时间不足优先删普通活动。"
                 "is_context_anchor 标记的零停留出发位置由系统维护，无需作为新活动重复输出。"
+                "start_day_offset 表示相对该行程日的日期：当日0、次日1。"
+                "凌晨安排和跨日预约不能丢失偏移。"
             )
             prompt += (
                 "\n已完成、进行中和已跳过的活动属于旅中历史，保持原样，只调整后续未开始的安排。"
@@ -306,9 +331,11 @@ def make_refiner_node(
         if itinerary and scope_day is not None:
             day = next(d for d in itinerary.days if d.day == scope_day)
             if day.replan_context:
+                departure_label = time_label(
+                    day.replan_context.time, day.replan_context.start_day_offset
+                )
                 reply = (
-                    f"已从第{scope_day}天{day.replan_context.time}接上后续安排，"
-                    "保留已有预约和前段记录。"
+                    f"已从第{scope_day}天{departure_label}接上后续安排，保留已有预约和前段记录。"
                 )
                 if day.replan_context.omitted_titles:
                     reply += (

@@ -24,6 +24,8 @@ from app.domain.models import Requirements
 from app.maps.amap import AmapProvider
 from app.maps.base import MapProvider
 from app.maps.matching import choose_place, distance_meters, normal_name
+from app.services.travel_time import minutes as _minutes
+from app.services.travel_time import time_label
 
 MODE_LABELS = {
     "auto": "智能衔接",
@@ -127,16 +129,11 @@ def build_itinerary(drafts: list[DayDraft], requirements: Requirements) -> Itine
     return Itinerary(days=sorted(days, key=lambda day: day.day))
 
 
-def _minutes(value: str) -> int:
-    h, m = map(int, value.split(":"))
-    return h * 60 + m
-
-
 def schedule_day(day: DayPlan) -> None:
     """填充建议游玩时间；车次/航班的真实发车时间仍需按票面确认。"""
     day.schedule_notes = ["时间轴为建议安排；实际车次、航班及预约时间以票面为准。"]
     cursor = (
-        _minutes(day.activities[0].start_time)
+        _minutes(day.activities[0].start_time, day.activities[0].start_day_offset)
         if day.activities and day.activities[0].start_time
         else 9 * 60
     )
@@ -144,11 +141,12 @@ def schedule_day(day: DayPlan) -> None:
     for index, activity in enumerate(day.activities):
         if day.replan_context and not after_origin:
             if activity.id == day.replan_context.activity_id:
-                cursor = _minutes(day.replan_context.time)
+                cursor = _minutes(day.replan_context.time, day.replan_context.start_day_offset)
                 after_origin = True
             continue  # 出发点及之前的记录不重新排时刻。
         if activity.booking:
             activity.start_time = activity.booking.start_time
+            activity.start_day_offset = activity.booking.start_day_offset
             activity.duration_minutes = activity.booking.duration_minutes
             activity.time_is_suggested = False
         if index and index - 1 < len(day.legs):
@@ -157,16 +155,15 @@ def schedule_day(day: DayPlan) -> None:
                 cursor += math.ceil(leg.duration_seconds / 60)
         earliest_arrival = cursor
         if activity.start_time:
-            requested = _minutes(activity.start_time)
+            requested = _minutes(activity.start_time, activity.start_day_offset)
             if requested < cursor and not activity.time_is_suggested:
                 day.warnings.append(f"「{activity.title}」固定时间与前段路程冲突，可通过对话调整。")
             if not activity.time_is_suggested or activity.progress != "not_started":
                 cursor = requested
             elif not after_origin:
                 cursor = max(cursor, requested)
-        if cursor >= 24 * 60:
-            day.warnings.append("当天安排将跨过午夜，建议减少活动或增加一天。")
-        activity.start_time = f"{min(cursor, 1439) // 60:02d}:{min(cursor, 1439) % 60:02d}"
+        activity.start_day_offset = cursor // 1440
+        activity.start_time = f"{cursor % 1440 // 60:02d}:{cursor % 60:02d}"
         if activity.duration_minutes is None:
             activity.duration_minutes = {
                 "station": 20,
@@ -174,13 +171,14 @@ def schedule_day(day: DayPlan) -> None:
                 "meal": 60,
                 "free_time": 60,
             }.get(activity.kind, 90)
-        if after_origin:
+        if after_origin or activity.progress == "not_started":
             cursor = max(cursor, earliest_arrival)
         cursor += activity.duration_minutes
+    if cursor > 1440:
+        day.schedule_notes.append("部分安排延续至次日，仍归在本行程日中，日期已在时刻旁标明。")
     if day.replan_context:
-        day.schedule_notes.append(
-            f"从当前地点 {day.replan_context.time} 出发，前面的活动记录保持原样。"
-        )
+        departure_label = time_label(day.replan_context.time, day.replan_context.start_day_offset)
+        day.schedule_notes.append(f"从当前地点 {departure_label} 出发，前面的活动记录保持原样。")
 
 
 def summarise_day(day: DayPlan, requirements: Requirements) -> None:
@@ -478,6 +476,9 @@ async def enrich_itinerary(
     from app.services.budget_service import apply_budget_overrides
 
     apply_budget_overrides(result, requirements)
+    from app.services.replan_service import check_overnight_links
+
+    check_overnight_links(result)
     return result
 
 
@@ -490,7 +491,11 @@ def render_days(itinerary: Itinerary) -> str:
     for day in itinerary.days:
         lines.extend([f"### 第 {day.day} 天：{_text(day.title)}", ""])
         for index, activity in enumerate(day.activities, 1):
-            time = activity.start_time or "按当天安排"
+            time = (
+                time_label(activity.start_time, activity.start_day_offset)
+                if activity.start_time
+                else "按当天安排"
+            )
             duration = (
                 f"，停留约 {activity.duration_minutes} 分钟" if activity.duration_minutes else ""
             )
@@ -504,9 +509,9 @@ def render_days(itinerary: Itinerary) -> str:
                 if activity.cost is None
                 else f"{prefix}{activity.cost:g} 元（{basis}）"
             )
-            time_label = "预约" if activity.booking else "建议"
+            time_kind = "预约" if activity.booking else "建议"
             lines.append(
-                f"{index}. **{time_label} {time} · {_text(activity.title)}**"
+                f"{index}. **{time_kind} {time} · {_text(activity.title)}**"
                 + ("（出发位置）" if activity.is_context_anchor else f"{duration}；{cost}。{refs}")
             )
             if activity.progress != "not_started":
@@ -520,8 +525,12 @@ def render_days(itinerary: Itinerary) -> str:
             if activity.notes:
                 lines.append(f"   {_text(activity.notes)}")
             if activity.booking:
+                booked_label = time_label(
+                    activity.booking.start_time, activity.booking.start_day_offset
+                )
                 lines.append(
-                    f"   已记录预约：{activity.booking.start_time}，"
+                    "   已记录预约："
+                    f"{booked_label}，"
                     f"停留 {activity.booking.duration_minutes} 分钟。"
                 )
                 if activity.booking.notes:

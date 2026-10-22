@@ -367,12 +367,14 @@ async def update_activity(
             activity.place_name,
             activity.city,
             activity.start_time,
+            activity.start_day_offset,
             activity.duration_minutes,
-        ) != (old.place_name, old.city, old.start_time, old.duration_minutes):
+        ) != (old.place_name, old.city, old.start_time, old.start_day_offset, old.duration_minutes):
             raise ConflictError("此站已记录预约；请先更正或清除预约记录，再修改地点和时间。")
         activity.time_is_suggested = (
             old.time_is_suggested
-            if activity.start_time == old.start_time
+            if (activity.start_time, activity.start_day_offset)
+            == (old.start_time, old.start_day_offset)
             else activity.start_time is None
         )
         # 同地点编辑时复用已确认坐标；替换地点时只能使用高德返回的坐标。

@@ -6,10 +6,13 @@ from app.core.errors import AppError
 from app.domain.itinerary import Booking, Itinerary
 from app.services.replan_service import explicit_day, record_booking
 from app.services.travel_messages import TravelReply, _number
+from app.services.travel_time import time_label
 
 
 def handle_booking_message(text: str, itinerary: Itinerary) -> TravelReply | None:
-    if re.search(r"如果|预计|打算|想预约|帮我预约|能否|是否|吗|[?？]", text):
+    if re.search(
+        r"如果|预计|打算|想预约|帮我预约|能否|是否|不要|不是|未预约|没预约|吗|[?？]", text
+    ):
         return None
     clear = bool(re.search(r"清除预约记录|取消预约记录|删除预约记录", text))
     if not clear and not re.search(r"已预约|已经预约|预约好了|已经订好|已订好|记录已有预约", text):
@@ -43,6 +46,18 @@ def handle_booking_message(text: str, itinerary: Itinerary) -> TravelReply | Non
             if clear
             else Booking(
                 start_time=f"{int(times[0][0]):02d}:{times[0][1]}",
+                start_day_offset=(
+                    1
+                    if re.search(
+                        r"(?:次日|翌日|第二天|明天)\s*(?:凌晨|早上|上午|下午|晚上)?\s*\d{1,2}[:：]",
+                        text,
+                    )
+                    else 0
+                    if re.search(r"当天|当日", text)
+                    else activity.booking.start_day_offset
+                    if activity.booking
+                    else 0
+                ),
                 duration_minutes=duration_minutes,
             )
         )
@@ -53,7 +68,8 @@ def handle_booking_message(text: str, itinerary: Itinerary) -> TravelReply | Non
         reply = "已清除这项预约的行程约束记录；外部预约没有取消。"
     else:
         reply = (
-            f"已记录第{number}天「{activity.title}」的已有预约：{booking.start_time}，"
+            f"已记录第{number}天「{activity.title}」的已有预约："
+            f"{time_label(booking.start_time, booking.start_day_offset)}，"
             f"停留{booking.duration_minutes}分钟。后续调整会保留此预约。"
         )
     return TravelReply(reply, result)

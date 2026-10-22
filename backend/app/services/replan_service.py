@@ -14,11 +14,7 @@ from app.domain.itinerary import (
     ScheduledActivity,
 )
 from app.maps.matching import normal_name
-
-
-def minutes(time: str) -> int:
-    hour, minute = map(int, time.split(":"))
-    return hour * 60 + minute
+from app.services.travel_time import minutes, time_label, window_error
 
 
 def record_booking(
@@ -33,8 +29,9 @@ def record_booking(
     activity.booking = booking
     activity.time_is_suggested = booking is None
     if booking:
-        activity.start_time, activity.duration_minutes = (
+        activity.start_time, activity.start_day_offset, activity.duration_minutes = (
             booking.start_time,
+            booking.start_day_offset,
             booking.duration_minutes,
         )
 
@@ -43,8 +40,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     day = next((d for d in itinerary.days if d.day == day_number), None)
     if day is None:
         raise InvalidRequest("未找到当天行程")
-    if data.end_time is not None and data.end_time <= data.time:
-        raise InvalidRequest("结束时间需晚于出发时间；跨日行程请分别安排")
+    error = window_error(data.time, data.start_day_offset, data.end_time, data.end_day_offset)
+    if error:
+        raise InvalidRequest(error)
     anchor = next((a for a in day.activities if a.id == data.activity_id), None)
     if data.activity_id and anchor is None:
         raise InvalidRequest("出发地点不在当天行程中")
@@ -78,6 +76,7 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
             cost_basis="total",
             cost_source="manual",
             start_time=data.time,
+            start_day_offset=data.start_day_offset,
             progress="in_progress",
             progress_updated_at=datetime.now(),
             notes="用户描述的出发位置，不代表额外游玩停留。",
@@ -96,8 +95,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     elif (
         anchor.booking
         and anchor.progress == "not_started"
-        and minutes(data.time)
-        < minutes(anchor.booking.start_time) + anchor.booking.duration_minutes
+        and minutes(data.time, data.start_day_offset)
+        < minutes(anchor.booking.start_time, anchor.booking.start_day_offset)
+        + anchor.booking.duration_minutes
     ):
         # 人已到预约地点不代表预约已结束；另设零停留起点，原预约仍在后续约束中。
         booked = anchor
@@ -115,6 +115,7 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
             place=booked.place,
             place_status=booked.place_status,
             start_time=data.time,
+            start_day_offset=data.start_day_offset,
             duration_minutes=0,
             cost=0,
             cost_basis="total",
@@ -135,7 +136,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     day.replan_context = ReplanContext(
         activity_id=anchor.id,
         time=data.time,
+        start_day_offset=data.start_day_offset,
         end_time=data.end_time,
+        end_day_offset=data.end_day_offset,
         end_activity_id=data.end_activity_id,
     )
     return day
@@ -185,7 +188,15 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
                     remaining.append(old.model_copy(deep=True))
                 else:
                     remaining[found] = old.model_copy(deep=True)
-        remaining.sort(key=lambda a: a.booking.start_time if a.booking else a.start_time or "23:59")
+        remaining.sort(
+            key=lambda a: (
+                minutes(a.booking.start_time, a.booking.start_day_offset)
+                if a.booking
+                else minutes(a.start_time, a.start_day_offset)
+                if a.start_time
+                else 10**9
+            )
+        )
         if context.end_activity_id:
             remaining = [a for a in remaining if a.id != context.end_activity_id] + [
                 a for a in remaining if a.id == context.end_activity_id
@@ -209,14 +220,14 @@ def optional_to_remove(day: DayPlan) -> int | None:
     start = next((i for i, a in enumerate(day.activities) if a.id == context.activity_id), None)
     if start is None:
         return None
-    cursor = minutes(context.time)
+    cursor = minutes(context.time, context.start_day_offset)
     optional: list[int] = []
     for index in range(start + 1, len(day.activities)):
         activity = day.activities[index]
         if index - 1 < len(day.legs):
             cursor += int((day.legs[index - 1].duration_seconds or 0) + 59) // 60
         if activity.booking:
-            fixed = minutes(activity.booking.start_time)
+            fixed = minutes(activity.booking.start_time, activity.booking.start_day_offset)
             if cursor > fixed and optional:
                 return optional[-1]
             cursor = max(cursor, fixed)
@@ -224,7 +235,11 @@ def optional_to_remove(day: DayPlan) -> int | None:
             optional.append(index)
         if activity.id != context.end_activity_id:
             cursor += activity.duration_minutes or 0
-        if context.end_time and cursor > minutes(context.end_time) and optional:
+        if (
+            context.end_time
+            and cursor > minutes(context.end_time, context.end_day_offset)
+            and optional
+        ):
             return optional[-1]
     return None
 
@@ -234,13 +249,14 @@ def context_warnings(day: DayPlan) -> list[str]:
     if not context:
         return []
     start = next((i for i, a in enumerate(day.activities) if a.id == context.activity_id), 0)
-    cursor = minutes(context.time)
+    cursor = minutes(context.time, context.start_day_offset)
     warnings = []
     for earlier in day.activities[: start + 1]:
         if (
             earlier.booking
             and earlier.progress == "not_started"
-            and earlier.booking.start_time < context.time
+            and minutes(earlier.booking.start_time, earlier.booking.start_day_offset)
+            < minutes(context.time, context.start_day_offset)
         ):
             warnings.append(
                 f"前段预约「{earlier.title}」尚未记录完成，已过原预约时刻，请核对实际情况。"
@@ -252,18 +268,19 @@ def context_warnings(day: DayPlan) -> list[str]:
         unknown = unknown or leg is None or leg.duration_seconds is None
         cursor += int(((leg.duration_seconds if leg else 0) or 0) + 59) // 60
         if activity.booking:
-            fixed = minutes(activity.booking.start_time)
+            fixed = minutes(activity.booking.start_time, activity.booking.start_day_offset)
             if cursor > fixed:
                 warnings.append(
-                    f"预约冲突：「{activity.title}」预计无法在{activity.booking.start_time}前抵达；预约时间保持不变。"
+                    f"预约冲突：「{activity.title}」预计无法在"
+                    f"{time_label(activity.booking.start_time, activity.booking.start_day_offset)}"
+                    "前抵达；预约时间保持不变。"
                 )
             cursor = max(cursor, fixed)
         if activity.id != context.end_activity_id:
             cursor += activity.duration_minutes or 0
-    if context.end_time and cursor > minutes(context.end_time):
-        warnings.append(
-            f"时间冲突：保留的必要安排仍超过{context.end_time}，请调整结束时间或明确更改预约。"
-        )
+    if context.end_time and cursor > minutes(context.end_time, context.end_day_offset):
+        deadline = time_label(context.end_time, context.end_day_offset)
+        warnings.append(f"时间冲突：保留的必要安排仍超过{deadline}，请调整结束时间或明确更改预约。")
     if unknown:
         warnings.append("部分交通耗时尚未查到，时间窗口仅按已知耗时估算，需预留接驳时间。")
     return warnings
@@ -274,3 +291,40 @@ def explicit_day(text: str) -> int | None:
 
     match = re.search(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", text)
     return _number(match[1]) if match else None
+
+
+def check_overnight_links(itinerary: Itinerary) -> None:
+    """仅提示相邻行程日的重叠，不能擅改次日预约或历史。"""
+    for day in itinerary.days:
+        day.warnings = [w for w in day.warnings if not w.startswith("跨日衔接冲突：")]
+        ends = [
+            (
+                (day.day - 1) * 1440
+                + minutes(a.start_time, a.start_day_offset)
+                + (a.duration_minutes or 0),
+                a,
+            )
+            for a in day.activities
+            if a.start_time and a.progress != "skipped"
+        ]
+        if not ends:
+            continue
+        finish, last = max(ends, key=lambda item: item[0])
+        if finish <= day.day * 1440:
+            continue
+        following = [
+            ((other.day - 1) * 1440 + minutes(a.start_time, a.start_day_offset), other.day, a)
+            for other in itinerary.days
+            if other.day > day.day
+            for a in other.activities
+            if a.start_time and a.progress != "skipped"
+        ]
+        overlaps = [entry for entry in following if entry[0] < finish]
+        if overlaps:
+            _, number, first = min(overlaps, key=lambda item: item[0])
+            day.warnings.append(
+                f"跨日衔接冲突：本日「{last.title}」延续到次日后，与第{number}天"
+                f"「{first.title}」的{time_label(first.start_time or '', first.start_day_offset)}"
+                "安排重叠；"
+                "其他天和已有预约未自动改动，请核对衔接时间。"
+            )

@@ -43,6 +43,7 @@ class Activity(BaseModel):
     )
     address_hint: str = Field(default="", max_length=200)
     start_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    start_day_offset: int = Field(default=0, ge=0, le=60)
     duration_minutes: int | None = Field(default=None, ge=1, le=1440)
     cost: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     cost_basis: Literal["per_person", "total", "unknown"] = "unknown"
@@ -59,6 +60,7 @@ class Activity(BaseModel):
 
 class Booking(BaseModel):
     start_time: ClockTime
+    start_day_offset: int = Field(default=0, ge=0, le=60)
     duration_minutes: int = Field(ge=1, le=1440)
     notes: str = Field(default="", max_length=500)
 
@@ -66,15 +68,20 @@ class Booking(BaseModel):
 class ReplanContext(BaseModel):
     activity_id: str
     time: ClockTime
+    start_day_offset: int = Field(default=0, ge=0, le=60)
     end_time: ClockTime | None = None
+    end_day_offset: int = Field(default=0, ge=0, le=60)
     end_activity_id: str | None = None
     omitted_titles: list[str] = Field(default_factory=list, max_length=40)
     updated_at: datetime = Field(default_factory=datetime.now)
 
     @model_validator(mode="after")
     def valid_window(self) -> ReplanContext:
-        if self.end_time is not None and self.end_time <= self.time:
-            raise ValueError("结束时间需晚于出发时间；跨日行程请分别安排")
+        from app.services.travel_time import window_error
+
+        error = window_error(self.time, self.start_day_offset, self.end_time, self.end_day_offset)
+        if error:
+            raise ValueError(error)
         return self
 
 
@@ -83,7 +90,9 @@ class ReplanInput(BaseModel):
     location_name: str = Field(default="", max_length=100)
     city: str = Field(default="", max_length=50)
     time: ClockTime
+    start_day_offset: int = Field(default=0, ge=0, le=60)
     end_time: ClockTime | None = None
+    end_day_offset: int = Field(default=0, ge=0, le=60)
     end_activity_id: str | None = Field(default=None, max_length=100)
 
 

@@ -77,7 +77,17 @@ def prepare_journey_message(
     text: str, itinerary: Itinerary, requirements: Requirements
 ) -> JourneyMessage | None:
     clauses = _clauses(text)
-    if not any(_RECORD.search(part) and not _NOT_ACTUAL.search(part) for part in clauses):
+
+    def asserted(part: str) -> bool:
+        # 预约是已经发生的记录，即使票面日期在明天；未来预算仍不落账。
+        probe = (
+            re.sub("明天", "次日", part)
+            if re.search(r"已预约|已经预约|预约好了|已经订好|已订好|记录已有预约", part)
+            else part
+        )
+        return bool(_RECORD.search(part) and not _NOT_ACTUAL.search(probe))
+
+    if not any(asserted(part) for part in clauses):
         return None
     multiple = len(clauses) > 1
 
