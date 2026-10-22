@@ -145,6 +145,7 @@ async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
         "search_provider": settings.search_provider,
         "searxng_base_url": settings.searxng_base_url or "",
         "search_has_key": bool(settings.search_api_key),
+        "amap_has_key": bool(settings.amap_api_key),
         "default_detail_level": settings.default_detail_level,
         "cors_strict": settings.app_cors_strict,
         "env_path": str(settings.env_file_path),

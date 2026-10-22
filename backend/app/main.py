@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.agents.checkpoint import open_checkpointer
-from app.api import routes_chat, routes_export, routes_session, routes_system
+from app.api import routes_chat, routes_export, routes_itinerary, routes_session, routes_system
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, new_trace_id, set_trace_id, setup_logging
@@ -166,6 +166,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_session.router)
     app.include_router(routes_chat.router)
     app.include_router(routes_export.router)
+    app.include_router(routes_itinerary.router)
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:

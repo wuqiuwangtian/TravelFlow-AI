@@ -43,13 +43,20 @@ def build_queries(requirements: Requirements, year: int) -> dict[str, str]:
     }
 
 
-def make_researcher_node(search: SearchProvider, *, max_results: int = 5):
+def make_researcher_node(search: SearchProvider, *, max_results: int = 5, focus: str = ""):
     """构造 researcher 节点。"""
 
     async def researcher(state: PlanState) -> dict:
         emit_progress("research")
         requirements = state["requirements"]
         queries = build_queries(requirements, datetime.now().year)
+        if requirements.departure_date:
+            queries = {
+                key: f"{query} {requirements.departure_date.isoformat()}"
+                for key, query in queries.items()
+            }
+        if focus:
+            queries["attractions"] = f"{requirements.destination} {focus[:300]} 开放时间 价格 官方"
 
         # ★ 三路并行；单路失败不拖垮整体
         outcomes = await asyncio.gather(

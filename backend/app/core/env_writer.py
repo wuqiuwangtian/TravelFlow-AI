@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from app.core.errors import InvalidRequest
@@ -30,12 +31,74 @@ FIELD_TO_ENV: dict[str, str] = {
     "llm_base_url": "LLM_BASE_URL",
     "search_provider": "SEARCH_PROVIDER",
     "search_api_key": "SEARCH_API_KEY",
+    "amap_api_key": "AMAP_API_KEY",
     "searxng_base_url": "SEARXNG_BASE_URL",
     "default_detail_level": "DEFAULT_DETAIL_LEVEL",
 }
 
 #: .env 的文件权限：属主可读写，其他人一律不可见（里面是 API Key）
 ENV_FILE_MODE = 0o600
+
+MAP_SECTION = "# ---------------- 高德地图（选填）----------------"
+MAP_HELP = (
+    "# 使用高德 Web 服务类型的 Key，用于地点搜索、路线规划和每日地图。",
+    "# 此 Key 与大模型的 LLM_API_KEY 独立；留空时不校验地图路线。",
+    "# 查询超时单位为秒。",
+)
+MAP_FIELDS = ("AMAP_API_KEY", "AMAP_TIMEOUT_SECONDS")
+
+
+def _with_map_section(lines: list[str]) -> list[str]:
+    """把地图配置归入独立区块，兼容早期直接追加在数据库配置后的文件。"""
+    entries: dict[str, str] = {}
+    remaining: list[str] = []
+    for line in lines:
+        key = line.strip().split("=", 1)[0].strip()
+        if "=" in line and key in MAP_FIELDS:
+            entries[key] = line  # 与 dotenv 一致：重复项以最后一次为准
+        else:
+            remaining.append(line)
+    if not entries:
+        return lines
+    entries.setdefault("AMAP_TIMEOUT_SECONDS", "AMAP_TIMEOUT_SECONDS=12")
+    header = next(
+        (
+            i
+            for i, line in enumerate(remaining)
+            if re.match(r"^#\s*-+.*(?:高德|地图).*?-+\s*$", line)
+        ),
+        None,
+    )
+    if header is None:
+        insertion = next(
+            (
+                i
+                for i, line in enumerate(remaining)
+                if re.match(r"^#\s*-+.*(?:生成偏好|数据).*?-+\s*$", line)
+            ),
+            len(remaining),
+        )
+        block = [
+            MAP_SECTION,
+            *MAP_HELP,
+            *(entries[key] for key in MAP_FIELDS if key in entries),
+            "",
+        ]
+        if insertion and remaining[insertion - 1].strip():
+            block.insert(0, "")
+        return remaining[:insertion] + block + remaining[insertion:]
+    insertion = header + 1
+    while (
+        insertion < len(remaining)
+        and remaining[insertion].startswith("#")
+        and not re.match(r"^#\s*-+", remaining[insertion])
+    ):
+        insertion += 1
+    if not any("LLM_API_KEY" in line for line in remaining[header:insertion]):
+        remaining[insertion:insertion] = MAP_HELP
+        insertion += len(MAP_HELP)
+    remaining[insertion:insertion] = [entries[key] for key in MAP_FIELDS if key in entries]
+    return remaining
 
 
 def _reject_unsafe(key: str, value: str) -> str:
@@ -58,7 +121,7 @@ def _reject_unsafe(key: str, value: str) -> str:
 def write_env(path: str | Path, updates: dict[str, str]) -> list[str]:
     """把 ``updates`` 合并进 .env 文件，返回实际发生变化的键。
 
-    保留原有注释与行序；文件中不存在的键会被追加到末尾。
+    保留原有注释与行序；地图项集中放入独立区块，其余新键追加到末尾。
     """
     env_path = Path(path)
     lines: list[str] = []
@@ -89,6 +152,8 @@ def write_env(path: str | Path, updates: dict[str, str]) -> list[str]:
     for key, value in remaining.items():
         lines.append(f"{key}={value}")
         changed.append(key)
+
+    lines = _with_map_section(lines)
 
     if not lines or lines[-1] != "":
         lines.append("")

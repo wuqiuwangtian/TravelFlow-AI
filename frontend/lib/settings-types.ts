@@ -7,6 +7,7 @@ export interface SettingsPayload {
   search_provider: string;
   searxng_base_url: string;
   search_has_key: boolean;
+  amap_has_key: boolean;
   default_detail_level: string;
   env_path: string;
 }
@@ -18,6 +19,7 @@ export interface SettingsUpdate {
   llm_base_url?: string;
   search_provider?: string;
   search_api_key?: string;
+  amap_api_key?: string;
   searxng_base_url?: string;
   default_detail_level?: string;
 }

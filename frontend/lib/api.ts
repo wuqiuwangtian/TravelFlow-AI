@@ -8,21 +8,27 @@
  */
 
 import type {
+  Activity,
   BranchInfo,
   ChatResponse,
   ConfigCheck,
   ConnectionTest,
   DetailLevel,
   ProvidersResponse,
+  Place,
   SessionDetail,
   SessionInfo,
   VersionDetail,
   VersionInfo,
+  TravelMode,
 } from "./types";
-import type { SettingsPayload, SettingsSaveResult, SettingsUpdate } from "./settings-types";
+import type {
+  SettingsPayload,
+  SettingsSaveResult,
+  SettingsUpdate,
+} from "./settings-types";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+export const API_BASE = "/api/backend";
 
 export class ApiError extends Error {
   constructor(
@@ -46,7 +52,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(
       "BACKEND_UNREACHABLE",
-      `连不上后端服务（${API_BASE}）。请确认后端已启动。`,
+      "网络连接暂时中断，已保存的行程不受影响，请稍后重试。",
       0,
     );
   }
@@ -72,11 +78,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // ---- 系统 ----
-  health: () => request<{ status: string; name: string; version: string }>("/api/system/health"),
+  health: () =>
+    request<{ status: string; name: string; version: string }>(
+      "/api/system/health",
+    ),
   config: () => request<ConfigCheck>("/api/system/config"),
   providers: () => request<ProvidersResponse>("/api/system/providers"),
-  testLlm: () => request<ConnectionTest>("/api/system/test-llm", { method: "POST" }),
-  testSearch: () => request<ConnectionTest>("/api/system/test-search", { method: "POST" }),
+  testLlm: () =>
+    request<ConnectionTest>("/api/system/test-llm", { method: "POST" }),
+  testSearch: () =>
+    request<ConnectionTest>("/api/system/test-search", { method: "POST" }),
+  testMap: () =>
+    request<ConnectionTest>("/api/system/test-map", { method: "POST" }),
   getSettings: () => request<SettingsPayload>("/api/system/settings"),
   saveSettings: (payload: SettingsUpdate) =>
     request<SettingsSaveResult>("/api/system/settings", {
@@ -84,7 +97,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   /** 向服务商查询可用模型（模型名会随官方调整，故不让用户手写）。 */
-  getModels: () => request<{ models: string[]; message: string }>("/api/system/models"),
+  getModels: () =>
+    request<{ models: string[]; message: string }>("/api/system/models"),
 
   // ---- 会话 ----
   listSessions: (params?: { archived?: boolean; q?: string }) => {
@@ -92,7 +106,9 @@ export const api = {
     if (params?.archived) search.set("archived", "true");
     if (params?.q) search.set("q", params.q);
     const suffix = search.toString() ? `?${search}` : "";
-    return request<{ items: SessionInfo[]; total: number }>(`/api/sessions${suffix}`);
+    return request<{ items: SessionInfo[]; total: number }>(
+      `/api/sessions${suffix}`,
+    );
   },
   createSession: (title: string) =>
     request<SessionDetail>("/api/sessions", {
@@ -113,17 +129,95 @@ export const api = {
     request<{ items: BranchInfo[] }>(`/api/sessions/${sessionId}/branches`),
   createBranch: (
     sessionId: string,
-    payload: { title: string; parent_branch_id?: string; fork_version_id?: string },
+    payload: {
+      title: string;
+      parent_branch_id?: string;
+      fork_version_id?: string;
+    },
   ) =>
     request<{ items: BranchInfo[] }>(`/api/sessions/${sessionId}/branches`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   setPrimaryBranch: (branchId: string) =>
-    request<{ items: BranchInfo[] }>(`/api/branches/${branchId}/primary`, { method: "POST" }),
+    request<{ items: BranchInfo[] }>(`/api/branches/${branchId}/primary`, {
+      method: "POST",
+    }),
   listVersions: (branchId: string) =>
     request<{ items: VersionInfo[] }>(`/api/branches/${branchId}/versions`),
-  getVersion: (versionId: string) => request<VersionDetail>(`/api/versions/${versionId}`),
+  getVersion: (versionId: string) =>
+    request<VersionDetail>(`/api/versions/${versionId}`),
+  organiseItinerary: (versionId: string) =>
+    request<VersionDetail>(`/api/versions/${versionId}/itinerary`, {
+      method: "POST",
+    }),
+  searchPlaces: (keyword: string, city: string) =>
+    request<{ items: Place[] }>(
+      `/api/maps/places?${new URLSearchParams({ keyword, city })}`,
+    ),
+  updateActivity: (
+    versionId: string,
+    day: number,
+    activityId: string,
+    activity: Activity,
+    placeId?: string,
+  ) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/days/${day}/activities/${activityId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ activity, place_id: placeId ?? null }),
+      },
+    ),
+  recalculateDay: (versionId: string, day: number, travelMode: TravelMode) =>
+    request<VersionDetail>(`/api/versions/${versionId}/days/${day}/routes`, {
+      method: "POST",
+      body: JSON.stringify({ travel_mode: travelMode }),
+    }),
+  dayMapUrl: (versionId: string, day: number) =>
+    `${API_BASE}/api/versions/${versionId}/days/${day}/map`,
+  dayMapImage: async (
+    versionId: string,
+    day: number,
+    signal?: AbortSignal,
+  ): Promise<Blob> => {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${API_BASE}/api/versions/${versionId}/days/${day}/map`,
+        {
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(22_000)])
+            : AbortSignal.timeout(22_000),
+          cache: "no-store",
+        },
+      );
+    } catch {
+      throw new ApiError(
+        "MAP_UNAVAILABLE",
+        "地图连接暂时不可用，行程连线仍可查看。",
+        0,
+      );
+    }
+    if (!response.ok) {
+      let message = "地图暂时不可用，行程连线仍可查看。";
+      try {
+        const data = await response.json();
+        message = data?.error?.message ?? message;
+      } catch {
+        /* 保留安全提示 */
+      }
+      throw new ApiError("MAP_UNAVAILABLE", message, response.status);
+    }
+    if (!response.headers.get("content-type")?.startsWith("image/")) {
+      throw new ApiError(
+        "MAP_UNAVAILABLE",
+        "地图服务暂未返回图片，已保留行程连线。",
+        502,
+      );
+    }
+    return response.blob();
+  },
   /** 读取该分支的对话历史（存在后端的 checkpoint 里）。 */
   getMessages: (branchId: string) =>
     request<{ messages: { role: string; content: string }[] }>(
@@ -137,7 +231,10 @@ export const api = {
     branch_id?: string;
     detail_level?: DetailLevel;
   }) =>
-    request<ChatResponse>("/api/chat", { method: "POST", body: JSON.stringify(payload) }),
+    request<ChatResponse>("/api/chat", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   // ---- 导出（直接触发浏览器下载）----
   exportUrl: (versionId: string, format: "md" | "html") =>
@@ -194,7 +291,7 @@ export async function chatStream(
   } catch {
     throw new ApiError(
       "BACKEND_UNREACHABLE",
-      `连不上后端服务（${API_BASE}）。请确认后端已启动。`,
+      "网络连接暂时中断，已保存的行程不受影响，请稍后重试。",
       0,
     );
   }

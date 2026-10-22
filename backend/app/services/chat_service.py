@@ -17,6 +17,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from app.agents.checkpoint import thread_config
 from app.core.logging import get_logger
 from app.domain.enums import DetailLevel, PlanStatus
+from app.services.branch_lock import branch_guard
 from app.storage.session_store import SessionStore
 
 logger = get_logger(__name__)
@@ -73,6 +74,39 @@ class ChatService:
         message: str,
         detail_level: DetailLevel | None = None,
     ) -> ChatOutcome:
+        async with branch_guard(branch_id):
+            return await self._send(
+                session_id=session_id,
+                branch_id=branch_id,
+                message=message,
+                detail_level=detail_level,
+            )
+
+    async def send_stream(
+        self,
+        *,
+        session_id: str,
+        branch_id: str,
+        message: str,
+        detail_level: DetailLevel | None = None,
+    ) -> AsyncIterator[dict]:
+        async with branch_guard(branch_id):
+            async for item in self._send_stream(
+                session_id=session_id,
+                branch_id=branch_id,
+                message=message,
+                detail_level=detail_level,
+            ):
+                yield item
+
+    async def _send(
+        self,
+        *,
+        session_id: str,
+        branch_id: str,
+        message: str,
+        detail_level: DetailLevel | None = None,
+    ) -> ChatOutcome:
         """把用户消息送入图，并把产出记录为一个新版本。"""
         # 显式声明「非流式」：节点据此选择结构化输出而非逐字流
         config = thread_config(branch_id, stream_llm=False)
@@ -86,7 +120,7 @@ class ChatService:
         values = await self._graph.ainvoke(payload, config)
         values = dict(values)
 
-        version_id = await self._record_version(branch_id, values, config)
+        version_id = await self.record_version(branch_id, values, config)
         await self._store.touch_session(session_id)
 
         return ChatOutcome(
@@ -98,7 +132,7 @@ class ChatService:
             missing_fields=list(values.get("missing_fields") or []),
         )
 
-    async def send_stream(
+    async def _send_stream(
         self,
         *,
         session_id: str,
@@ -134,7 +168,7 @@ class ChatService:
         snapshot = await self._graph.aget_state(config)
         values = dict(snapshot.values or {})
 
-        version_id = await self._record_version(branch_id, values, config)
+        version_id = await self.record_version(branch_id, values, config)
         await self._store.touch_session(session_id)
 
         outcome = ChatOutcome(
@@ -147,7 +181,15 @@ class ChatService:
         )
         yield {"event": "done", "data": outcome}
 
-    async def _record_version(self, branch_id: str, values: dict, config: dict) -> str | None:
+    async def record_version(
+        self,
+        branch_id: str,
+        values: dict,
+        config: dict,
+        *,
+        trigger: str = "user_message",
+        summary: str | None = None,
+    ) -> str | None:
         """有路书产出时，落一个版本记录（供版本树与导出使用）。"""
         markdown = values.get("plan_markdown") or ""
         if not markdown:
@@ -163,9 +205,9 @@ class ChatService:
         research = values.get("research")
         version = await self._store.create_version(
             branch_id,
-            summary=_summarise(values),
+            summary=summary or _summarise(values),
             detail_level=str(values.get("detail_level") or DetailLevel.L2_STANDARD.value),
-            trigger="user_message",
+            trigger=trigger,
             checkpoint_id=checkpoint_id,
         )
         await self._store.save_plan(
@@ -174,6 +216,8 @@ class ChatService:
             citations=research.build_citations() if research else [],
             todos=list(values.get("todos") or []),
             searched_at=getattr(research, "searched_at", None),
+            itinerary=values.get("itinerary"),
+            requirements=values.get("requirements"),
         )
         logger.info(
             "版本已记录",

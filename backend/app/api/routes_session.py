@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.agents.checkpoint import thread_config
+from app.agents.state import initial_state
 from app.core.deps import get_graph, get_store
-from app.core.errors import BranchNotFound, InvalidRequest, SessionNotFound
+from app.core.errors import BranchNotFound, ConfigError, InvalidRequest, SessionNotFound
+from app.domain.enums import PlanStatus
+from app.domain.models import ResearchBundle
 from app.domain.schemas import (
     BranchListResponse,
     ChatHistoryResponse,
@@ -18,6 +23,9 @@ from app.domain.schemas import (
     UpdateSessionRequest,
     VersionListResponse,
 )
+from app.search.base import SearchResult
+from app.services.branch_lock import branch_guard
+from app.services.chat_service import ChatService
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
@@ -115,6 +123,7 @@ async def list_branches(
 async def create_branch(
     session_id: str,
     payload: CreateBranchRequest,
+    request: Request,
     store: SessionStore = Depends(get_store),
 ) -> BranchListResponse:
     """从某个版本（或某个分支的最新状态）分叉出一条新分支。"""
@@ -127,12 +136,72 @@ async def create_branch(
             raise InvalidRequest("指定的版本不存在")
         parent_id = version.branch_id
 
-    await store.create_branch(
-        session_id,
-        payload.title,
-        parent_branch_id=parent_id,
-        fork_version_id=payload.fork_version_id,
+    parent = await store.get_branch(parent_id) if parent_id else None
+    if parent_id and (parent is None or parent.session_id != session_id):
+        raise InvalidRequest("源分支不属于当前会话")
+    source = (
+        await store.get_version_detail(payload.fork_version_id) if payload.fork_version_id else None
     )
+    if source and source.version.branch_id != parent_id:
+        raise InvalidRequest("源版本不属于指定分支")
+    graph = getattr(request.app.state, "graph", None)
+    if parent_id and graph is None:
+        raise ConfigError("请先完成模型与检索配置，再从历史方案继续规划")
+    async with branch_guard(parent_id or session_id):
+        values = {}
+        if parent_id:
+            assert graph is not None
+            source_config = thread_config(parent_id)
+            if source and source.version.checkpoint_id:
+                source_config = thread_config(parent_id, checkpoint_id=source.version.checkpoint_id)
+            if source is None or source.version.checkpoint_id:
+                snapshot = await graph.aget_state(source_config)
+                values = dict(snapshot.values or {})
+            # 兼容只有业务版本、没有 checkpoint 的旧记录。
+            if source:
+                values = values or dict(initial_state())
+                values.update(
+                    plan_markdown=source.markdown,
+                    itinerary=source.itinerary,
+                    todos=source.todos,
+                    status=PlanStatus.REVIEWING,
+                )
+                if source.requirements:
+                    values["requirements"] = source.requirements
+                if not values.get("research") and source.citations:
+                    values["research"] = ResearchBundle(
+                        transport=[
+                            SearchResult(title=c.title, url=c.url, content="", provider=c.provider)
+                            for c in source.citations
+                        ],
+                        searched_at=source.searched_at or datetime.now(),
+                    )
+        branch = await store.create_branch(
+            session_id,
+            payload.title,
+            parent_branch_id=parent_id,
+            fork_version_id=payload.fork_version_id,
+        )
+        if values:
+            assert graph is not None
+            config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
+            vid = await ChatService(graph=graph, store=store).record_version(
+                branch.id,
+                values,
+                config,
+                trigger="fork",
+                summary="从原方案分叉",
+            )
+            if source and vid:
+                await store.save_plan(
+                    vid,
+                    markdown=source.markdown,
+                    itinerary=source.itinerary,
+                    requirements=source.requirements,
+                    citations=source.citations,
+                    todos=source.todos,
+                    searched_at=source.searched_at,
+                )
     return BranchListResponse(items=await store.list_branches(session_id))
 
 

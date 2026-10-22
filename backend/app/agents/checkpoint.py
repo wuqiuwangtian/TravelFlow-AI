@@ -27,11 +27,17 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 # 状态中会用到的自定义类型；新增领域模型时需同步登记
 _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
     ("app.domain.models",),
+    ("app.domain.itinerary",),
     ("app.domain.enums",),
     ("app.search.base",),
 ]
 
 _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
+    ("app.domain.itinerary", "Itinerary"),
+    ("app.domain.itinerary", "DayPlan"),
+    ("app.domain.itinerary", "ScheduledActivity"),
+    ("app.domain.itinerary", "Place"),
+    ("app.domain.itinerary", "RouteLeg"),
     ("app.domain.models", "Requirements"),
     ("app.domain.models", "ResearchBundle"),
     ("app.domain.models", "Citation"),

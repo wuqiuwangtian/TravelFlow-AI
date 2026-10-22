@@ -48,7 +48,7 @@ def build_runtime(settings: Settings, *, checkpointer: Any) -> RuntimeBuildResul
         return RuntimeBuildResult(error=str(exc))
 
     try:
-        graph = build_graph(llm, search, checkpointer=checkpointer)
+        graph = build_graph(llm, search, checkpointer=checkpointer, settings=settings)
     except Exception as exc:  # pragma: no cover - 防御性
         return RuntimeBuildResult(error=f"编排图构建失败：{exc}")
 

@@ -12,3 +12,5 @@ $user_message
 intent 字段填 approve / modify / unclear 之一；
 summary 字段用一句话概括用户想要什么（不超过 30 字）。
 不要把用户的原始消息原样抄进 summary。
+requirements 只提取本次明确改变的需求，未提到的字段留空；预算口径不明时不要猜测。
+needs_research：新增/替换景点或酒店、改变城市或日期、要求更新真实票价时为 true；只调整顺序、措辞、删减活动时为 false。

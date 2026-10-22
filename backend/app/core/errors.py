@@ -88,6 +88,14 @@ class LLMUnavailable(ProviderError):
     default_message = "模型服务连不上，请检查配置与网络"
 
 
+class LLMAuthenticationFailed(LLMUnavailable):
+    code = "LLM_AUTH_FAILED"
+    default_message = (
+        "大模型服务鉴权失败，请在「设置 → 大模型」检查 LLM_API_KEY 与接口地址，"
+        "保存后测试模型连接。高德 Key 仅用于地图，不能用于大模型鉴权。"
+    )
+
+
 class LLMTimeout(ProviderError):
     code = "LLM_TIMEOUT"
     http_status = 504

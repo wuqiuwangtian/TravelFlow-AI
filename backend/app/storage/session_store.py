@@ -14,9 +14,11 @@ from datetime import datetime
 
 import aiosqlite
 
+from app.domain.itinerary import Itinerary
 from app.domain.models import (
     BranchInfo,
     Citation,
+    Requirements,
     SessionInfo,
     TodoItem,
     VersionDetail,
@@ -254,6 +256,8 @@ class SessionStore:
         citations: list[Citation] | None = None,
         todos: list[TodoItem] | None = None,
         searched_at: datetime | None = None,
+        itinerary: Itinerary | None = None,
+        requirements: Requirements | None = None,
     ) -> None:
         citations_payload = json.dumps(
             [c.model_dump(mode="json") for c in (citations or [])], ensure_ascii=False
@@ -262,19 +266,24 @@ class SessionStore:
             [t.model_dump(mode="json") for t in (todos or [])], ensure_ascii=False
         )
         await self._conn.execute(
-            """INSERT INTO plans(version_id, markdown, citations, todos, searched_at)
-               VALUES (?,?,?,?,?)
+            """INSERT INTO plans(
+                   version_id, markdown, citations, todos, searched_at, itinerary, requirements)
+               VALUES (?,?,?,?,?,?,?)
                ON CONFLICT(version_id) DO UPDATE SET
                    markdown = excluded.markdown,
                    citations = excluded.citations,
                    todos = excluded.todos,
-                   searched_at = excluded.searched_at""",
+                   searched_at = excluded.searched_at,
+                   itinerary = excluded.itinerary,
+                   requirements = excluded.requirements""",
             (
                 version_id,
                 markdown,
                 citations_payload,
                 todos_payload,
                 searched_at.isoformat(timespec="seconds") if searched_at else None,
+                itinerary.model_dump_json() if itinerary else None,
+                requirements.model_dump_json() if requirements else None,
             ),
         )
         await self._conn.commit()
@@ -285,7 +294,8 @@ class SessionStore:
             return None
 
         cursor = await self._conn.execute(
-            "SELECT markdown, citations, todos, searched_at FROM plans WHERE version_id = ?",
+            "SELECT markdown, citations, todos, searched_at, itinerary, requirements "
+            "FROM plans WHERE version_id = ?",
             (version_id,),
         )
         row = await cursor.fetchone()
@@ -300,6 +310,10 @@ class SessionStore:
             citations=citations,
             todos=todos,
             searched_at=datetime.fromisoformat(row["searched_at"]) if row["searched_at"] else None,
+            itinerary=Itinerary.model_validate_json(row["itinerary"]) if row["itinerary"] else None,
+            requirements=Requirements.model_validate_json(row["requirements"])
+            if row["requirements"]
+            else None,
         )
 
     # ==================================================== 映射

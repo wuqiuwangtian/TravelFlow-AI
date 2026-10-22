@@ -80,6 +80,8 @@ async def create_connection(db_path: str | Path) -> aiosqlite.Connection:
     await conn.executescript(SCHEMA)
     # 轻量迁移：老库补齐后加的列（幂等）
     await _ensure_column(conn, "plans", "todos", "TEXT NOT NULL DEFAULT '[]'")
+    await _ensure_column(conn, "plans", "itinerary", "TEXT")
+    await _ensure_column(conn, "plans", "requirements", "TEXT")
     await conn.commit()
 
     logger.info("数据库就绪", extra={"extra_fields": {"path": str(path)}})

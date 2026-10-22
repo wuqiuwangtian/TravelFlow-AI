@@ -14,6 +14,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 from app.domain.enums import DetailLevel, PlanStatus
+from app.domain.itinerary import Itinerary
 from app.domain.models import Requirements, ResearchBundle, TodoItem
 
 
@@ -35,10 +36,12 @@ class PlanState(TypedDict, total=False):
     # 当前路书
     plan_markdown: str
     todos: list[TodoItem]
+    itinerary: Itinerary | None
 
     # 状态机
     status: PlanStatus
     missing_fields: list[str]
+    destination_ideas: list[str]
 
     # 生成偏好
     detail_level: DetailLevel
@@ -61,6 +64,7 @@ def initial_state(
         research=None,
         plan_markdown="",
         todos=[],
+        itinerary=None,
         status=PlanStatus.COLLECTING,
         missing_fields=list(Requirements.REQUIRED_FIELDS),
         detail_level=detail_level,

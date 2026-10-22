@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import ClassVar
+from datetime import date, datetime
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
 from app.domain.enums import DetailLevel, TodoKind
+from app.domain.itinerary import Itinerary
 from app.search.base import SearchResult
 
 
@@ -29,9 +30,11 @@ class Requirements(BaseModel):
     destination: str | None = Field(None, description="目的地")
     origin: str | None = Field(None, description="出发地")
     duration_days: int | None = Field(None, ge=1, le=60, description="游玩天数")
-    budget: float | None = Field(None, ge=0, description="总预算（元）")
+    budget: float | None = Field(None, ge=0, allow_inf_nan=False, description="预算金额（元）")
     travelers: int | None = Field(None, ge=1, le=50, description="出行人数")
     preferences: list[str] = Field(default_factory=list, description="偏好标签")
+    departure_date: date | None = Field(None, description="出行日期，未定则留空")
+    budget_basis: Literal["per_person", "total"] | None = Field(None, description="人均或全团预算")
 
     def missing_fields(self) -> list[str]:
         """返回仍然缺失的必填字段名。"""
@@ -83,7 +86,7 @@ class ResearchBundle(BaseModel):
             merged.extend(bucket if per_bucket is None else bucket[:per_bucket])
         return merged
 
-    def build_citations(self, *, limit: int = 20) -> list[Citation]:
+    def build_citations(self, *, limit: int = 100) -> list[Citation]:
         """把检索结果编号为引用列表 —— 编号即大模型唯一可见的引用标识。"""
         now = self.searched_at
         return [
@@ -91,7 +94,7 @@ class ResearchBundle(BaseModel):
             for i, r in enumerate(self.merged_results()[:limit], start=1)
         ]
 
-    def numbered_sources(self, *, limit: int = 20, snippet: int = 500) -> str:
+    def numbered_sources(self, *, limit: int = 100, snippet: int = 500) -> str:
         """渲染给大模型的编号资料块。
 
         大模型看到的只有「编号 + 标题 + 摘要」，**看不到 URL**，
@@ -161,3 +164,5 @@ class VersionDetail(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     todos: list[TodoItem] = Field(default_factory=list)
     searched_at: datetime | None = None
+    itinerary: Itinerary | None = None
+    requirements: Requirements | None = None

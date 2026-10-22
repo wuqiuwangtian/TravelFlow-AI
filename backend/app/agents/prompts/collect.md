@@ -5,6 +5,7 @@ $collected_json
 
 【必填字段】destination（目的地）、origin（出发地）、duration_days（天数）、budget（预算）
 【选填字段】travelers（出行人数）、preferences（偏好，如亲子 / 美食 / 徒步 / 摄影）
+departure_date（出行日期，YYYY-MM-DD；日期未定则留空）、budget_basis（人均 per_person / 全团 total；没说清则留空）。日期和预算口径不阻止初步规划，严禁猜测。
 
 【你的任务】
 1. 阅读用户最新一条消息，提取其中**明确表达**的字段值。
@@ -21,3 +22,5 @@ $collected_json
   并在 reply 中**明确告知你替他定的值**，然后视为已收集。
 - 本阶段**不要输出任何具体行程、景点或价格建议**。
 - 若用户消息与旅行无关，友好地把话题引导回需求收集。
+- 用户不知道去哪、希望推荐城市时，将 wants_destination_ideas 设为 true；先收集出发地、天数、预算和偏好，不要反复要求用户自己填写目的地。系统会给出城市候选。
+- 用户明确选择了之前的候选城市（包括“第二个”这类指代）时，结合候选提取 destination。未经用户选择或明确授权，不替用户确定城市。

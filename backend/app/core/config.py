@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     search_timeout_seconds: int = 20
     searxng_base_url: str | None = None
 
+    # ---------------- 地图（选填）----------------
+    amap_api_key: str | None = None
+    amap_timeout_seconds: int = 12
+
     # ---------------- 生成偏好 ----------------
     default_detail_level: str = "L2_standard"
 

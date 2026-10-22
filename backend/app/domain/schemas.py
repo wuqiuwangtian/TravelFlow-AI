@@ -134,6 +134,7 @@ class SettingsUpdate(BaseModel):
     llm_base_url: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
     search_provider: str | None = Field(default=None, max_length=64)
     search_api_key: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
+    amap_api_key: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
     searxng_base_url: str | None = Field(default=None, max_length=SETTING_MAX_LEN)
     default_detail_level: str | None = Field(default=None, max_length=64)
 
@@ -148,6 +149,7 @@ class SettingsUpdate(BaseModel):
         "llm_api_key",
         "search_provider",
         "search_api_key",
+        "amap_api_key",
         "default_detail_level",
         mode="after",
     )

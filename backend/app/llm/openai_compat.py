@@ -19,7 +19,13 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from app.core.errors import AppError, LLMOutputInvalid, LLMTimeout, LLMUnavailable
+from app.core.errors import (
+    AppError,
+    LLMAuthenticationFailed,
+    LLMOutputInvalid,
+    LLMTimeout,
+    LLMUnavailable,
+)
 from app.core.logging import get_logger
 from app.llm.base import ChatMessage, SchemaT
 
@@ -95,7 +101,7 @@ def _map_error(exc: Exception, *, structured: bool = False) -> AppError:
 
     # ---- 鉴权 ----
     if "authentication" in name or "401" in text or "invalid api key" in lowered:
-        return LLMUnavailable("模型服务鉴权失败，请检查 API Key 是否正确", detail=detail)
+        return LLMAuthenticationFailed()
 
     # ---- 模型不存在 / 名称写错 ----
     if (
@@ -208,10 +214,15 @@ class OpenAICompatProvider:
             result = await runnable.ainvoke(_to_langchain(messages))
             return self._coerce(result, schema)
         except Exception as exc:
-            if isinstance(exc, AppError) or not _supports_json_mode_fallback(exc):
+            mapped = _map_error(exc, structured=True)
+            parsing_failed = isinstance(mapped, LLMOutputInvalid) and (
+                isinstance(exc, LLMOutputInvalid)
+                or any(word in type(exc).__name__.lower() for word in ("parse", "validation"))
+            )
+            if not parsing_failed and not _supports_json_mode_fallback(exc):
                 raise _map_error(exc, structured=True) from exc
             logger.info(
-                "模型不支持 json_schema，自动降级为 json_object 模式",
+                "结构化输出切换为 JSON 模式并自动重试一次",
                 extra={"extra_fields": {"model": self.model}},
             )
 

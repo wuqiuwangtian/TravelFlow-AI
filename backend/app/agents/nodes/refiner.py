@@ -19,13 +19,18 @@ from langchain_core.messages import AIMessage
 from pydantic import BaseModel, Field
 
 from app.agents.detail_levels import detail_name, target_length_text
+from app.agents.itinerary_output import PlanDetails, prepare_itinerary
+from app.agents.nodes.researcher import make_researcher_node
 from app.agents.nodes.utils import last_user_text
 from app.agents.prompt_loader import render_prompt
 from app.agents.state import PlanState
-from app.agents.streaming import emit_progress, emit_token, is_streaming
+from app.agents.streaming import emit_notice, emit_progress
+from app.core.config import Settings
 from app.core.logging import get_logger
 from app.domain.enums import DetailLevel, PlanStatus
+from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
+from app.search.base import SearchProvider
 
 logger = get_logger(__name__)
 
@@ -38,9 +43,22 @@ class RefineIntent(BaseModel):
 
     intent: Literal["approve", "modify", "unclear"]
     summary: str = Field(default="", description="一句话概括用户想要什么")
+    requirements: Requirements = Field(
+        default_factory=Requirements, description="只提取本次明确改变的出行需求"
+    )
+    needs_research: bool = Field(
+        default=False,
+        description="新增景点、酒店、修改目的地或日期等需要新资料时为 true，改措辞、顺序则为 false",
+    )
 
 
-def make_refiner_node(llm: LLMProvider):
+class RevisionOutput(PlanDetails):
+    markdown: str = Field(description="修改后的完整文字路书")
+
+
+def make_refiner_node(
+    llm: LLMProvider, settings: Settings | None = None, search: SearchProvider | None = None
+):
     """构造 refiner 节点。"""
 
     async def refiner(state: PlanState) -> dict:
@@ -81,8 +99,25 @@ def make_refiner_node(llm: LLMProvider):
                 "updated_at": datetime.now(),
             }
 
-        # ---- 2. 最小必要修改 ----
-        # ★ 复用 state 中已有的 research，**不重新检索**
+        # ---- 2. 更新需求，只有涉及新事实时补充检索 ----
+        requirements = requirements.merged_with(verdict.requirements)
+        changed = bool(verdict.requirements.model_dump(exclude_defaults=True, exclude_none=True))
+        if (verdict.needs_research or changed) and search:
+            emit_notice("本次修改涉及新的出行信息，正在补充检索。")
+            researched = await make_researcher_node(search, focus=user_text)(
+                {**state, "requirements": requirements}
+            )
+            fresh = researched["research"]
+            # 保持旧编号稳定，新资料追加到同一资料桶；防止新旧引用串号。
+            if research:
+                old = research.merged_results()
+                combined = old + fresh.merged_results()
+                research = fresh.model_copy(
+                    update={"transport": combined, "attractions": [], "reviews": []}
+                )
+            else:
+                research = fresh
+
         prompt = render_prompt(
             "refine",
             plan_markdown=plan_markdown or "（当前尚无路书）",
@@ -91,24 +126,48 @@ def make_refiner_node(llm: LLMProvider):
             detail_name=detail_name(level),
             target_length=target_length_text(level, requirements.duration_days),
         )
+        prompt += "\n【更新后的需求】\n" + requirements.model_dump_json(exclude_none=True)
+        current_itinerary = state.get("itinerary")
+        if current_itinerary:
+            prompt += (
+                "\n【当前结构化行程，未要求修改的站点和字段必须保留】\n"
+                + current_itinerary.model_dump_json()
+            )
+        prompt += (
+            "\n返回完整 markdown 和 days。停留点是具体地点；抵达该点的交通放在 transport_* 字段中。"
+            "建议时间可以调整，费用估算须标 estimate，不得编造班次或票面时间。"
+            "局部修改必须保留其余天数、地点、费用来源、交通方式和待办。"
+        )
         messages = [
             ChatMessage(role="system", content=prompt),
             ChatMessage(role="user", content="请按上述意见修改路书。"),
         ]
-        if is_streaming():
-            parts: list[str] = []
-            async for piece in llm.stream(messages):
-                parts.append(piece)
-                emit_token(piece)
-            new_plan = "".join(parts).strip()
-        else:
-            new_plan = await llm.chat(messages)
+        details = await llm.structured(messages, RevisionOutput)
+        new_plan = details.markdown
+        if not details.days and state.get("itinerary"):
+            # 不允许格式缺失的回答把现有可用线路变回空白。
+            from app.core.errors import LLMOutputInvalid
 
+            raise LLMOutputInvalid("本次调整未返回完整行程，原计划已保留，请重试。")
+        itinerary, new_plan = await prepare_itinerary(
+            details,
+            new_plan,
+            requirements,
+            settings or Settings(),
+            len(research.build_citations()) if research else 0,
+            previous=state.get("itinerary"),
+        )
         return {
             "plan_markdown": new_plan,
+            "itinerary": itinerary,
+            "todos": details.todos,
+            "requirements": requirements,
+            "research": research,
             "status": PlanStatus.REVIEWING,
             "revision": revision + 1,
-            "messages": [AIMessage(content="已按您的意见调整，其余内容保持不变。请再次查阅。")],
+            "messages": [
+                AIMessage(content="已按您的意见调整，并更新每日行程与费用汇总。请再次查阅。")
+            ],
             "updated_at": datetime.now(),
         }
 

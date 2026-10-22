@@ -26,6 +26,7 @@ from app.agents.routing import (
     route_entry,
 )
 from app.agents.state import PlanState
+from app.core.config import Settings
 from app.llm.base import LLMProvider
 from app.search.base import SearchProvider
 
@@ -35,6 +36,7 @@ def build_graph(
     search: SearchProvider,
     *,
     checkpointer: Any = None,
+    settings: Settings | None = None,
 ):
     """构建并编译状态图。
 
@@ -42,10 +44,10 @@ def build_graph(
     """
     workflow = StateGraph(PlanState)
 
-    workflow.add_node("collector", make_collector_node(llm))
+    workflow.add_node("collector", make_collector_node(llm, search))
     workflow.add_node("researcher", make_researcher_node(search))
-    workflow.add_node("planner", make_planner_node(llm))
-    workflow.add_node("refiner", make_refiner_node(llm))
+    workflow.add_node("planner", make_planner_node(llm, settings))
+    workflow.add_node("refiner", make_refiner_node(llm, settings, search))
 
     # ★ 显式入口路由：按状态决定入口（旧项目固定 START → collector 的修复）
     workflow.add_conditional_edges(
