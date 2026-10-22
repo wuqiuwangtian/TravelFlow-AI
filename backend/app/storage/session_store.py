@@ -235,6 +235,24 @@ class SessionStore:
             created_at=_parse(now),
         )
 
+    async def get_chat_receipt(self, branch_id: str, request_id: str) -> tuple[str, dict] | None:
+        cursor = await self._conn.execute(
+            "SELECT fingerprint, outcome FROM chat_receipts WHERE branch_id = ? AND request_id = ?",
+            (branch_id, request_id),
+        )
+        row = await cursor.fetchone()
+        return (row["fingerprint"], json.loads(row["outcome"])) if row else None
+
+    async def save_chat_receipt(
+        self, branch_id: str, request_id: str, fingerprint: str, outcome: dict
+    ) -> None:
+        await self._conn.execute(
+            "INSERT INTO chat_receipts (branch_id, request_id, fingerprint, outcome) "
+            "VALUES (?, ?, ?, ?)",
+            (branch_id, request_id, fingerprint, json.dumps(outcome, ensure_ascii=False)),
+        )
+        await self._conn.commit()
+
     async def list_versions(self, branch_id: str) -> list[VersionInfo]:
         cursor = await self._conn.execute(
             "SELECT * FROM versions WHERE branch_id = ? ORDER BY seq ASC", (branch_id,)

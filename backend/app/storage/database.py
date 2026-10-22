@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS receipt_assets (
     UNIQUE(session_id, digest)
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_session ON receipt_assets(session_id);
+
+-- 已完成的对话请求回执；重试同一次发送时复用结果，随分支和旅行删除。
+CREATE TABLE IF NOT EXISTS chat_receipts (
+    branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    request_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    PRIMARY KEY(branch_id, request_id)
+);
 """
 
 

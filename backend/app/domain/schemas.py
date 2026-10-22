@@ -244,6 +244,9 @@ class ChatRequest(BaseModel):
     session_id: str = Field(min_length=1)
     branch_id: str | None = Field(default=None, description="不传则使用会话主分支")
     detail_level: DetailLevel | None = Field(default=None, description="本次生成的详细度档位")
+    request_id: str | None = Field(
+        default=None, min_length=8, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$"
+    )
 
 
 class ChatResponse(BaseModel):

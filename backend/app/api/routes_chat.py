@@ -93,6 +93,7 @@ async def chat(
         branch_id=branch_id,
         message=payload.message,
         detail_level=payload.detail_level,
+        request_id=payload.request_id,
     )
 
     # 首轮对话后自动命名（用户自己改过名字则不动）
@@ -152,6 +153,7 @@ async def chat_stream(
                 branch_id=branch_id,
                 message=message,
                 detail_level=payload.detail_level,
+                request_id=payload.request_id,
             ):
                 if item["event"] == "done":
                     outcome = item["data"]

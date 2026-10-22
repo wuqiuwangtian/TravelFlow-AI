@@ -186,6 +186,8 @@ async def create_branch(
         if values:
             assert graph is not None
             values["pending_journey"] = None
+            values["chat_request"] = None
+            values["completed_chat"] = None
             config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
             vid = await ChatService(graph=graph, store=store).record_version(
                 branch.id,

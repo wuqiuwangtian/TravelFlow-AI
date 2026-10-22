@@ -39,6 +39,8 @@ class PlanState(TypedDict, total=False):
     todos: list[TodoItem]
     itinerary: Itinerary | None
     pending_journey: JourneyClarification | None
+    chat_request: dict[str, str] | None
+    completed_chat: dict[str, str] | None
 
     # 状态机
     status: PlanStatus

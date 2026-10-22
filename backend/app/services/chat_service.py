@@ -9,12 +9,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.checkpoint import thread_config
+from app.core.errors import InvalidRequest
 from app.core.logging import get_logger
 from app.domain.clarification import clarification_prompt
 from app.domain.enums import DetailLevel, PlanStatus
@@ -75,6 +78,7 @@ class ChatService:
         branch_id: str,
         message: str,
         detail_level: DetailLevel | None = None,
+        request_id: str | None = None,
     ) -> ChatOutcome:
         async with branch_guard(branch_id):
             return await self._send(
@@ -82,6 +86,7 @@ class ChatService:
                 branch_id=branch_id,
                 message=message,
                 detail_level=detail_level,
+                request_id=request_id,
             )
 
     async def send_stream(
@@ -91,6 +96,7 @@ class ChatService:
         branch_id: str,
         message: str,
         detail_level: DetailLevel | None = None,
+        request_id: str | None = None,
     ) -> AsyncIterator[dict]:
         async with branch_guard(branch_id):
             async for item in self._send_stream(
@@ -98,6 +104,7 @@ class ChatService:
                 branch_id=branch_id,
                 message=message,
                 detail_level=detail_level,
+                request_id=request_id,
             ):
                 yield item
 
@@ -108,36 +115,33 @@ class ChatService:
         branch_id: str,
         message: str,
         detail_level: DetailLevel | None = None,
+        request_id: str | None = None,
     ) -> ChatOutcome:
         """把用户消息送入图，并把产出记录为一个新版本。"""
         # 显式声明「非流式」：节点据此选择结构化输出而非逐字流
         config = thread_config(branch_id, stream_llm=False)
         before = await self._graph.aget_state(config)
         previous_status = (before.values or {}).get("status")
+        receipt = self._request_receipt(request_id, message, detail_level)
+        replay = await self._replay(session_id, branch_id, config, before.values or {}, receipt)
+        if replay:
+            return replay
 
         # 只传「本次输入」：历史状态由 checkpointer 自动恢复，
         # messages 通过 add_messages reducer 追加。
-        payload: dict = {"messages": [HumanMessage(content=message)]}
+        payload: dict = {
+            "messages": [
+                HumanMessage(content=message, id="request-" + request_id if request_id else None)
+            ],
+            "chat_request": receipt,
+        }
         if detail_level is not None:
             payload["detail_level"] = detail_level
 
         values = await self._graph.ainvoke(payload, config)
         values = dict(values)
 
-        version_id = await self.record_version(
-            branch_id, values, config, previous_status=previous_status
-        )
-        await self._store.touch_session(session_id)
-
-        return ChatOutcome(
-            branch_id=branch_id,
-            status=str(values.get("status") or PlanStatus.COLLECTING),
-            reply=_last_ai_text(values) or "（无回复内容）",
-            plan_markdown=values.get("plan_markdown") or "",
-            version_id=version_id,
-            missing_fields=list(values.get("missing_fields") or []),
-            clarification=clarification_prompt(values.get("pending_journey")),
-        )
+        return await self._finish(session_id, branch_id, values, config, receipt, previous_status)
 
     async def _send_stream(
         self,
@@ -146,6 +150,7 @@ class ChatService:
         branch_id: str,
         message: str,
         detail_level: DetailLevel | None = None,
+        request_id: str | None = None,
     ) -> AsyncIterator[dict]:
         """流式版本：边执行边产出事件，最后给出与 ``send`` 相同的结果。
 
@@ -160,8 +165,18 @@ class ChatService:
         config = thread_config(branch_id, stream_llm=True)
         before = await self._graph.aget_state(config)
         previous_status = (before.values or {}).get("status")
+        receipt = self._request_receipt(request_id, message, detail_level)
+        replay = await self._replay(session_id, branch_id, config, before.values or {}, receipt)
+        if replay:
+            yield {"event": "done", "data": replay}
+            return
 
-        payload: dict = {"messages": [HumanMessage(content=message)]}
+        payload: dict = {
+            "messages": [
+                HumanMessage(content=message, id="request-" + request_id if request_id else None)
+            ],
+            "chat_request": receipt,
+        }
         if detail_level is not None:
             payload["detail_level"] = detail_level
 
@@ -177,11 +192,54 @@ class ChatService:
         snapshot = await self._graph.aget_state(config)
         values = dict(snapshot.values or {})
 
+        outcome = await self._finish(
+            session_id, branch_id, values, config, receipt, previous_status
+        )
+        yield {"event": "done", "data": outcome}
+
+    @staticmethod
+    def _request_receipt(request_id: str | None, message: str, level: DetailLevel | None):
+        if not request_id:
+            return None
+        fingerprint = hashlib.sha256(
+            json.dumps([message, level], ensure_ascii=False).encode()
+        ).hexdigest()
+        return {"id": request_id, "fingerprint": fingerprint}
+
+    async def _replay(self, session_id, branch_id, config, values, receipt):
+        completed = values.get("completed_chat")
+        if completed and not await self._store.get_chat_receipt(branch_id, completed["id"]):
+            # 先收妥上次已完成的结果，再允许新消息覆盖完成标记。
+            await self._finish(
+                session_id, branch_id, values, config, completed, values.get("status")
+            )
+        if not receipt:
+            return None
+        cached = await self._store.get_chat_receipt(branch_id, receipt["id"])
+        previous = (
+            cached[0]
+            if cached
+            else (
+                completed["fingerprint"] if completed and completed["id"] == receipt["id"] else None
+            )
+        )
+        if previous is not None and previous != receipt["fingerprint"]:
+            raise InvalidRequest("这次发送的内容已改变，请作为一条新消息发送。")
+        if cached:
+            await self._store.touch_session(session_id)
+            return ChatOutcome(**cached[1])
+        if previous is not None:
+            # 图已提交但回执尚未保存（如断流／退出），从该完成状态补齐结果，不能重跑记账。
+            return await self._finish(
+                session_id, branch_id, values, config, receipt, values.get("status")
+            )
+        return None
+
+    async def _finish(self, session_id, branch_id, values, config, receipt, previous_status):
         version_id = await self.record_version(
             branch_id, values, config, previous_status=previous_status
         )
         await self._store.touch_session(session_id)
-
         outcome = ChatOutcome(
             branch_id=branch_id,
             status=str(values.get("status") or PlanStatus.COLLECTING),
@@ -191,7 +249,11 @@ class ChatService:
             missing_fields=list(values.get("missing_fields") or []),
             clarification=clarification_prompt(values.get("pending_journey")),
         )
-        yield {"event": "done", "data": outcome}
+        if receipt:
+            await self._store.save_chat_receipt(
+                branch_id, receipt["id"], receipt["fingerprint"], asdict(outcome)
+            )
+        return outcome
 
     async def record_version(
         self,

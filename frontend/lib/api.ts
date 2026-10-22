@@ -334,6 +334,7 @@ export const api = {
     session_id: string;
     branch_id?: string;
     detail_level?: DetailLevel;
+    request_id?: string;
   }) =>
     request<ChatResponse>("/api/chat", {
       method: "POST",
@@ -395,6 +396,7 @@ export async function chatStream(
     session_id: string;
     branch_id?: string;
     detail_level?: DetailLevel;
+    request_id?: string;
   },
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
@@ -435,12 +437,14 @@ export async function chatStream(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
 
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
 
       // SSE 以空行分隔一条消息；用 \n\n 切分并保留不完整尾巴
       let index = buffer.indexOf("\n\n");
@@ -471,6 +475,18 @@ export async function chatStream(
               handlers.onNotice?.((data.message as string) ?? "");
             }
           } else if (parsed.event === "done") {
+            if (
+              typeof data.reply !== "string" ||
+              typeof data.branch_id !== "string" ||
+              typeof data.status !== "string"
+            ) {
+              throw new ApiError(
+                "STREAM_INTERRUPTED",
+                "回复未完整收到，输入已保留，请重试这条消息。",
+                0,
+              );
+            }
+            completed = true;
             handlers.onDone?.(data as unknown as ChatResponse);
           } else if (parsed.event === "error") {
             throw new ApiError(
@@ -483,6 +499,20 @@ export async function chatStream(
         index = buffer.indexOf("\n\n");
       }
     }
+    if (!completed) {
+      throw new ApiError(
+        "STREAM_INTERRUPTED",
+        "回复中断，结果可能已保存。可以重试这条消息，系统会核对上次结果。",
+        0,
+      );
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      "STREAM_INTERRUPTED",
+      "回复连接中断，输入已保留。可以重试这条消息，系统会核对上次结果。",
+      0,
+    );
   } finally {
     reader.releaseLock();
   }

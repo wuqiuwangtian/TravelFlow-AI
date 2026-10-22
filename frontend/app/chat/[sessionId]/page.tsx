@@ -16,7 +16,12 @@ import ReactMarkdown from "react-markdown";
 import { ItineraryPanel } from "@/components/itinerary-panel";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
-import { api, chatStream } from "@/lib/api";
+import { api, ApiError, chatStream } from "@/lib/api";
+import {
+  readChatDraft,
+  saveChatDraft,
+  type ChatAttempt,
+} from "@/lib/chat-draft";
 import type {
   BranchInfo,
   DetailLevel,
@@ -44,6 +49,12 @@ export default function ChatPage() {
     null,
   );
   const [input, setInput] = useState("");
+  const [draftBranch, setDraftBranch] = useState<string | null>(null);
+  const [failedRequest, setFailedRequest] = useState<ChatAttempt | null>(null);
+  const [sendFailure, setSendFailure] = useState<{
+    message: string;
+    code: string;
+  } | null>(null);
   const [clarification, setClarification] = useState<{
     kind: string;
     prompt: string;
@@ -107,6 +118,27 @@ export default function ChatPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!activeBranchId) return;
+    const draft = readChatDraft(activeBranchId);
+    setInput(draft.input);
+    setFailedRequest(draft.attempt);
+    setSendFailure(
+      draft.attempt
+        ? {
+            message:
+              "上次发送未确认完成，可以重试这条消息，系统会核对已保存结果。",
+            code: "UNCONFIRMED",
+          }
+        : null,
+    );
+    setDraftBranch(activeBranchId);
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    autoGrow();
+  }, [input, autoGrow]);
+
   // 切换分支时：载入该分支的对话历史与最新版本路书
   //
   // 注意「对话历史」这一步曾经缺失 —— 后端一直有存（LangGraph checkpoint），
@@ -156,16 +188,40 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
-  async function send(override?: string) {
+  async function send(override?: string, retry?: ChatAttempt) {
     const text = (override ?? input).trim();
-    if (!text || !activeBranchId || sending || itineraryBusy) return;
+    if (
+      !text ||
+      !activeBranchId ||
+      draftBranch !== activeBranchId ||
+      sending ||
+      itineraryBusy
+    )
+      return;
+    const attempt =
+      retry ??
+      (failedRequest?.message === text
+        ? failedRequest
+        : {
+            message: text,
+            request_id: crypto.randomUUID(),
+            detail_level: level,
+          });
+    const clearInput =
+      override === undefined || (retry && input.trim() === retry.message);
+    const remainingInput = clearInput ? "" : input;
+    if (!retry)
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setInput(remainingInput);
+    setSendFailure(null);
+    setFailedRequest(null);
+    saveChatDraft(activeBranchId, remainingInput, attempt);
 
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setInput("");
     // 发送后把输入框收回一行高度
-    requestAnimationFrame(() => {
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-    });
+    if (clearInput)
+      requestAnimationFrame(() => {
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+      });
     setSending(true);
     setProgress(null);
     setStreamingPlan("");
@@ -177,10 +233,9 @@ export default function ChatPage() {
       // 流式：进度与增量文本实时显示，避免 30~40 秒一直干等
       await chatStream(
         {
-          message: text,
+          ...attempt,
           session_id: sessionId,
           branch_id: activeBranchId,
-          detail_level: level,
         },
         {
           onProgress: (message) => setProgress(message),
@@ -203,15 +258,18 @@ export default function ChatPage() {
         ...prev,
         { role: "assistant", content: reply || "（无回复内容）" },
       ]);
+      saveChatDraft(activeBranchId, remainingInput, null);
       await load();
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: `⚠️ ${err instanceof Error ? err.message : "发送失败"}`,
-        },
-      ]);
+      const restored = clearInput ? text : input;
+      setInput(restored);
+      setFailedRequest(attempt);
+      setSendFailure({
+        message: err instanceof Error ? err.message : "发送失败，输入已保留。",
+        code: err instanceof ApiError ? err.code : "UNKNOWN",
+      });
+      saveChatDraft(activeBranchId, restored, attempt);
+      await load();
     } finally {
       setSending(false);
       setProgress(null);
@@ -383,6 +441,34 @@ export default function ChatPage() {
             </div>
 
             <div className="border-t border-slate-100 bg-slate-50 p-3">
+              {sendFailure && (
+                <div
+                  role="alert"
+                  aria-label="消息发送未完成"
+                  className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-6 text-red-800"
+                >
+                  <p>{sendFailure.message}</p>
+                  <div className="mt-1 flex flex-wrap gap-3">
+                    {failedRequest && (
+                      <button
+                        type="button"
+                        disabled={sending || itineraryBusy}
+                        className="underline disabled:opacity-40"
+                        onClick={() =>
+                          void send(failedRequest.message, failedRequest)
+                        }
+                      >
+                        重试这条消息
+                      </button>
+                    )}
+                    {/LLM_AUTH|CONFIG_INVALID/.test(sendFailure.code) && (
+                      <Link href="/settings" className="underline">
+                        检查模型设置
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
               {clarification && (
                 <div
                   role="status"
@@ -406,9 +492,16 @@ export default function ChatPage() {
                   rows={1}
                   className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                   placeholder="说出你的想法，或回复「确认」定稿…"
+                  aria-label="旅行对话输入"
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
+                    if (activeBranchId)
+                      saveChatDraft(
+                        activeBranchId,
+                        e.target.value,
+                        failedRequest,
+                      );
                     autoGrow();
                   }}
                   onKeyDown={(e) => {
@@ -422,12 +515,14 @@ export default function ChatPage() {
                       void send();
                     }
                   }}
-                  disabled={sending || itineraryBusy}
+                  disabled={
+                    sending || itineraryBusy || draftBranch !== activeBranchId
+                  }
                 />
                 <Button
                   variant="primary"
                   loading={sending}
-                  disabled={itineraryBusy}
+                  disabled={itineraryBusy || draftBranch !== activeBranchId}
                   onClick={() => void send()}
                 >
                   <Send className="h-3.5 w-3.5" />

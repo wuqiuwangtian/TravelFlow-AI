@@ -20,6 +20,7 @@ from app.agents.nodes.collector import make_collector_node
 from app.agents.nodes.planner import make_planner_node
 from app.agents.nodes.refiner import make_refiner_node
 from app.agents.nodes.researcher import make_researcher_node
+from app.agents.request_receipt import mark_completed_request
 from app.agents.routing import (
     route_after_collect,
     route_after_refine,
@@ -44,10 +45,10 @@ def build_graph(
     """
     workflow = StateGraph(PlanState)
 
-    workflow.add_node("collector", make_collector_node(llm, search))
+    workflow.add_node("collector", mark_completed_request(make_collector_node(llm, search)))
     workflow.add_node("researcher", make_researcher_node(search))
-    workflow.add_node("planner", make_planner_node(llm, settings))
-    workflow.add_node("refiner", make_refiner_node(llm, settings, search))
+    workflow.add_node("planner", mark_completed_request(make_planner_node(llm, settings)))
+    workflow.add_node("refiner", mark_completed_request(make_refiner_node(llm, settings, search)))
 
     # ★ 显式入口路由：按状态决定入口（旧项目固定 START → collector 的修复）
     workflow.add_conditional_edges(
