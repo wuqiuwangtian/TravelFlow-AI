@@ -33,11 +33,9 @@ from app.domain.itinerary import ClockTime, ReplanInput
 from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
-from app.services.adjustment_messages import handle_adjustment_message
-from app.services.booking_messages import handle_booking_message
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.journey_messages import prepare_journey_message
 from app.services.replan_service import explicit_day, set_replan_context
-from app.services.travel_messages import handle_travel_message
 
 logger = get_logger(__name__)
 
@@ -91,38 +89,30 @@ def make_refiner_node(
         revision = int(state.get("revision", 0))
 
         current = state.get("itinerary")
-        booking_action = handle_booking_message(user_text, current) if current else None
-        action = (
-            booking_action
-            or (handle_adjustment_message(user_text, current) if current else None)
-            or (handle_travel_message(user_text, current, requirements) if current else None)
-        )
-        if action:
-            updated_itinerary = action.itinerary or current
+        batch = prepare_journey_message(user_text, current, requirements) if current else None
+        if batch and not batch.refinement:
+            updated_itinerary = batch.itinerary or current
             assert updated_itinerary is not None
-            if booking_action and action.itinerary is not None and current:
-                changed_day = next(
-                    (
-                        d.day
-                        for d in updated_itinerary.days
-                        if d != next(old for old in current.days if old.day == d.day)
-                    ),
-                    None,
+            for changed_day in sorted(batch.booking_days):
+                updated_itinerary = await enrich_itinerary(
+                    updated_itinerary,
+                    requirements,
+                    settings or Settings(),
+                    day_number=changed_day,
                 )
-                if changed_day is not None:
-                    updated_itinerary = await enrich_itinerary(
-                        updated_itinerary,
-                        requirements,
-                        settings or Settings(),
-                        day_number=changed_day,
-                    )
             return {
                 "itinerary": updated_itinerary,
                 "plan_markdown": sync_markdown(plan_markdown, updated_itinerary, requirements),
-                "messages": [AIMessage(content=action.reply)],
-                "revision": revision + (1 if action.itinerary is not None else 0),
+                "messages": [AIMessage(content=batch.reply)],
+                "revision": revision + (1 if batch.itinerary is not None else 0),
                 "updated_at": datetime.now(),
             }
+        if batch:
+            # 多项操作只在内存草稿中执行，模型调整成功后随整份行程一起提交。
+            current = batch.itinerary
+            user_text = batch.refinement
+            assert current is not None
+            plan_markdown = sync_markdown(plan_markdown, current, requirements)
 
         # ---- 1. 意图判定 ----
         verdict = await llm.structured(
@@ -138,6 +128,16 @@ def make_refiner_node(
             "意图判定",
             extra={"extra_fields": {"intent": verdict.intent, "summary": verdict.summary[:40]}},
         )
+
+        if batch and verdict.intent != "modify":
+            return {
+                "messages": [
+                    AIMessage(
+                        content="本次没有保存任何操作：后续调整还不明确，请补充要改哪一天、哪些安排。"
+                    )
+                ],
+                "updated_at": datetime.now(),
+            }
 
         if verdict.intent == "approve":
             return {
@@ -171,7 +171,9 @@ def make_refiner_node(
                     return {
                         "messages": [
                             AIMessage(
-                                content="请说明现在是旅程第几天，例如「第2天14:00，我在景山，18:00前结束」。"
+                                content=("本次没有保存任何操作。" if batch else "")
+                                + "请说明现在是旅程第几天，"
+                                "例如「第2天14:00，我在景山，18:00前结束」。"
                             )
                         ],
                         "updated_at": datetime.now(),
@@ -324,7 +326,7 @@ def make_refiner_node(
             "research": research,
             "status": PlanStatus.REVIEWING,
             "revision": revision + 1,
-            "messages": [AIMessage(content=reply)],
+            "messages": [AIMessage(content=(batch.reply + "\n" if batch else "") + reply)],
             "updated_at": datetime.now(),
         }
 
