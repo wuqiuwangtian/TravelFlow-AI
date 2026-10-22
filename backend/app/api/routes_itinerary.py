@@ -18,10 +18,12 @@ from app.domain.enums import PlanStatus
 from app.domain.itinerary import (
     ActivityProgress,
     ActivityUpdate,
+    Booking,
     DayPlan,
     ExpenseCreate,
     ExpenseInput,
     Itinerary,
+    ReplanInput,
     ScheduledActivity,
     TravelMode,
 )
@@ -33,6 +35,7 @@ from app.maps.assets import map_asset
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.replan_service import preserve_replan_scope, record_booking, set_replan_context
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 from app.storage.session_store import SessionStore
 
@@ -212,6 +215,14 @@ async def update_activity(
         old = day.activities[index]
         activity = ScheduledActivity(id=activity_id, **payload.activity.model_dump())
         activity.progress, activity.progress_updated_at = old.progress, old.progress_updated_at
+        activity.booking = old.booking
+        if old.booking and (
+            activity.place_name,
+            activity.city,
+            activity.start_time,
+            activity.duration_minutes,
+        ) != (old.place_name, old.city, old.start_time, old.duration_minutes):
+            raise ConflictError("此站已记录预约；请先更正或清除预约记录，再修改地点和时间。")
         activity.time_is_suggested = (
             old.time_is_suggested
             if activity.start_time == old.start_time
@@ -391,3 +402,60 @@ async def delete_expense(
         detail = await _editable(store, version_id)
         remove_expense(_itinerary(detail), expense_id)
         return await _save_revision(store, graph, detail, "移除误记消费", keep_plan_status=True)
+
+
+class BookingUpdate(BaseModel):
+    booking: Booking | None
+
+
+@router.patch(
+    "/versions/{version_id}/days/{number}/activities/{activity_id}/booking",
+    response_model=VersionDetail,
+    summary="记录或清除用户已有的预约约束",
+)
+async def update_booking(
+    version_id: str,
+    number: int,
+    activity_id: str,
+    payload: BookingUpdate,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+    settings: Settings = Depends(get_settings),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        itinerary = _itinerary(detail)
+        record_booking(itinerary, number, activity_id, payload.booking)
+        detail.itinerary = await enrich_itinerary(
+            itinerary, detail.requirements or Requirements(), settings, day_number=number
+        )
+        summary = "记录已有预约" if payload.booking else "清除预约约束记录（未操作外部预约）"
+        return await _save_revision(store, graph, detail, summary, keep_plan_status=True)
+
+
+@router.post(
+    "/versions/{version_id}/days/{number}/replan",
+    response_model=VersionDetail,
+    summary="从当前地点按剩余时间重排后续，保留已预约项目",
+)
+async def replan_day(
+    version_id: str,
+    number: int,
+    payload: ReplanInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+    settings: Settings = Depends(get_settings),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        itinerary = _itinerary(detail)
+        set_replan_context(itinerary, number, payload)
+        preserve_replan_scope(itinerary.model_copy(deep=True), itinerary, number)
+        detail.itinerary = await enrich_itinerary(
+            itinerary, detail.requirements or Requirements(), settings, day_number=number
+        )
+        return await _save_revision(
+            store, graph, detail, f"从{payload.time}调整第{number}天后续安排"
+        )

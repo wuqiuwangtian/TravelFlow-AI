@@ -140,7 +140,17 @@ def schedule_day(day: DayPlan) -> None:
         if day.activities and day.activities[0].start_time
         else 9 * 60
     )
+    after_origin = False
     for index, activity in enumerate(day.activities):
+        if day.replan_context and not after_origin:
+            if activity.id == day.replan_context.activity_id:
+                cursor = _minutes(day.replan_context.time)
+                after_origin = True
+            continue  # 出发点及之前的记录不重新排时刻。
+        if activity.booking:
+            activity.start_time = activity.booking.start_time
+            activity.duration_minutes = activity.booking.duration_minutes
+            activity.time_is_suggested = False
         if index and index - 1 < len(day.legs):
             leg = day.legs[index - 1]
             if leg.duration_seconds is not None:
@@ -149,11 +159,10 @@ def schedule_day(day: DayPlan) -> None:
             requested = _minutes(activity.start_time)
             if requested < cursor and not activity.time_is_suggested:
                 day.warnings.append(f"「{activity.title}」固定时间与前段路程冲突，可通过对话调整。")
-            cursor = (
-                requested
-                if not activity.time_is_suggested or activity.progress != "not_started"
-                else max(cursor, requested)
-            )
+            if not activity.time_is_suggested or activity.progress != "not_started":
+                cursor = requested
+            elif not after_origin:
+                cursor = max(cursor, requested)
         if cursor >= 24 * 60:
             day.warnings.append("当天安排将跨过午夜，建议减少活动或增加一天。")
         activity.start_time = f"{min(cursor, 1439) // 60:02d}:{min(cursor, 1439) % 60:02d}"
@@ -165,6 +174,13 @@ def schedule_day(day: DayPlan) -> None:
                 "free_time": 60,
             }.get(activity.kind, 90)
         cursor += activity.duration_minutes
+        if day.replan_context and activity.id == day.replan_context.activity_id:
+            cursor = _minutes(day.replan_context.time)
+            after_origin = True
+    if day.replan_context:
+        day.schedule_notes.append(
+            f"从当前地点 {day.replan_context.time} 出发，前面的活动记录保持原样。"
+        )
 
 
 def summarise_day(day: DayPlan, requirements: Requirements) -> None:
@@ -300,9 +316,20 @@ async def check_day(
     day: DayPlan, requirements: Requirements, provider: MapProvider | None, *, copy_day: bool = True
 ) -> DayPlan:
     day = day.model_copy(deep=True) if copy_day else day
+    old_legs = {(leg.from_id, leg.to_id): leg.model_copy(deep=True) for leg in day.legs}
+    anchor = next(
+        (
+            i
+            for i, a in enumerate(day.activities)
+            if day.replan_context and a.id == day.replan_context.activity_id
+        ),
+        -1,
+    )
     day.warnings, day.legs = [], []
     if provider:
-        for activity in day.activities:
+        for index, activity in enumerate(day.activities):
+            if index < anchor:
+                continue
             if activity.place:
                 continue
             if not activity.place_name or activity.kind == "free_time":
@@ -334,9 +361,14 @@ async def check_day(
     else:
         day.checked_at = None
         day.warnings.append("地图暂未配置，建议行程仍可使用。")
-    for origin, destination in zip(day.activities, day.activities[1:], strict=False):
+    for index, (origin, destination) in enumerate(
+        zip(day.activities, day.activities[1:], strict=False), 1
+    ):
         mode = _mode(day, origin, destination)
         leg = _planned_leg(origin, destination, mode)
+        if index <= anchor:
+            day.legs.append(old_legs.get((origin.id, destination.id), leg))
+            continue
         if (
             mode not in {"rail", "flight", "transfer"}
             and provider
@@ -399,15 +431,39 @@ async def enrich_itinerary(
                 return day
             async with semaphore:
                 working = day.model_copy(deep=True)
+
+                async def balanced(maps: MapProvider | None) -> DayPlan:
+                    from app.services.replan_service import context_warnings, optional_to_remove
+
+                    await check_day(working, requirements, maps, copy_day=False)
+                    for _ in range(80):
+                        remove = optional_to_remove(working)
+                        if remove is None:
+                            break
+                        removed = working.activities.pop(remove)
+                        assert working.replan_context is not None
+                        working.replan_context.omitted_titles = list(
+                            dict.fromkeys([*working.replan_context.omitted_titles, removed.title])
+                        )[-40:]
+                        await check_day(working, requirements, maps, copy_day=False)
+                    working.warnings.extend(context_warnings(working))
+                    return working
+
                 try:
                     async with asyncio.timeout(35):
-                        return await check_day(working, requirements, provider, copy_day=False)
+                        return await balanced(provider)
                 except TimeoutError:
-                    fallback = await check_day(working, requirements, None)
-                    fallback.warnings = ["地点服务响应较慢，已保留建议时间轴；稍后可重新校验。"]
+                    fallback = await balanced(None)
+                    fallback.warnings.insert(
+                        0, "地点服务响应较慢，已保留建议时间轴；稍后可重新校验。"
+                    )
                     return fallback
 
         result.days = list(await asyncio.gather(*(checked(day) for day in result.days)))
+    ids = {a.id for d in result.days for a in d.activities}
+    for entry in result.expenses:
+        if entry.activity_id not in ids:
+            entry.activity_id = None
     result.map_status = (
         "unconfigured"
         if not provider
@@ -458,6 +514,11 @@ def render_days(itinerary: Itinerary) -> str:
                 lines.append(f"   地点：{_text(name)}")
             if activity.notes:
                 lines.append(f"   {_text(activity.notes)}")
+            if activity.booking:
+                lines.append(
+                    f"   已记录预约：{activity.booking.start_time}，"
+                    f"停留 {activity.booking.duration_minutes} 分钟。"
+                )
             if index <= len(day.legs):
                 leg = day.legs[index - 1]
                 label = MODE_LABELS[leg.mode]
@@ -471,6 +532,12 @@ def render_days(itinerary: Itinerary) -> str:
             f"其中估算 {day.estimated_cost:g} 元；未计入 {day.unknown_cost_count} 项。"
         )
         lines.extend(f"> {_text(note)}" for note in [*day.schedule_notes, *day.warnings])
+        if day.replan_context and day.replan_context.omitted_titles:
+            lines.append(
+                "> 为满足时间约束，本次移出后续安排："
+                + "、".join(_text(title) for title in day.replan_context.omitted_titles)
+                + "。原安排保存在历史版本中。"
+            )
         lines.append("")
     return "\n".join(lines)
 

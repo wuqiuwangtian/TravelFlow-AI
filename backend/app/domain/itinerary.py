@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -13,6 +13,7 @@ CostBasis = Literal["per_person", "total", "unknown"]
 CostSource = Literal["reference", "estimate", "manual", "unknown"]
 ActivityProgress = Literal["not_started", "in_progress", "completed", "skipped"]
 ExpenseCategory = Literal["transport", "lodging", "meal", "ticket", "shopping", "other"]
+ClockTime = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
 
 
 class Place(BaseModel):
@@ -54,6 +55,36 @@ class Activity(BaseModel):
     source_indices: list[int] = Field(default_factory=list, max_length=20)
 
 
+class Booking(BaseModel):
+    start_time: ClockTime
+    duration_minutes: int = Field(ge=1, le=1440)
+    notes: str = Field(default="", max_length=500)
+
+
+class ReplanContext(BaseModel):
+    activity_id: str
+    time: ClockTime
+    end_time: ClockTime | None = None
+    end_activity_id: str | None = None
+    omitted_titles: list[str] = Field(default_factory=list, max_length=40)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    @model_validator(mode="after")
+    def valid_window(self) -> ReplanContext:
+        if self.end_time is not None and self.end_time <= self.time:
+            raise ValueError("结束时间需晚于出发时间；跨日行程请分别安排")
+        return self
+
+
+class ReplanInput(BaseModel):
+    activity_id: str | None = Field(default=None, max_length=100)
+    location_name: str = Field(default="", max_length=100)
+    city: str = Field(default="", max_length=50)
+    time: ClockTime
+    end_time: ClockTime | None = None
+    end_activity_id: str | None = Field(default=None, max_length=100)
+
+
 class ScheduledActivity(Activity):
     id: str
     place: Place | None = None
@@ -63,6 +94,9 @@ class ScheduledActivity(Activity):
     time_is_suggested: bool = True
     progress: ActivityProgress = "not_started"
     progress_updated_at: datetime | None = None
+    booking: Booking | None = None
+    is_context_anchor: bool = False
+    duration_minutes: int | None = Field(default=None, ge=0, le=1440)
 
 
 class ExpenseInput(BaseModel):
@@ -118,7 +152,7 @@ class RouteLeg(BaseModel):
 class DayPlan(BaseModel):
     day: int = Field(ge=1, le=60)
     title: str = ""
-    activities: list[ScheduledActivity] = Field(default_factory=list, max_length=20)
+    activities: list[ScheduledActivity] = Field(default_factory=list, max_length=80)
     travel_mode: TravelMode = "auto"
     legs: list[RouteLeg] = Field(default_factory=list)
     checked_at: datetime | None = None
@@ -129,6 +163,7 @@ class DayPlan(BaseModel):
     unknown_cost_count: int = 0
     estimated_cost: float = 0
     schedule_notes: list[str] = Field(default_factory=list)
+    replan_context: ReplanContext | None = None
 
 
 class Itinerary(BaseModel):

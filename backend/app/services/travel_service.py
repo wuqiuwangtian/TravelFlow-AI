@@ -82,7 +82,12 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     """模型只能改未来安排；旅中历史由用户的明确操作修改。"""
     current.expenses = [entry.model_copy(deep=True) for entry in previous.expenses]
     for old_day in previous.days:
-        locked = [a for a in old_day.activities if a.progress != "not_started"]
+        existing_day = next((d for d in current.days if d.day == old_day.day), None)
+        if existing_day:
+            existing_day.replan_context = (
+                old_day.replan_context.model_copy(deep=True) if old_day.replan_context else None
+            )
+        locked = [a for a in old_day.activities if a.progress != "not_started" or a.booking]
         if not locked:
             continue
         day = next((d for d in current.days if d.day == old_day.day), None)

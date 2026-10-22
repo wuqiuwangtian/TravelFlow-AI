@@ -9,6 +9,7 @@ from app.domain.itinerary import DayDraft, Itinerary, ScheduledActivity
 from app.domain.models import Requirements, TodoItem
 from app.llm.base import ChatMessage, LLMProvider
 from app.services.itinerary_service import build_itinerary, enrich_itinerary, sync_markdown
+from app.services.replan_service import preserve_replan_scope
 from app.services.travel_service import preserve_travel_records
 
 logger = get_logger(__name__)
@@ -65,6 +66,7 @@ async def prepare_itinerary(
     settings: Settings,
     source_count: int,
     previous: Itinerary | None = None,
+    scope_day: int | None = None,
 ) -> tuple[Itinerary | None, str]:
     if not details.days:
         emit_notice("未提取到每日行程，路书已保留；可点击「整理每日行程」重试。")
@@ -107,8 +109,10 @@ async def prepare_itinerary(
                     activity.cost_source = "estimate"
     if previous:
         preserve_travel_records(previous, itinerary)
+        if scope_day is not None:
+            preserve_replan_scope(previous, itinerary, scope_day)
     emit_progress("routes", "正在匹配地点并校验每日路线…")
-    itinerary = await enrich_itinerary(itinerary, requirements, settings)
+    itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=scope_day)
     return itinerary, sync_markdown(markdown, itinerary, requirements)
 
 
