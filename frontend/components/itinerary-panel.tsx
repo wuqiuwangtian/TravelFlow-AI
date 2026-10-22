@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Button, Card, ErrorBanner } from "@/components/ui";
 import { TravelLedger } from "@/components/travel-ledger";
+import { OnTripControls } from "@/components/ontrip-controls";
 import { api, ApiError } from "@/lib/api";
 import type {
   Activity,
@@ -293,15 +294,49 @@ export function ItineraryPanel({
               selected={active?.id}
               onSelect={setSelected}
             />
+            {day.replan_context && (
+              <div
+                role="status"
+                aria-label="途中调整说明"
+                className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-4 text-xs leading-6 text-teal-800"
+              >
+                <p>
+                  从
+                  {day.activities.find(
+                    (a) => a.id === day.replan_context?.activity_id,
+                  )?.place_name || "所选地点"}{" "}
+                  {day.replan_context.time} 出发
+                  {day.replan_context.end_time
+                    ? `，${day.replan_context.end_time}前结束`
+                    : "，继续后续安排"}
+                  。预约与前段记录已保留。
+                </p>
+                {day.replan_context.omitted_titles.length > 0 && (
+                  <p>
+                    本次精简：{day.replan_context.omitted_titles.join("、")}
+                    。原安排可在版本历史中查看。
+                  </p>
+                )}
+                {day.warnings
+                  .filter((w) => w.includes("交通耗时尚未查到"))
+                  .map((w) => (
+                    <p key={w} className="text-amber-800">
+                      {w}
+                    </p>
+                  ))}
+              </div>
+            )}
             {day.warnings
-              .filter((warning) => /冲突|跨日|超过.*24|跨越午夜/.test(warning))
+              .filter((warning) =>
+                /冲突|跨日|超过.*24|跨越午夜|前段预约/.test(warning),
+              )
               .map((warning, index) => (
                 <p
                   key={index}
                   role="status"
                   className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800"
                 >
-                  {warning}，可以直接告诉我调整这一天。
+                  {warning}
                 </p>
               ))}
             <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
@@ -348,21 +383,22 @@ export function ItineraryPanel({
                                   ? ` · 停留约 ${activity.duration_minutes} 分钟`
                                   : ""}
                               </p>
-                              {activity.cost !== null && (
-                                <p className="mt-1.5 text-[11px] text-slate-500">
-                                  {["estimate", "manual"].includes(
-                                    activity.cost_source,
-                                  )
-                                    ? "预计 "
-                                    : ""}
-                                  ¥{activity.cost}
-                                  {activity.cost_basis === "per_person"
-                                    ? " / 人"
-                                    : activity.cost_basis === "total"
-                                      ? " / 全团"
-                                      : "（口径待核实）"}
-                                </p>
-                              )}
+                              {activity.cost !== null &&
+                                !activity.is_context_anchor && (
+                                  <p className="mt-1.5 text-[11px] text-slate-500">
+                                    {["estimate", "manual"].includes(
+                                      activity.cost_source,
+                                    )
+                                      ? "预计 "
+                                      : ""}
+                                    ¥{activity.cost}
+                                    {activity.cost_basis === "per_person"
+                                      ? " / 人"
+                                      : activity.cost_basis === "total"
+                                        ? " / 全团"
+                                        : "（口径待核实）"}
+                                  </p>
+                                )}
                             </div>
                             <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-teal-600">
                               {activity.progress &&
@@ -371,13 +407,19 @@ export function ItineraryPanel({
                                 : index + 1}
                             </span>
                           </div>
+                          {activity.booking && (
+                            <p className="mt-2 text-[11px] text-amber-700">
+                              已有预约 {activity.booking.start_time} · 停留{" "}
+                              {activity.booking.duration_minutes} 分钟
+                            </p>
+                          )}
                         </button>
                         {activity.notes && (
                           <p className="px-2 pt-2 text-xs leading-relaxed text-slate-500">
                             {activity.notes}
                           </p>
                         )}
-                        {advanced && (
+                        {advanced && !activity.is_context_anchor && (
                           <div className="py-2">
                             <Button
                               size="sm"
@@ -517,6 +559,14 @@ export function ItineraryPanel({
                           ))}
                       </div>
                     </div>
+                    <OnTripControls
+                      key={`${detail.version.id}:${active.id}`}
+                      day={day}
+                      active={active}
+                      versionId={detail.version.id}
+                      disabled={!editable || disabled || busy}
+                      onCommit={mutate}
+                    />
                   </div>
                 )}
                 <div className="rounded-xl bg-slate-50 p-4">

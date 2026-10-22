@@ -174,6 +174,30 @@ export interface ScheduledActivity extends Activity {
   time_is_suggested: boolean;
   progress: ActivityProgress;
   progress_updated_at: string | null;
+  booking: Booking | null;
+  is_context_anchor: boolean;
+}
+
+export interface Booking {
+  start_time: string;
+  duration_minutes: number;
+  notes: string;
+}
+export interface ReplanContext {
+  activity_id: string;
+  time: string;
+  end_time: string | null;
+  end_activity_id: string | null;
+  omitted_titles: string[];
+  updated_at: string;
+}
+export interface ReplanInput {
+  activity_id?: string;
+  location_name?: string;
+  city?: string;
+  time: string;
+  end_time: string | null;
+  end_activity_id: string | null;
 }
 
 export type ActivityProgress =
@@ -231,6 +255,7 @@ export interface DayPlan {
   unknown_cost_count: number;
   estimated_cost: number;
   schedule_notes: string[];
+  replan_context: ReplanContext | null;
 }
 
 export interface Itinerary {

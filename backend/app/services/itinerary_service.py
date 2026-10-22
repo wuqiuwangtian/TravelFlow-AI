@@ -155,6 +155,7 @@ def schedule_day(day: DayPlan) -> None:
             leg = day.legs[index - 1]
             if leg.duration_seconds is not None:
                 cursor += math.ceil(leg.duration_seconds / 60)
+        earliest_arrival = cursor
         if activity.start_time:
             requested = _minutes(activity.start_time)
             if requested < cursor and not activity.time_is_suggested:
@@ -173,10 +174,9 @@ def schedule_day(day: DayPlan) -> None:
                 "meal": 60,
                 "free_time": 60,
             }.get(activity.kind, 90)
+        if after_origin:
+            cursor = max(cursor, earliest_arrival)
         cursor += activity.duration_minutes
-        if day.replan_context and activity.id == day.replan_context.activity_id:
-            cursor = _minutes(day.replan_context.time)
-            after_origin = True
     if day.replan_context:
         day.schedule_notes.append(
             f"从当前地点 {day.replan_context.time} 出发，前面的活动记录保持原样。"
@@ -501,8 +501,10 @@ def render_days(itinerary: Itinerary) -> str:
                 if activity.cost is None
                 else f"{prefix}{activity.cost:g} 元（{basis}）"
             )
+            time_label = "预约" if activity.booking else "建议"
             lines.append(
-                f"{index}. **建议 {time} · {_text(activity.title)}**{duration}；{cost}。{refs}"
+                f"{index}. **{time_label} {time} · {_text(activity.title)}**"
+                + ("（出发位置）" if activity.is_context_anchor else f"{duration}；{cost}。{refs}")
             )
             if activity.progress != "not_started":
                 label = {"in_progress": "进行中", "completed": "已完成", "skipped": "已跳过"}[
@@ -519,6 +521,8 @@ def render_days(itinerary: Itinerary) -> str:
                     f"   已记录预约：{activity.booking.start_time}，"
                     f"停留 {activity.booking.duration_minutes} 分钟。"
                 )
+                if activity.booking.notes:
+                    lines.append(f"   预约备注：{_text(activity.booking.notes)}")
             if index <= len(day.legs):
                 leg = day.legs[index - 1]
                 label = MODE_LABELS[leg.mode]

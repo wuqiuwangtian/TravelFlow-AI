@@ -13,6 +13,7 @@ from app.domain.itinerary import (
     ReplanInput,
     ScheduledActivity,
 )
+from app.maps.matching import normal_name
 
 
 def minutes(time: str) -> int:
@@ -48,12 +49,18 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     if data.activity_id and anchor is None:
         raise InvalidRequest("出发地点不在当天行程中")
     if anchor is None and data.location_name.strip():
+
+        def core(name: str) -> str:
+            return re.sub(r"(?:风景名胜区|风景区|景区|博物院|公园)$", "", normal_name(name))
+
         names = [
             a
             for a in day.activities
             if data.location_name in (a.title, a.place_name)
             or a.place
             and a.place.name == data.location_name
+            or len(core(data.location_name)) >= 2
+            and core(data.location_name) == core(a.place_name)
         ]
         if len(names) == 1:
             anchor = names[0]
@@ -67,6 +74,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
             city=data.city,
             is_context_anchor=True,
             duration_minutes=0,
+            cost=0,
+            cost_basis="total",
+            cost_source="manual",
             start_time=data.time,
             progress="in_progress",
             progress_updated_at=datetime.now(),
@@ -74,12 +84,45 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
         )
         # 保留已经记录的历史；新的出发位置位于之后。
         prefix = [
-            a for a in day.activities if a.progress != "not_started" and not a.is_context_anchor
+            a
+            for a in day.activities
+            if a.progress != "not_started"
+            and (not a.is_context_anchor or a.progress in {"completed", "skipped"})
         ]
         rest = [
             a for a in day.activities if a.progress == "not_started" and not a.is_context_anchor
         ]
         day.activities = prefix + [anchor] + rest
+    elif (
+        anchor.booking
+        and anchor.progress == "not_started"
+        and minutes(data.time)
+        < minutes(anchor.booking.start_time) + anchor.booking.duration_minutes
+    ):
+        # 人已到预约地点不代表预约已结束；另设零停留起点，原预约仍在后续约束中。
+        booked = anchor
+        day.activities = [
+            a
+            for a in day.activities
+            if not a.is_context_anchor or a.progress in {"completed", "skipped"}
+        ]
+        index = next(i for i, a in enumerate(day.activities) if a.id == booked.id)
+        anchor = ScheduledActivity(
+            id="position-" + uuid4().hex[:12],
+            title=f"当前位置：{booked.place_name or booked.title}",
+            place_name=booked.place_name,
+            city=booked.city,
+            place=booked.place,
+            place_status=booked.place_status,
+            start_time=data.time,
+            duration_minutes=0,
+            cost=0,
+            cost_basis="total",
+            is_context_anchor=True,
+            progress="in_progress",
+            notes="出发位置，原预约仍作为后续固定安排保留。",
+        )
+        day.activities.insert(index, anchor)
     if data.end_activity_id and not any(a.id == data.end_activity_id for a in day.activities):
         raise InvalidRequest("结束地点不在当天行程中")
     if data.end_activity_id == anchor.id:
@@ -106,7 +149,10 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
     updated.replan_context = context.model_copy(deep=True) if context else None
     if context:
         index = next(i for i, a in enumerate(old_day.activities) if a.id == context.activity_id)
-        prefix = old_day.activities[: index + 1]
+        completed_after = [
+            a for a in old_day.activities[index + 1 :] if a.progress != "not_started"
+        ]
+        prefix = [*old_day.activities[:index], *completed_after, old_day.activities[index]]
         prefix_ids = {a.id for a in prefix}
         prefix_names = {(a.title, a.place_name) for a in prefix}
         remaining = [
@@ -119,7 +165,9 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
         ]
         # 模型遗漏的预约与结束地点由程序恢复。
         for old in old_day.activities[index + 1 :]:
-            if old.booking or old.id == context.end_activity_id or old.progress != "not_started":
+            if old.id in prefix_ids:
+                continue
+            if old.booking or old.id == context.end_activity_id:
                 found = next(
                     (
                         i
@@ -188,6 +236,15 @@ def context_warnings(day: DayPlan) -> list[str]:
     start = next((i for i, a in enumerate(day.activities) if a.id == context.activity_id), 0)
     cursor = minutes(context.time)
     warnings = []
+    for earlier in day.activities[: start + 1]:
+        if (
+            earlier.booking
+            and earlier.progress == "not_started"
+            and earlier.booking.start_time < context.time
+        ):
+            warnings.append(
+                f"前段预约「{earlier.title}」尚未记录完成，已过原预约时刻，请核对实际情况。"
+            )
     unknown = False
     for index in range(start + 1, len(day.activities)):
         activity = day.activities[index]

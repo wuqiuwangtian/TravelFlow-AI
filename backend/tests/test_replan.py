@@ -101,6 +101,7 @@ async def test_impossible_reservation_is_preserved_and_conflict_is_explicit():
     assert result.days[0].activities[-1].id == "end"
     assert any("预约冲突" in w for w in result.days[0].warnings)
     assert any("时间冲突" in w for w in result.days[0].warnings)
+    assert result.days[0].activities[-1].start_time == "17:30"
 
 
 async def test_new_position_has_zero_dwell_and_unknown_travel_is_disclosed():
@@ -197,3 +198,145 @@ async def test_replan_endpoints_version_history_and_manual_edit_guard(environmen
         json={"activity_id": old_day["activities"][0]["id"], "time": "18:00", "end_time": "14:00"},
     )
     assert invalid.status_code == 400
+
+
+async def test_chat_ontrip_update_is_scoped_and_preserves_booked_stop(environment, monkeypatch):
+    from conftest import FakeLLM
+
+    from app.agents.nodes.refiner import OnTripUpdate, RefineIntent, RevisionOutput
+
+    client, _, graph, _ = environment
+    sid, bid, before = await generate(client)
+    original_call = FakeLLM.structured
+
+    async def model(self, messages, schema, **kwargs):
+        if schema is RefineIntent:
+            return RefineIntent(
+                intent="modify",
+                on_trip=OnTripUpdate(day=2, location_name="故宫", time="14:00", end_time="18:00"),
+            )
+        if schema is RevisionOutput:
+            return RevisionOutput(
+                markdown="模型错误改动了其他章节",
+                days=[
+                    DayDraft(
+                        day=2,
+                        activities=[
+                            {
+                                "title": "超长可选活动",
+                                "place_name": "新公园",
+                                "city": "北京",
+                                "duration_minutes": 300,
+                            }
+                        ],
+                    )
+                ],
+            )
+        return await original_call(self, messages, schema, **kwargs)
+
+    monkeypatch.setattr(FakeLLM, "structured", model)
+    booked = await client.post(
+        "/api/chat",
+        json={"session_id": sid, "branch_id": bid, "message": "第2天第2站已预约16:00，停留60分钟"},
+    )
+    assert booked.status_code == 200, booked.text
+    assert "16:00" in booked.json()["reply"]
+    response = await client.post(
+        "/api/chat",
+        json={
+            "session_id": sid,
+            "branch_id": bid,
+            "message": "第2天14:00，我在故宫，18:00前结束，调整后续行程",
+        },
+    )
+    assert response.status_code == 200, response.text
+    after = (await client.get(f"/api/versions/{response.json()['version_id']}")).json()
+    assert after["itinerary"]["days"][0] == before["itinerary"]["days"][0]
+    assert after["itinerary"]["days"][2] == before["itinerary"]["days"][2]
+    day = after["itinerary"]["days"][1]
+    assert len(day["activities"]) == 2
+    assert not any(a["is_context_anchor"] for a in day["activities"])
+    assert day["activities"][1]["booking"]["start_time"] == "16:00"
+    assert day["replan_context"]["omitted_titles"] == ["超长可选活动"]
+    assert "模型错误改动了其他章节" not in after["markdown"]
+
+
+async def test_booking_chat_needs_no_model_and_can_clear_record(environment, monkeypatch):
+    from conftest import FakeLLM
+
+    client, _, _, _ = environment
+    sid, bid, before = await generate(client)
+
+    async def offline(*args, **kwargs):
+        raise AssertionError("记录预约不应调用模型")
+
+    monkeypatch.setattr(FakeLLM, "structured", offline)
+    for text in ["第2天第2站已预约16:00，停留60分钟", "清除预约记录，第2天第2站"]:
+        response = await client.post(
+            "/api/chat", json={"session_id": sid, "branch_id": bid, "message": text}
+        )
+        assert response.status_code == 200, response.text
+    after = (await client.get(f"/api/versions/{response.json()['version_id']}")).json()
+    assert after["itinerary"]["days"][1]["activities"][1]["booking"] is None
+    assert after["itinerary"]["days"][0] == before["itinerary"]["days"][0]
+    assert "外部预约没有取消" in response.json()["reply"]
+
+
+async def test_research_failure_uses_existing_sources_for_revision(environment, monkeypatch):
+    from conftest import FakeSearch
+
+    from app.core.errors import SearchUnavailable
+
+    client, _, _, _ = environment
+    sid, bid, before = await generate(client)
+
+    async def offline(*args, **kwargs):
+        raise SearchUnavailable("测试离线")
+
+    monkeypatch.setattr(FakeSearch, "search", offline)
+    result = await client.post(
+        "/api/chat", json={"session_id": sid, "branch_id": bid, "message": "换一家酒店"}
+    )
+    assert result.status_code == 200, result.text
+    latest = (await client.get(f"/api/versions/{result.json()['version_id']}")).json()
+    assert len(latest["citations"]) == len(before["citations"])
+
+
+async def test_starting_at_booked_place_does_not_discard_future_booking():
+    plan = itinerary()
+    record_booking(plan, 1, "booking", Booking(start_time="16:00", duration_minutes=60))
+    set_replan_context(
+        plan,
+        1,
+        ReplanInput(activity_id="booking", time="14:00", end_time="18:00", end_activity_id="end"),
+    )
+    result = await enrich_itinerary(plan, Requirements(), Settings(_env_file=None), day_number=1)
+    day = result.days[0]
+    context_index = next(
+        i for i, a in enumerate(day.activities) if a.id == day.replan_context.activity_id
+    )
+    booked_index = next(i for i, a in enumerate(day.activities) if a.id == "booking")
+    assert context_index < booked_index
+    assert day.activities[booked_index].booking.start_time == "16:00"
+    assert day.activities[booked_index].start_time == "16:00"
+
+
+async def test_skipped_booking_stays_in_history_without_requiring_a_visit():
+    from app.services.replan_service import preserve_replan_scope
+
+    plan = itinerary()
+    record_booking(plan, 1, "booking", Booking(start_time="16:00", duration_minutes=60))
+    plan.days[0].activities[3].progress = "skipped"
+    set_replan_context(
+        plan,
+        1,
+        ReplanInput(activity_id="anchor", time="17:00", end_time="18:00", end_activity_id="end"),
+    )
+    preserve_replan_scope(plan.model_copy(deep=True), plan, 1)
+    result = await enrich_itinerary(plan, Requirements(), Settings(_env_file=None), day_number=1)
+    day = result.days[0]
+    booked = next(i for i, a in enumerate(day.activities) if a.id == "booking")
+    anchor = next(i for i, a in enumerate(day.activities) if a.id == "anchor")
+    assert booked < anchor
+    assert day.activities[booked].progress == "skipped"
+    assert not any("预约冲突" in w for w in day.warnings)

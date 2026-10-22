@@ -11,6 +11,8 @@ import type {
   Activity,
   ActivityProgress,
   ExpenseInput,
+  Booking,
+  ReplanInput,
   BranchInfo,
   ChatResponse,
   ConfigCheck,
@@ -193,6 +195,24 @@ export const api = {
     request<VersionDetail>(`/api/versions/${versionId}/expenses`, {
       method: "POST",
       body: JSON.stringify({ ...expense, request_id: requestId }),
+    }),
+  recordBooking: (
+    versionId: string,
+    day: number,
+    activityId: string,
+    booking: Booking | null,
+  ) =>
+    request<VersionDetail>(
+      `/api/versions/${versionId}/days/${day}/activities/${activityId}/booking`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ booking }),
+      },
+    ),
+  replanDay: (versionId: string, day: number, context: ReplanInput) =>
+    request<VersionDetail>(`/api/versions/${versionId}/days/${day}/replan`, {
+      method: "POST",
+      body: JSON.stringify(context),
     }),
   editExpense: (versionId: string, expenseId: string, expense: ExpenseInput) =>
     request<VersionDetail>(`/api/versions/${versionId}/expenses/${expenseId}`, {
