@@ -28,6 +28,8 @@ frontend/next-env.d.ts
 # 测试覆盖率报告
 .coverage
 htmlcov/
+test-results/
+playwright-report/
 
 # Python 缓存
 __pycache__/

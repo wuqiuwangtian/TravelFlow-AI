@@ -73,3 +73,22 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: 安装浏览器验收后端依赖
+        run: uv sync --frozen --project ../backend
+
+      - name: 安装验收浏览器
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: 桌面与手机主流程验收（隔离数据，无需 API Key）
+        run: pnpm test:e2e
+
+      - name: 保存失败的浏览器验收证据
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: frontend/test-results/
+          retention-days: 7
