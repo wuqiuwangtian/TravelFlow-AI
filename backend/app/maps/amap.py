@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import re
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -37,7 +38,31 @@ def _place(data: dict) -> Place:
         city=string("cityname"),
         district=string("adname"),
         typecode=string("typecode"),
+        photos=safe_photos(data.get("photos")),
     )
+
+
+def safe_photos(items: object) -> list[str]:
+    result: list[str] = []
+    for item in items if isinstance(items, list) else []:
+        url = item.get("url", "") if isinstance(item, dict) else ""
+        if not isinstance(url, str) or len(url) > 2000:
+            continue
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            continue
+        if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
+            continue
+        host = parsed.hostname or ""
+        if not any(
+            host == d or host.endswith("." + d) for d in ("autonavi.com", "amap.com", "isamap.com")
+        ):
+            continue
+        result.append(urlunsplit(parsed._replace(scheme="https")))
+        if len(result) == 3:
+            break
+    return result
 
 
 def _provider_error(data: dict | None = None) -> ProviderError:
@@ -114,11 +139,25 @@ class AmapProvider:
         return places
 
     async def get_place(self, place_id: str) -> Place:
-        data = await self._json("/v5/place/detail", {"id": place_id})
+        data = await self._json("/v5/place/detail", {"id": place_id, "show_fields": "photos"})
         try:
             return _place(data["pois"][0])
         except (KeyError, IndexError, ValueError, TypeError):
             raise ProviderError("该地点暂时不可用，原行程已保留。") from None
+
+    async def convert_gps(self, longitude: float, latitude: float) -> Place:
+        data = await self._json(
+            "/v3/assistant/coordinate/convert",
+            {
+                "locations": f"{longitude:.6f},{latitude:.6f}",
+                "coordsys": "gps",
+            },
+        )
+        try:
+            lon, lat = map(float, data["locations"].split(","))
+            return Place(id="current-location", name="我的位置", longitude=lon, latitude=lat)
+        except (KeyError, ValueError, TypeError):
+            raise ProviderError("当前位置转换失败，可在高德中手动选择起点。") from None
 
     async def route(self, origin: Place, destination: Place, mode: TravelMode) -> RouteLeg:
         if mode not in {"walking", "transit", "driving"}:

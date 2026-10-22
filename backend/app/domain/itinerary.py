@@ -27,6 +27,7 @@ class Place(BaseModel):
     city: str = ""
     district: str = ""
     typecode: str = ""
+    photos: list[str] = Field(default_factory=list, max_length=3)
 
     @property
     def location(self) -> str:
@@ -109,6 +110,8 @@ class ExpenseInput(BaseModel):
     notes: str = Field(default="", max_length=1000)
     receipt_ids: list[ReceiptId] = Field(default_factory=list, max_length=6)
     allow_shared_receipts: bool = False
+    budget_item_id: str | None = Field(default=None, max_length=150)
+    settles_budget: bool = False
 
 
 class ExpenseCreate(ExpenseInput):
@@ -126,6 +129,32 @@ class Expense(BaseModel):
     created_at: datetime
     updated_at: datetime
     receipt_ids: list[ReceiptId] = Field(default_factory=list, max_length=6)
+    budget_item_id: str | None = None
+    settles_budget: bool = False
+
+
+class BudgetItem(BaseModel):
+    id: str = Field(min_length=1, max_length=150)
+    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
+    category: ExpenseCategory = "other"
+    planned_cents: int | None = Field(default=None, ge=0)
+    day: int | None = Field(default=None, ge=1, le=60)
+    activity_id: str | None = None
+    source: Literal["activity", "transport", "custom"] = "custom"
+
+
+class BudgetRow(BudgetItem):
+    expense_ids: list[str] = Field(default_factory=list)
+    actual_cents: int = 0
+    settled: bool = False
+
+
+class BudgetOverview(BaseModel):
+    rows: list[BudgetRow] = Field(default_factory=list)
+    planned_cents: int = 0
+    projected_cents: int = 0
+    unknown_count: int = 0
+    budget_cents: int | None = None
 
 
 class ReceiptDraft(BaseModel):
@@ -218,6 +247,7 @@ class Itinerary(BaseModel):
     map_status: Literal["unconfigured", "ready", "partial"] = "unconfigured"
     expenses: list[Expense] = Field(default_factory=list, max_length=2000)
     adjustments: list[ExpenseAdjustment] = Field(default_factory=list, max_length=4000)
+    budget_items: list[BudgetItem] = Field(default_factory=list, max_length=2000)
 
     @computed_field  # type: ignore[prop-decorator]  # Pydantic 运行时支持，mypy 尚不支持该叠加。
     @property

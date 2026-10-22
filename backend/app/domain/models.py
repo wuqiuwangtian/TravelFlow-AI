@@ -10,10 +10,10 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.domain.enums import DetailLevel, TodoKind
-from app.domain.itinerary import Itinerary
+from app.domain.itinerary import BudgetOverview, Itinerary
 from app.search.base import SearchResult
 
 
@@ -166,3 +166,14 @@ class VersionDetail(BaseModel):
     searched_at: datetime | None = None
     itinerary: Itinerary | None = None
     requirements: Requirements | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def budget_overview(self) -> BudgetOverview | None:
+        from app.services.budget_service import budget_overview
+
+        return (
+            budget_overview(self.itinerary, self.requirements or Requirements())
+            if self.itinerary
+            else None
+        )

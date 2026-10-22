@@ -475,6 +475,9 @@ async def enrich_itinerary(
             else "partial"
         )
     )
+    from app.services.budget_service import apply_budget_overrides
+
+    apply_budget_overrides(result, requirements)
     return result
 
 
@@ -547,6 +550,9 @@ def render_days(itinerary: Itinerary) -> str:
 
 
 def sync_markdown(markdown: str, itinerary: Itinerary, requirements: Requirements) -> str:
+    from app.services.budget_service import apply_budget_overrides
+
+    apply_budget_overrides(itinerary, requirements)
     daily = render_days(itinerary)
     pattern = r"^## (?:四[、.． ]*)?每日详细行程[^\n]*\n.*?(?=^## |\Z)"
     if re.search(pattern, markdown, flags=re.M | re.S):
@@ -579,6 +585,21 @@ def sync_markdown(markdown: str, itinerary: Itinerary, requirements: Requirement
         + "\n"
     )
     expense_pattern = r"^## 五[、.． ]*费用预估[^\n]*\n.*?(?=^## |\Z)"
+    from app.services.budget_service import budget_overview
+
+    overview = budget_overview(itinerary, requirements)
+    financial += (
+        f"\n统一费用清单预估小计：{overview.planned_cents / 100:.2f} 元；"
+        f"按已结算实付与未结算预估推算：{overview.projected_cents / 100:.2f} 元。"
+        f"仍有 {overview.unknown_count} 项费用未定，不代表最终总价。\n\n"
+        "| 项目 | 预估（全团） | 已记净消费 | 状态 |\n| --- | ---: | ---: | --- |\n"
+    )
+    for row in overview.rows:
+        planned = f"{row.planned_cents / 100:.2f}" if row.planned_cents is not None else "待核实"
+        financial += (
+            f"| {_text(row.title).replace('|', '／')} | {planned} | "
+            f"{row.actual_cents / 100:.2f} | {'已结算' if row.settled else '待结算'} |\n"
+        )
     if re.search(expense_pattern, markdown, flags=re.M | re.S):
         markdown = re.sub(expense_pattern, lambda _: financial + "\n", markdown, flags=re.M | re.S)
     else:

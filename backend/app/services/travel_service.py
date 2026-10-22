@@ -21,10 +21,30 @@ def expense_values(data: ExpenseInput) -> dict:
         "activity_id": data.activity_id,
         "notes": data.notes,
         "receipt_ids": list(dict.fromkeys(data.receipt_ids)),
+        "budget_item_id": data.budget_item_id,
+        "settles_budget": data.settles_budget,
     }
 
 
 def validate_expense_link(itinerary: Itinerary, data: ExpenseInput) -> None:
+    if data.settles_budget and not data.budget_item_id:
+        raise InvalidRequest("请先关联预算项目，再将其标记为已结算")
+    if data.budget_item_id:
+        from app.domain.models import Requirements
+        from app.services.budget_service import budget_overview
+
+        row = next(
+            (
+                r
+                for r in budget_overview(itinerary, Requirements()).rows
+                if r.id == data.budget_item_id
+            ),
+            None,
+        )
+        if row is None or row.id.startswith("expense-"):
+            raise InvalidRequest("预算项目不存在，请刷新后重新选择")
+        if row.day != data.day or row.category != data.category:
+            raise InvalidRequest("消费日期或类别与预算项目不一致")
     if data.day is not None and not any(day.day == data.day for day in itinerary.days):
         raise InvalidRequest("记账日期不在当前行程中")
     if data.activity_id:
@@ -93,6 +113,7 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     """模型只能改未来安排；旅中历史由用户的明确操作修改。"""
     current.expenses = [entry.model_copy(deep=True) for entry in previous.expenses]
     current.adjustments = [entry.model_copy(deep=True) for entry in previous.adjustments]
+    current.budget_items = [entry.model_copy(deep=True) for entry in previous.budget_items]
     for old_day in previous.days:
         existing_day = next((d for d in current.days if d.day == old_day.day), None)
         if existing_day:
@@ -134,3 +155,10 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     for entry in current.expenses:
         if entry.activity_id not in ids:
             entry.activity_id = None
+        if (
+            entry.budget_item_id
+            and entry.budget_item_id.startswith(("stay-", "leg-"))
+            and entry.budget_item_id.split("-", 1)[1] not in ids
+        ):
+            entry.budget_item_id = None
+            entry.settles_budget = False

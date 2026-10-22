@@ -111,6 +111,8 @@ def handle_travel_message(
                     activity_id=entry.activity_id,
                     notes=entry.notes,
                     receipt_ids=entry.receipt_ids,
+                    budget_item_id=entry.budget_item_id,
+                    settles_budget=entry.settles_budget,
                 )
                 edit_expense(result, entry.id, updated)
             except ValidationError:

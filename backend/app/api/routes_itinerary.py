@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from decimal import Decimal
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agents.checkpoint import thread_config
 from app.agents.itinerary_output import complete_details, extract_details, prepare_itinerary
@@ -22,7 +23,9 @@ from app.domain.itinerary import (
     AdjustmentCreate,
     AdjustmentInput,
     Booking,
+    BudgetItem,
     DayPlan,
+    ExpenseCategory,
     ExpenseCreate,
     ExpenseInput,
     Itinerary,
@@ -38,6 +41,7 @@ from app.maps.amap import AmapProvider
 from app.maps.assets import map_asset
 from app.services.adjustment_service import add_adjustment, edit_adjustment, remove_adjustment
 from app.services.branch_lock import branch_guard
+from app.services.budget_service import budget_overview, save_budget_item
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.receipt_service import MAX_RECEIPT_BYTES, normalise_receipt, recognise_receipt
@@ -46,6 +50,141 @@ from app.services.travel_service import add_expense, edit_expense, remove_expens
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["itinerary"])
+
+
+class GPSInput(BaseModel):
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+
+
+@router.post("/maps/convert-location")
+async def convert_location(payload: GPSInput, settings: Settings = Depends(get_settings)):
+    if not settings.amap_api_key:
+        raise InvalidRequest("请先配置高德地图 Key，或在高德页面手动选择起点")
+    async with httpx.AsyncClient(timeout=settings.amap_timeout_seconds) as client:
+        return await AmapProvider(client, settings.amap_api_key).convert_gps(
+            payload.longitude, payload.latitude
+        )
+
+
+@router.get("/versions/{version_id}/activities/{activity_id}/photos")
+async def place_photos(
+    version_id: str,
+    activity_id: str,
+    store: SessionStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+):
+    detail = await _detail(store, version_id)
+    activity = next(
+        (a for d in _itinerary(detail).days for a in d.activities if a.id == activity_id), None
+    )
+    if activity is None:
+        raise InvalidRequest("地点不存在")
+    if not activity.place or not settings.amap_api_key:
+        return {"photos": []}
+    if activity.place.photos:
+        return {"photos": activity.place.photos}
+    async with httpx.AsyncClient(timeout=settings.amap_timeout_seconds) as client:
+        place = await AmapProvider(client, settings.amap_api_key).get_place(activity.place.id)
+    return {"photos": place.photos}
+
+
+class BudgetAmount(BaseModel):
+    amount: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
+
+
+class CustomBudgetInput(BudgetAmount):
+    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
+    category: ExpenseCategory = "other"
+    day: int | None = Field(default=None, ge=1, le=60)
+    request_id: str = Field(min_length=8, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
+
+
+@router.post("/versions/{version_id}/budget-items", response_model=VersionDetail)
+async def create_budget_item(
+    version_id: str,
+    payload: CustomBudgetInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        versions = await store.list_versions(original.version.branch_id)
+        detail = await _detail(store, versions[-1].id)
+        itinerary = _itinerary(detail)
+        item = BudgetItem(
+            id="custom-" + payload.request_id,
+            title=payload.title.strip(),
+            category=payload.category,
+            day=payload.day,
+            planned_cents=int(payload.amount * 100) if payload.amount is not None else None,
+        )
+        old = next((r for r in itinerary.budget_items if r.id == item.id), None)
+        if old:
+            if old != item:
+                raise ConflictError("同一次预算请求内容已改变，请重新提交")
+            return detail
+        if detail.version.id != version_id:
+            raise ConflictError("当前为历史版本，请先分叉再编辑")
+        if item.day is not None and not any(d.day == item.day for d in itinerary.days):
+            raise InvalidRequest("日期不在当前行程中")
+        save_budget_item(itinerary, item)
+        return await _save_revision(
+            store, graph, detail, "添加自定义预算项目", keep_plan_status=True
+        )
+
+
+@router.put("/versions/{version_id}/budget-items/{item_id}", response_model=VersionDetail)
+async def update_budget_item(
+    version_id: str,
+    item_id: str,
+    payload: BudgetAmount,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        itinerary = _itinerary(detail)
+        row = next(
+            (
+                r
+                for r in budget_overview(itinerary, detail.requirements or Requirements()).rows
+                if r.id == item_id
+            ),
+            None,
+        )
+        if row is None or row.id.startswith("expense-"):
+            raise InvalidRequest("预算项目不存在")
+        item = BudgetItem(**row.model_dump(include=set(BudgetItem.model_fields)))
+        item.planned_cents = int(payload.amount * 100) if payload.amount is not None else None
+        save_budget_item(itinerary, item)
+        return await _save_revision(store, graph, detail, "修改项目预估费用", keep_plan_status=True)
+
+
+@router.delete("/versions/{version_id}/budget-items/{item_id}", response_model=VersionDetail)
+async def delete_budget_item(
+    version_id: str,
+    item_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        itinerary = _itinerary(detail)
+        item = next(
+            (r for r in itinerary.budget_items if r.id == item_id and r.source == "custom"), None
+        )
+        if item is None:
+            raise InvalidRequest("请选择自定义预算项")
+        itinerary.budget_items.remove(item)
+        for expense in itinerary.expenses:
+            if expense.budget_item_id == item_id:
+                expense.budget_item_id, expense.settles_budget = None, False
+        return await _save_revision(
+            store, graph, detail, "移除自定义预估项目（保留实际消费）", keep_plan_status=True
+        )
 
 
 async def _detail(store: SessionStore, version_id: str) -> VersionDetail:
