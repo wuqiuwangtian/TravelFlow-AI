@@ -18,6 +18,8 @@ from app.domain.enums import PlanStatus
 from app.domain.itinerary import (
     ActivityProgress,
     ActivityUpdate,
+    AdjustmentCreate,
+    AdjustmentInput,
     Booking,
     DayPlan,
     ExpenseCreate,
@@ -32,6 +34,7 @@ from app.domain.schemas import ConnectionTestResponse
 from app.llm.factory import create_llm_provider
 from app.maps.amap import AmapProvider
 from app.maps.assets import map_asset
+from app.services.adjustment_service import add_adjustment, edit_adjustment, remove_adjustment
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
@@ -402,6 +405,66 @@ async def delete_expense(
         detail = await _editable(store, version_id)
         remove_expense(_itinerary(detail), expense_id)
         return await _save_revision(store, graph, detail, "移除误记消费", keep_plan_status=True)
+
+
+@router.post(
+    "/versions/{version_id}/expense-adjustments",
+    response_model=VersionDetail,
+    summary="记录退款或报销（不操作真实资金）",
+)
+async def create_adjustment(
+    version_id: str,
+    payload: AdjustmentCreate,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        versions = await store.list_versions(original.version.branch_id)
+        latest = await _detail(store, versions[-1].id)
+        changed = add_adjustment(_itinerary(latest), payload)
+        if not changed:
+            return latest
+        if latest.version.id != version_id:
+            raise ConflictError("当前查看的是历史版本，请先分叉为新方案再记录回款")
+        return await _save_revision(store, graph, latest, "记录退款或报销", keep_plan_status=True)
+
+
+@router.put(
+    "/versions/{version_id}/expense-adjustments/{adjustment_id}",
+    response_model=VersionDetail,
+    summary="更正回款或标记到账",
+)
+async def update_adjustment(
+    version_id: str,
+    adjustment_id: str,
+    payload: AdjustmentInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        edit_adjustment(_itinerary(detail), adjustment_id, payload)
+        return await _save_revision(store, graph, detail, "更正回款记录", keep_plan_status=True)
+
+
+@router.delete(
+    "/versions/{version_id}/expense-adjustments/{adjustment_id}",
+    response_model=VersionDetail,
+    summary="移除误记回款（保留历史）",
+)
+async def delete_adjustment(
+    version_id: str,
+    adjustment_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+) -> VersionDetail:
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        remove_adjustment(_itinerary(detail), adjustment_id)
+        return await _save_revision(store, graph, detail, "移除误记回款", keep_plan_status=True)
 
 
 class BookingUpdate(BaseModel):

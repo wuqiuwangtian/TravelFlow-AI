@@ -33,6 +33,7 @@ from app.domain.itinerary import ClockTime, ReplanInput
 from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
+from app.services.adjustment_messages import handle_adjustment_message
 from app.services.booking_messages import handle_booking_message
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.replan_service import explicit_day, set_replan_context
@@ -91,8 +92,10 @@ def make_refiner_node(
 
         current = state.get("itinerary")
         booking_action = handle_booking_message(user_text, current) if current else None
-        action = booking_action or (
-            handle_travel_message(user_text, current, requirements) if current else None
+        action = (
+            booking_action
+            or (handle_adjustment_message(user_text, current) if current else None)
+            or (handle_travel_message(user_text, current, requirements) if current else None)
         )
         if action:
             updated_itinerary = action.itinerary or current
@@ -258,7 +261,7 @@ def make_refiner_node(
             actual = sum(e.amount_cents for e in current_itinerary.expenses) / 100
             prompt += (
                 "\n【当前结构化行程，未要求修改的站点和字段必须保留】\n"
-                + current_itinerary.model_dump_json(exclude={"expenses"})
+                + current_itinerary.model_dump_json(exclude={"expenses", "adjustments"})
             )
             if scope_day is not None:
                 prompt += f"\n本次仅调整第{scope_day}天。起点之前的活动、已有预约和其他天保持原样。"

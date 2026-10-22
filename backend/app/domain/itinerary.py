@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 TravelMode = Literal["auto", "walking", "transit", "driving", "rail", "flight", "transfer"]
 CostBasis = Literal["per_person", "total", "unknown"]
@@ -124,6 +124,40 @@ class Expense(BaseModel):
     updated_at: datetime
 
 
+class AdjustmentInput(BaseModel):
+    expense_id: str = Field(min_length=1, max_length=100)
+    kind: Literal["refund", "reimbursement"]
+    amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2, allow_inf_nan=False)
+    status: Literal["pending", "received"]
+    notes: str = Field(default="", max_length=1000)
+
+
+class AdjustmentCreate(AdjustmentInput):
+    request_id: str = Field(min_length=8, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
+
+
+class ExpenseAdjustment(BaseModel):
+    id: str
+    expense_id: str
+    kind: Literal["refund", "reimbursement"]
+    amount_cents: int = Field(gt=0)
+    status: Literal["pending", "received"]
+    notes: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class LedgerSummary(BaseModel):
+    paid_cents: int = 0
+    refunded_cents: int = 0
+    reimbursed_cents: int = 0
+    pending_refund_cents: int = 0
+    pending_reimbursement_cents: int = 0
+    net_expense_cents: int = 0
+    net_outlay_cents: int = 0
+    over_recovered_cents: int = 0
+
+
 class DayDraft(BaseModel):
     day: int = Field(ge=1, le=60)
     title: str = Field(default="", max_length=100)
@@ -170,6 +204,32 @@ class Itinerary(BaseModel):
     days: list[DayPlan] = Field(default_factory=list, max_length=60)
     map_status: Literal["unconfigured", "ready", "partial"] = "unconfigured"
     expenses: list[Expense] = Field(default_factory=list, max_length=2000)
+    adjustments: list[ExpenseAdjustment] = Field(default_factory=list, max_length=4000)
+
+    @computed_field  # type: ignore[prop-decorator]  # Pydantic 运行时支持，mypy 尚不支持该叠加。
+    @property
+    def ledger_summary(self) -> LedgerSummary:
+        summary = LedgerSummary(paid_cents=sum(e.amount_cents for e in self.expenses))
+        recovered: dict[str, int] = {}
+        for entry in self.adjustments:
+            if entry.status == "received":
+                if entry.kind == "refund":
+                    summary.refunded_cents += entry.amount_cents
+                else:
+                    summary.reimbursed_cents += entry.amount_cents
+                recovered[entry.expense_id] = (
+                    recovered.get(entry.expense_id, 0) + entry.amount_cents
+                )
+            elif entry.kind == "refund":
+                summary.pending_refund_cents += entry.amount_cents
+            else:
+                summary.pending_reimbursement_cents += entry.amount_cents
+        summary.net_expense_cents = summary.paid_cents - summary.refunded_cents
+        summary.net_outlay_cents = summary.net_expense_cents - summary.reimbursed_cents
+        summary.over_recovered_cents = sum(
+            max(0, recovered.get(e.id, 0) - e.amount_cents) for e in self.expenses
+        )
+        return summary
 
     @model_validator(mode="after")
     def unique_days(self) -> Itinerary:

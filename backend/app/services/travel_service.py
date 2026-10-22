@@ -56,12 +56,22 @@ def edit_expense(itinerary: Itinerary, expense_id: str, data: ExpenseInput) -> N
     if not entry:
         raise InvalidRequest("消费记录不存在")
     validate_expense_link(itinerary, data)
+    for kind in ("refund", "reimbursement"):
+        claimed = sum(
+            a.amount_cents
+            for a in itinerary.adjustments
+            if a.expense_id == expense_id and a.kind == kind
+        )
+        if claimed > int(data.amount * 100):
+            raise InvalidRequest("新金额小于已记录的退款或报销，请先更正相关回款记录")
     for key, value in expense_values(data).items():
         setattr(entry, key, value)
     entry.updated_at = datetime.now()
 
 
 def remove_expense(itinerary: Itinerary, expense_id: str) -> None:
+    if any(a.expense_id == expense_id for a in itinerary.adjustments):
+        raise InvalidRequest("这笔消费已有退款或报销记录，请先移除相关回款记录")
     index = next((i for i, e in enumerate(itinerary.expenses) if e.id == expense_id), None)
     if index is None:
         raise InvalidRequest("消费记录不存在")
@@ -81,6 +91,7 @@ def set_progress(
 def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     """模型只能改未来安排；旅中历史由用户的明确操作修改。"""
     current.expenses = [entry.model_copy(deep=True) for entry in previous.expenses]
+    current.adjustments = [entry.model_copy(deep=True) for entry in previous.adjustments]
     for old_day in previous.days:
         existing_day = next((d for d in current.days if d.day == old_day.day), None)
         if existing_day:

@@ -585,19 +585,43 @@ def sync_markdown(markdown: str, itinerary: Itinerary, requirements: Requirement
         markdown += "\n" + financial
     progress_count = sum(a.progress == "completed" for d in itinerary.days for a in d.activities)
     actual_cents = sum(e.amount_cents for e in itinerary.expenses)
+    ledger = itinerary.ledger_summary
     travel = (
         "## 旅中记录与实际消费\n\n"
         f"已完成 {progress_count} 个停留点；"
         f"实际消费合计：**{actual_cents / 100:.2f} 元**（全团）。\n\n"
         "实际消费独立记账，不与上方规划估算相加；余额按已记消费计算，未记支出不在其中。\n\n"
     )
+    if itinerary.adjustments:
+        travel += (
+            f"已到账退款：**{ledger.refunded_cents / 100:.2f} 元**；"
+            f"已到账报销：**{ledger.reimbursed_cents / 100:.2f} 元**。\n\n"
+            f"净消费（实付减已到账退款）：**{ledger.net_expense_cents / 100:.2f} 元**；"
+            f"净垫付（再减已到账报销）：**{ledger.net_outlay_cents / 100:.2f} 元**（全团）。\n\n"
+            f"待到账退款：{ledger.pending_refund_cents / 100:.2f} 元；"
+            f"待到账报销：{ledger.pending_reimbursement_cents / 100:.2f} 元。"
+            "待到账款项不冲减实际金额。\n\n"
+            "报销作为资金回收单列，不重复冲减旅行消费；预算余量按净消费计算。\n\n"
+        )
     if budget is not None:
-        travel += f"预算减已记消费：{budget - actual_cents / 100:.2f} 元。\n\n"
+        travel += f"预算减已记净消费：{budget - ledger.net_expense_cents / 100:.2f} 元。\n\n"
+    if ledger.over_recovered_cents:
+        travel += (
+            f"> 部分消费的到账回款超过原支出，超出 {ledger.over_recovered_cents / 100:.2f} 元，"
+            "请核对回款记录。\n\n"
+        )
     for entry in itinerary.expenses:
         day_label = f"第 {entry.day} 天" if entry.day else "未关联日期"
         travel += f"- {day_label} · {_text(entry.title)}：{entry.amount_cents / 100:.2f} 元\n"
         if entry.notes:
             travel += f"  {_text(entry.notes)}\n"
+        for adjustment in itinerary.adjustments:
+            if adjustment.expense_id == entry.id:
+                kind = "退款" if adjustment.kind == "refund" else "报销"
+                status = "已到账" if adjustment.status == "received" else "待到账"
+                travel += f"  - {kind}（{status}）：{adjustment.amount_cents / 100:.2f} 元。\n"
+                if adjustment.notes:
+                    travel += f"    {_text(adjustment.notes)}\n"
     travel_pattern = r"^## 旅中记录与实际消费[^\n]*\n.*?(?=^## |\Z)"
     if re.search(travel_pattern, markdown, flags=re.M | re.S):
         markdown = re.sub(travel_pattern, lambda _: travel + "\n", markdown, flags=re.M | re.S)
