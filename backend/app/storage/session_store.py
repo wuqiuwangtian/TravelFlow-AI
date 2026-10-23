@@ -110,6 +110,26 @@ class SessionStore:
         )
         return [dict(r) for r in await cursor.fetchall()], total
 
+    async def list_career_sources(self) -> list[dict]:
+        # 一次会话算一次旅行。只从分支的当前结束版本中选，不回退到已重新开启的历史。
+        # 已结束主方案优先，否则取最近结束方案；同一时间用分支 ID 稳定排序。
+        cursor = await self._conn.execute(
+            "WITH finished AS ("
+            "SELECT s.id AS session_id, s.title AS session_title, s.archived AS session_archived, "
+            "b.id AS branch_id, b.title AS branch_title, b.is_primary, v.id AS version_id, "
+            "p.itinerary, json_extract(p.itinerary,'$.ended_at') AS ended_at, "
+            "COUNT(*) OVER (PARTITION BY s.id) AS finished_branch_count, "
+            "ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY b.is_primary DESC, "
+            "julianday(json_extract(p.itinerary,'$.ended_at')) DESC, b.id) AS rank "
+            "FROM sessions s JOIN branches b ON b.session_id=s.id "
+            "JOIN versions v ON v.id=(SELECT vv.id FROM versions vv "
+            "WHERE vv.branch_id=b.id ORDER BY vv.seq DESC LIMIT 1) "
+            "JOIN plans p ON p.version_id=v.id "
+            "WHERE json_extract(p.itinerary,'$.ended_at') IS NOT NULL) "
+            "SELECT * FROM finished WHERE rank=1 ORDER BY julianday(ended_at) DESC, session_id"
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
     async def count_sessions(self, *, archived: bool = False, query: str | None = None) -> int:
         """会话总数（用于分页的 total，注意不是「本页数量」）。"""
         sql = ["SELECT COUNT(*) FROM sessions WHERE archived = ?"]

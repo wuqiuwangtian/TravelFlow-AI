@@ -10,6 +10,7 @@ from app.agents.checkpoint import thread_config
 from app.agents.state import initial_state
 from app.core.deps import get_graph, get_store
 from app.core.errors import BranchNotFound, ConfigError, InvalidRequest, SessionNotFound
+from app.domain.career import TravelCareer
 from app.domain.clarification import clarification_prompt
 from app.domain.enums import PlanStatus
 from app.domain.models import ResearchBundle
@@ -30,6 +31,20 @@ from app.services.chat_service import ChatService
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
+
+
+@router.get("/travel-career", response_model=TravelCareer, summary="基于实际记录的旅行生涯")
+async def get_travel_career(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    city: str | None = Query(None, max_length=100),
+    store: SessionStore = Depends(get_store),
+) -> TravelCareer:
+    from app.services.career_service import travel_career
+
+    return await travel_career(
+        store, page=page, page_size=page_size, city=(city or "").strip() or None
+    )
 
 
 @router.get("/recap-archive", summary="已结束方案的旅行回顾")
