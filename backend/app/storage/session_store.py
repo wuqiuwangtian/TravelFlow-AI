@@ -387,6 +387,47 @@ class SessionStore:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
+    async def save_photo(
+        self, session_id: str, digest: str, image: bytes, width: int, height: int
+    ) -> dict:
+        photo_id = uuid.uuid4().hex
+        await self._conn.execute(
+            "INSERT INTO photo_assets(id,session_id,digest,image_data,width,height,created_at) "
+            "SELECT ?,?,?,?,?,?,? WHERE "
+            "(SELECT COUNT(*) FROM photo_assets WHERE session_id=?)<100 AND "
+            "(SELECT COALESCE(SUM(length(image_data)),0) FROM photo_assets WHERE session_id=?)"
+            "+?<=134217728 ON CONFLICT(session_id,digest) DO NOTHING",
+            (
+                photo_id,
+                session_id,
+                digest,
+                image,
+                width,
+                height,
+                _now(),
+                session_id,
+                session_id,
+                len(image),
+            ),
+        )
+        await self._conn.commit()
+        cursor = await self._conn.execute(
+            "SELECT * FROM photo_assets WHERE session_id=? AND digest=?", (session_id, digest)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            from app.core.errors import InvalidRequest
+
+            raise InvalidRequest("本次旅行照片已达到100张或128MB上限")
+        return dict(row)
+
+    async def get_photo(self, session_id: str, photo_id: str) -> dict | None:
+        cursor = await self._conn.execute(
+            "SELECT * FROM photo_assets WHERE session_id=? AND id=?", (session_id, photo_id)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
     @staticmethod
     def _to_session(row: aiosqlite.Row) -> SessionInfo:
         keys = row.keys()

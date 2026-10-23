@@ -79,6 +79,19 @@ CREATE TABLE IF NOT EXISTS receipt_assets (
 );
 CREATE INDEX IF NOT EXISTS idx_receipts_session ON receipt_assets(session_id);
 
+-- 旅行照片独立于消费凭证，只保存已清除元数据的展示图。
+CREATE TABLE IF NOT EXISTS photo_assets (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    digest TEXT NOT NULL,
+    image_data BLOB NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, digest)
+);
+CREATE INDEX IF NOT EXISTS idx_photos_session ON photo_assets(session_id);
+
 -- 已完成的对话请求回执；重试同一次发送时复用结果，随分支和旅行删除。
 CREATE TABLE IF NOT EXISTS chat_receipts (
     branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,

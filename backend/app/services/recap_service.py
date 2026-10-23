@@ -60,6 +60,8 @@ def recap_view(itinerary: Itinerary, requirements: Requirements) -> dict[str, An
         "template": template,
         "saved": saved is not None,
         "stale": bool(saved and saved.source_fingerprint != fingerprint),
+        "photos": [p.model_dump() for p in saved.photos] if saved else [],
+        "cover_photo_id": saved.cover_photo_id if saved else None,
     }
 
 
@@ -102,13 +104,28 @@ def render_recap(view: dict[str, Any], *, as_html: bool = False) -> str:
     text = "\n\n".join(lines)
     if not as_html:
         return text
+    blocks = []
+    for line in lines:
+        tag, content = "p", line
+        for prefix, heading in (("### ", "h3"), ("## ", "h2"), ("# ", "h1")):
+            if line.startswith(prefix):
+                tag, content = heading, line[len(prefix) :]
+                break
+        blocks.append(f"<{tag}>{html.escape(content)}</{tag}>")
     return (
         '<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         f"<title>{html.escape(view['title'])}</title>"
         "<style>body{margin:0;background:#f0fdfa;color:#134e4a;font:16px/1.9 system-ui}"
-        "main{max-width:800px;margin:40px auto;padding:32px;background:white;border-radius:24px}"
-        "pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit} "
-        "@media(max-width:600px){main{margin:12px;padding:20px}}</style>"
-        f"<main><pre>{html.escape(text)}</pre></main></html>"
+        "main{max-width:860px;margin:40px auto;padding:40px;background:white;border-radius:24px}"
+        "p{white-space:pre-wrap;overflow-wrap:anywhere}h1{font-size:32px;line-height:1.4}"
+        "h2{margin-top:36px;border-bottom:1px solid #ccfbf1;padding-bottom:8px}"
+        "figure{margin:24px 0}img{display:block;width:100%;max-height:700px;object-fit:contain;"
+        "border-radius:16px;background:#f8fafc}figcaption{font-size:14px;color:#475569}"
+        ".photo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}"
+        ".photo-grid figure{margin:0}.photo-grid img{height:280px;object-fit:contain}"
+        "@media(max-width:600px){main{margin:12px;padding:20px}}"
+        "@media print{body{background:white}main{margin:0;padding:0}"
+        "figure{break-inside:avoid}}</style>"
+        "<main>" + "".join(blocks) + "</main></html>"
     )

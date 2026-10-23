@@ -262,10 +262,31 @@ class DayPlan(BaseModel):
     linked_replan: LinkedReplanNote | None = None
 
 
+class RecapPhoto(BaseModel):
+    id: ReceiptId
+    caption: str = Field(default="", max_length=500)
+    day: int | None = Field(default=None, ge=1, le=60)
+    activity_id: str | None = Field(default=None, min_length=1, max_length=100)
+    included: bool = False
+
+
 class TravelRecap(BaseModel):
     title: str = Field(min_length=1, max_length=100, pattern=r"\S")
     body: str = Field(max_length=20000)
     source_fingerprint: str
+    photos: list[RecapPhoto] = Field(default_factory=list, max_length=40)
+    cover_photo_id: ReceiptId | None = None
+
+    @model_validator(mode="after")
+    def valid_photos(self) -> TravelRecap:
+        ids = [photo.id for photo in self.photos]
+        if len(ids) != len(set(ids)):
+            raise ValueError("回顾中不能重复添加同一照片")
+        if self.cover_photo_id and not any(
+            p.id == self.cover_photo_id and p.included for p in self.photos
+        ):
+            raise ValueError("封面必须选自已选入回顾的照片")
+        return self
 
 
 class Itinerary(BaseModel):

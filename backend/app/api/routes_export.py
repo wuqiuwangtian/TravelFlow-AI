@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api", tags=["export"])
 async def export_recap(
     version_id: str,
     format: ExportFormat = ExportFormat.MARKDOWN,
+    include_photos: bool = False,
     store: SessionStore = Depends(get_store),
 ) -> Response:
     from app.domain.models import Requirements
@@ -40,13 +41,24 @@ async def export_recap(
     content = render_recap(
         recap_view(detail.itinerary, detail.requirements or Requirements()), as_html=as_html
     )
+    if include_photos:
+        if not as_html:
+            raise InvalidRequest("图文回顾请使用HTML格式，照片会嵌入文件以便离线查看。")
+        from app.services.photo_service import photo_export_html
+
+        branch = await store.get_branch(detail.version.branch_id)
+        if branch is None:
+            raise InvalidRequest("旅行不存在")
+        content = await photo_export_html(content, detail.itinerary, store, branch.session_id)
     return Response(
         content,
         media_type="text/html" if as_html else "text/markdown",
         headers={
             "Content-Disposition": "attachment; filename=travel-recap."
             + ("html" if as_html else "md"),
-            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "Content-Security-Policy": (
+                "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"
+            ),
             "X-Content-Type-Options": "nosniff",
         },
     )

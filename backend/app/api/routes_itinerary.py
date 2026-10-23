@@ -9,7 +9,7 @@ from decimal import Decimal
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.agents.checkpoint import thread_config
 from app.agents.itinerary_output import complete_details, extract_details, prepare_itinerary
@@ -53,9 +53,7 @@ from app.storage.session_store import SessionStore
 router = APIRouter(prefix="/api", tags=["itinerary"])
 
 
-class RecapInput(BaseModel):
-    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
-    body: str = Field(max_length=20000)
+class RecapInput(TravelRecap):
     source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
@@ -84,13 +82,60 @@ async def save_recap(
         view = recap_view(itinerary, detail.requirements or Requirements())
         if view["source_fingerprint"] != payload.source_fingerprint:
             raise ConflictError("行程或账目已变化，请刷新回顾并核对后再保存。")
-        recap = TravelRecap(**payload.model_dump())
+        fields = itinerary.recap.model_dump() if itinerary.recap else {}
+        fields.update(payload.model_dump(exclude_unset=True))
+        try:
+            recap = TravelRecap.model_validate(fields)
+        except ValidationError as exc:
+            raise InvalidRequest("请检查照片选择；封面必须选自已选入回顾的照片。") from exc
+        from app.services.photo_service import validate_photos
+
+        await validate_photos(store, await _receipt_session(store, detail), recap, itinerary)
         if itinerary.recap == recap:
             return detail
         if detail.version.id != version_id:
             raise ConflictError("当前版本已变化，请刷新后再保存回顾。")
         itinerary.recap = recap
         return await _save_revision(store, graph, detail, "保存旅行回顾", keep_plan_status=True)
+
+
+@router.post("/versions/{version_id}/travel-photos")
+async def upload_travel_photo(
+    version_id: str, request: Request, store: SessionStore = Depends(get_store)
+):
+    from app.services.photo_service import normalise_photo
+
+    detail = await _editable(store, version_id)
+    _itinerary(detail)
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_RECEIPT_BYTES:
+            raise InvalidRequest("请选择4MB以内的旅行照片")
+        data.extend(chunk)
+    image, width, height, digest = await asyncio.to_thread(normalise_photo, bytes(data))
+    row = await store.save_photo(
+        await _receipt_session(store, detail), digest, image, width, height
+    )
+    return {"id": row["id"], "width": width, "height": height}
+
+
+@router.get("/versions/{version_id}/travel-photos/{photo_id}")
+async def get_travel_photo(
+    version_id: str, photo_id: str, store: SessionStore = Depends(get_store)
+) -> Response:
+    detail = await _detail(store, version_id)
+    photo = await store.get_photo(await _receipt_session(store, detail), photo_id)
+    if photo is None:
+        raise InvalidRequest("旅行照片不存在")
+    return Response(
+        photo["image_data"],
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
 
 
 class GPSInput(BaseModel):
