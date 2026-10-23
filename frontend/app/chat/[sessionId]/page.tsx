@@ -52,6 +52,9 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [draftBranch, setDraftBranch] = useState<string | null>(null);
   const [failedRequest, setFailedRequest] = useState<ChatAttempt | null>(null);
+  const [retainedRequest, setRetainedRequest] = useState<ChatAttempt | null>(
+    null,
+  );
   const [sendFailure, setSendFailure] = useState<{
     message: string;
     code: string;
@@ -123,6 +126,7 @@ export default function ChatPage() {
     const draft = readChatDraft(activeBranchId);
     setInput(draft.input);
     setFailedRequest(draft.attempt);
+    setRetainedRequest(draft.retainedAttempt);
     setSendFailure(
       draft.attempt
         ? {
@@ -198,24 +202,32 @@ export default function ChatPage() {
       itineraryBusy
     )
       return;
-    const attempt =
-      retry ??
-      (failedRequest?.message === text
-        ? failedRequest
-        : {
-            message: text,
-            request_id: crypto.randomUUID(),
-            detail_level: level,
-          });
+    const attempt = retry ??
+      [failedRequest, retainedRequest].find(
+        (request) => request?.message === text,
+      ) ?? {
+        message: text,
+        request_id: crypto.randomUUID(),
+        detail_level: level,
+      };
     const clearInput =
       override === undefined || (retry && input.trim() === retry.message);
     const remainingInput = clearInput ? "" : input;
+    // 快捷建议和候选选择可以独立发送；输入框里的失败消息仍需沿用原请求号。
+    const remainingAttempt =
+      [failedRequest, retainedRequest].find(
+        (request) =>
+          request &&
+          request.request_id !== attempt.request_id &&
+          request.message === remainingInput.trim(),
+      ) ?? null;
     if (!retry)
       setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput(remainingInput);
     setSendFailure(null);
     setFailedRequest(null);
-    saveChatDraft(activeBranchId, remainingInput, attempt);
+    setRetainedRequest(remainingAttempt);
+    saveChatDraft(activeBranchId, remainingInput, attempt, remainingAttempt);
 
     // 发送后把输入框收回一行高度
     if (clearInput)
@@ -258,7 +270,17 @@ export default function ChatPage() {
         ...prev,
         { role: "assistant", content: reply || "（无回复内容）" },
       ]);
-      saveChatDraft(activeBranchId, remainingInput, null);
+      setFailedRequest(remainingAttempt);
+      setRetainedRequest(null);
+      setSendFailure(
+        remainingAttempt
+          ? {
+              message: "原消息仍未确认完成，可以重试，系统会核对已保存结果。",
+              code: "UNCONFIRMED",
+            }
+          : null,
+      );
+      saveChatDraft(activeBranchId, remainingInput, remainingAttempt);
       await load();
     } catch (err) {
       const restored = clearInput ? text : input;
@@ -268,7 +290,7 @@ export default function ChatPage() {
         message: err instanceof Error ? err.message : "发送失败，输入已保留。",
         code: err instanceof ApiError ? err.code : "UNKNOWN",
       });
-      saveChatDraft(activeBranchId, restored, attempt);
+      saveChatDraft(activeBranchId, restored, attempt, remainingAttempt);
       await load();
     } finally {
       setSending(false);
@@ -527,6 +549,7 @@ export default function ChatPage() {
                         activeBranchId,
                         e.target.value,
                         failedRequest,
+                        retainedRequest,
                       );
                     autoGrow();
                   }}

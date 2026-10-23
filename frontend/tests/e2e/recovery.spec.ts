@@ -159,3 +159,67 @@ test("切换分支分别恢复各自的未发送草稿", async ({ page }) => {
   await page.getByRole("button", { name: "隔离方案", exact: true }).click();
   await expect(input).toHaveValue("另一个方案的草稿");
 });
+
+for (const interruptShortcut of [false, true]) {
+  test(`失败记账后使用快捷建议${interruptShortcut ? "并再次断流" : ""}，保留原请求以防重复记账`, async ({
+    page,
+  }) => {
+    let count = 0;
+    const ids: string[] = [];
+    await page.route("**/api/backend/api/chat/stream", async (route) => {
+      const payload = route.request().postDataJSON();
+      ids.push(payload.request_id);
+      count++;
+      if (count !== 1 && !(interruptShortcut && count === 2))
+        return route.continue();
+      const response = await route.fetch();
+      expect(await response.text()).toContain("event: done");
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: "",
+      });
+    });
+    const input = page.getByRole("textbox", {
+      name: "旅行对话输入",
+      exact: true,
+    });
+    await input.fill("第1天午餐花了86.35元");
+    await page.getByRole("button", { name: "发送", exact: true }).click();
+    await expect(
+      page.getByLabel("消息发送未完成", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "轻松一点", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "发送", exact: true }),
+    ).toBeEnabled();
+    await page.reload();
+    await expect(input).toHaveValue("第1天午餐花了86.35元");
+    if (interruptShortcut) {
+      await page
+        .getByRole("button", { name: "重试这条消息", exact: true })
+        .click();
+      await expect(
+        page.getByRole("button", { name: "发送", exact: true }),
+      ).toBeEnabled();
+    }
+    await page.getByRole("button", { name: "发送", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "发送", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page.getByLabel("消息发送未完成", { exact: true }),
+    ).toHaveCount(0);
+    expect(ids.at(-1)).toBe(ids[0]);
+    const sid = page.url().split("/").at(-1);
+    const session = await (
+      await page.request.get(`${proxy}/api/sessions/${sid}`)
+    ).json();
+    const versions = session.versions[session.branches[0].id];
+    const current = await (
+      await page.request.get(`${proxy}/api/versions/${versions.at(-1).id}`)
+    ).json();
+    expect(current.itinerary.expenses).toHaveLength(1);
+    expect(current.itinerary.expenses[0].amount_cents).toBe(8635);
+  });
+}
