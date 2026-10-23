@@ -33,6 +33,7 @@ import type {
   RecapDraft,
   RecapArchiveItem,
   TravelCareer,
+  SavedPreferences,
 } from "./types";
 import type {
   SettingsPayload,
@@ -89,6 +90,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  travelPreferences: () => request<SavedPreferences>("/api/travel-preferences"),
+  saveTravelPreferences: (preferences: string[], expectedRevision: number) =>
+    request<SavedPreferences>("/api/travel-preferences", {
+      method: "PUT",
+      body: JSON.stringify({
+        preferences,
+        expected_revision: expectedRevision,
+      }),
+    }),
+  deleteTravelPreferences: (revision: number) =>
+    request<SavedPreferences>(`/api/travel-preferences?revision=${revision}`, {
+      method: "DELETE",
+    }),
   travelCareer: (page = 1, city = "") =>
     request<TravelCareer>(
       `/api/travel-career?page=${page}&city=${encodeURIComponent(city)}`,
@@ -209,10 +223,17 @@ export const api = {
       `/api/sessions${suffix}`,
     );
   },
-  createSession: (title: string) =>
+  createSession: (
+    title: string,
+    selectedPreferences?: SavedPreferences | null,
+  ) =>
     request<SessionDetail>("/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        use_saved_preferences: !!selectedPreferences,
+        preferences_revision: selectedPreferences?.revision,
+      }),
     }),
   getSession: (id: string) => request<SessionDetail>(`/api/sessions/${id}`),
   updateSession: (id: string, patch: { title?: string; archived?: boolean }) =>

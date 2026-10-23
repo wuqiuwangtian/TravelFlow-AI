@@ -408,6 +408,23 @@ export default function ChatPage() {
             </div>
 
             <div className="max-h-[460px] min-h-[300px] flex-1 space-y-3 overflow-y-auto p-4">
+              {!!detail?.session.initial_preferences?.length && (
+                <details
+                  aria-label="创建时选用的偏好"
+                  className="rounded-lg bg-teal-50 px-3 py-2 text-xs leading-6 text-teal-800"
+                >
+                  <summary className="cursor-pointer">
+                    创建时选用{detail.session.initial_preferences.length}
+                    项常用偏好
+                  </summary>
+                  <p className="mt-2 break-words">
+                    {detail.session.initial_preferences.join(" · ")}
+                  </p>
+                  <p>
+                    仅为初始参考，后续以本次对话为准。可说「这次清空偏好」或提出新偏好。
+                  </p>
+                </details>
+              )}
               {messages.length === 0 && (
                 <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
                   告诉我你的旅行想法即可，例如：

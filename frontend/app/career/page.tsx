@@ -68,6 +68,12 @@ export default function TravelCareerPage() {
           全部方案回顾 <ArrowUpRight className="h-4 w-4" />
         </Link>
       </div>
+      <Link
+        href="/preferences"
+        className="mt-3 inline-block text-sm text-teal-800"
+      >
+        管理常用旅行偏好 →
+      </Link>
 
       {busy && (
         <p role="status" className="mt-8 text-sm text-slate-500">

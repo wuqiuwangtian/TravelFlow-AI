@@ -20,6 +20,13 @@ export interface SessionInfo {
   updated_at: string;
   archived: boolean;
   branch_count: number;
+  initial_preferences: string[];
+}
+
+export interface SavedPreferences {
+  preferences: string[];
+  revision: number;
+  updated_at: string | null;
 }
 
 export interface BranchInfo {

@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plane, Plus } from "lucide-react";
 
-import { Button, Card, EmptyState, ErrorBanner, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
-import type { ConfigCheck, SessionInfo } from "@/lib/types";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Spinner,
+} from "@/components/ui";
+import { PreferenceChoice } from "@/components/preference-choice";
+import { api, ApiError } from "@/lib/api";
+import type { ConfigCheck, SessionInfo, SavedPreferences } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
 export default function HomePage() {
@@ -15,6 +22,9 @@ export default function HomePage() {
   const [config, setConfig] = useState<ConfigCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selectedPreferences, setSelectedPreferences] =
+    useState<SavedPreferences | null>(null);
+  const [preferenceRefresh, setPreferenceRefresh] = useState(0);
 
   const load = useCallback(async () => {
     setError(null);
@@ -35,10 +45,17 @@ export default function HomePage() {
   async function createTrip() {
     setCreating(true);
     try {
-      const detail = await api.createSession("新的旅行");
+      const detail = await api.createSession("新的旅行", selectedPreferences);
       router.push(`/chat/${detail.session.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "创建失败");
+      if (
+        err instanceof ApiError &&
+        (err.code === "CONFLICT" || err.code === "INVALID_REQUEST")
+      ) {
+        setSelectedPreferences(null);
+        setPreferenceRefresh(preferenceRefresh + 1);
+      }
       setCreating(false);
     }
   }
@@ -59,6 +76,12 @@ export default function HomePage() {
           <Button size="sm" onClick={() => router.push("/settings")}>
             去设置
           </Button>
+          <PreferenceChoice
+            key={preferenceRefresh}
+            selected={selectedPreferences}
+            onChange={setSelectedPreferences}
+            disabled={creating}
+          />
         </div>
       )}
 

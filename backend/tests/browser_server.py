@@ -22,6 +22,7 @@ from app.agents.nodes.collector import (  # noqa: E402
     DestinationIdea,
     DestinationOptions,
 )
+from app.agents.nodes.refiner import RefineIntent  # noqa: E402
 from app.agents.state import initial_state  # noqa: E402
 from app.api import routes_chat, routes_export, routes_itinerary, routes_session, routes_system  # noqa: E402
 from app.core.config import Settings, get_settings  # noqa: E402
@@ -37,6 +38,8 @@ from app.storage.session_store import SessionStore  # noqa: E402
 
 class BrowserLLM(FakeLLM):
     async def structured(self, messages, schema, **kwargs):
+        if schema is RefineIntent and "这次清空偏好" in messages[0].content:
+            return RefineIntent(intent="modify", clear_preferences=True)
         if schema is RecapWriting:
             return RecapWriting(
                 title="故宫的旅行片段", text="故宫的一段漫步，成为值得回味的旅行片段。"
@@ -47,6 +50,14 @@ class BrowserLLM(FakeLLM):
             )
         if schema is CollectResult:
             text = messages[-1].content
+            if text == "这次改成徒步":
+                return CollectResult(
+                    extracted=Requirements(preferences=["徒步"]), reply="按本次徒步偏好继续"
+                )
+            if text == "这次清空偏好":
+                return CollectResult(
+                    clear_preferences=True, reply="本次偏好已清空，常用偏好保持原样"
+                )
             if "北京" in text:
                 return CollectResult(extracted=requirements(), reply="开始规划")
             return CollectResult(
