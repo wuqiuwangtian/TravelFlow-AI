@@ -24,6 +24,34 @@ from app.storage.session_store import SessionStore
 router = APIRouter(prefix="/api", tags=["export"])
 
 
+@router.get("/versions/{version_id}/recap/export")
+async def export_recap(
+    version_id: str,
+    format: ExportFormat = ExportFormat.MARKDOWN,
+    store: SessionStore = Depends(get_store),
+) -> Response:
+    from app.domain.models import Requirements
+    from app.services.recap_service import recap_view, render_recap
+
+    detail = await store.get_version_detail(version_id)
+    if detail is None or detail.itinerary is None:
+        raise InvalidRequest("未找到可回顾的每日行程")
+    as_html = format == ExportFormat.HTML
+    content = render_recap(
+        recap_view(detail.itinerary, detail.requirements or Requirements()), as_html=as_html
+    )
+    return Response(
+        content,
+        media_type="text/html" if as_html else "text/markdown",
+        headers={
+            "Content-Disposition": "attachment; filename=travel-recap."
+            + ("html" if as_html else "md"),
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/versions/{version_id}/export", summary="导出版本")
 async def export_version(
     version_id: str,

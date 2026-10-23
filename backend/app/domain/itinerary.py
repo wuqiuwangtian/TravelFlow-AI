@@ -262,12 +262,19 @@ class DayPlan(BaseModel):
     linked_replan: LinkedReplanNote | None = None
 
 
+class TravelRecap(BaseModel):
+    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
+    body: str = Field(max_length=20000)
+    source_fingerprint: str
+
+
 class Itinerary(BaseModel):
     days: list[DayPlan] = Field(default_factory=list, max_length=60)
     map_status: Literal["unconfigured", "ready", "partial"] = "unconfigured"
     expenses: list[Expense] = Field(default_factory=list, max_length=2000)
     adjustments: list[ExpenseAdjustment] = Field(default_factory=list, max_length=4000)
     budget_items: list[BudgetItem] = Field(default_factory=list, max_length=2000)
+    recap: TravelRecap | None = None
 
     @computed_field  # type: ignore[prop-decorator]  # Pydantic 运行时支持，mypy 尚不支持该叠加。
     @property

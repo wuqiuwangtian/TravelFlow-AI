@@ -33,6 +33,7 @@ from app.domain.itinerary import (
     ReplanInput,
     ScheduledActivity,
     TravelMode,
+    TravelRecap,
 )
 from app.domain.models import Requirements, VersionDetail
 from app.domain.schemas import ConnectionTestResponse
@@ -50,6 +51,46 @@ from app.services.travel_service import add_expense, edit_expense, remove_expens
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["itinerary"])
+
+
+class RecapInput(BaseModel):
+    title: str = Field(min_length=1, max_length=100, pattern=r"\S")
+    body: str = Field(max_length=20000)
+    source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+@router.get("/versions/{version_id}/recap")
+async def get_recap(version_id: str, store: SessionStore = Depends(get_store)):
+    from app.services.recap_service import recap_view
+
+    detail = await _detail(store, version_id)
+    return recap_view(_itinerary(detail), detail.requirements or Requirements())
+
+
+@router.put("/versions/{version_id}/recap", response_model=VersionDetail)
+async def save_recap(
+    version_id: str,
+    payload: RecapInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.recap_service import recap_view
+
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        versions = await store.list_versions(original.version.branch_id)
+        detail = await _detail(store, versions[-1].id)
+        itinerary = _itinerary(detail)
+        view = recap_view(itinerary, detail.requirements or Requirements())
+        if view["source_fingerprint"] != payload.source_fingerprint:
+            raise ConflictError("行程或账目已变化，请刷新回顾并核对后再保存。")
+        recap = TravelRecap(**payload.model_dump())
+        if itinerary.recap == recap:
+            return detail
+        if detail.version.id != version_id:
+            raise ConflictError("当前版本已变化，请刷新后再保存回顾。")
+        itinerary.recap = recap
+        return await _save_revision(store, graph, detail, "保存旅行回顾", keep_plan_status=True)
 
 
 class GPSInput(BaseModel):

@@ -115,6 +115,7 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     current.expenses = [entry.model_copy(deep=True) for entry in previous.expenses]
     current.adjustments = [entry.model_copy(deep=True) for entry in previous.adjustments]
     current.budget_items = [entry.model_copy(deep=True) for entry in previous.budget_items]
+    current.recap = previous.recap.model_copy(deep=True) if previous.recap else None
     for old_day in previous.days:
         existing_day = next((d for d in current.days if d.day == old_day.day), None)
         if existing_day:
