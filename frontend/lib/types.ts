@@ -347,6 +347,7 @@ export interface DayPlan {
 }
 
 export interface Itinerary {
+  recap?: { title: string; body: string; source_fingerprint: string } | null;
   days: DayPlan[];
   map_status: "unconfigured" | "ready" | "partial";
   expenses: Expense[];
@@ -380,4 +381,23 @@ export interface LedgerSummary {
   net_expense_cents: number;
   net_outlay_cents: number;
   over_recovered_cents: number;
+}
+
+export interface RecapView {
+  source_fingerprint: string;
+  title: string;
+  body: string;
+  template: string;
+  saved: boolean;
+  stale: boolean;
+  days: {
+    day: number;
+    completed: string[];
+    skipped: string[];
+    unconfirmed: string[];
+  }[];
+  ledger: LedgerSummary;
+  expense_count: number;
+  unsettled_count: number;
+  unknown_count: number;
 }

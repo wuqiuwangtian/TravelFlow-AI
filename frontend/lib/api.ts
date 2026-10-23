@@ -28,6 +28,7 @@ import type {
   VersionDetail,
   VersionInfo,
   TravelMode,
+  RecapView,
 } from "./types";
 import type {
   SettingsPayload,
@@ -84,6 +85,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getRecap: (versionId: string) =>
+    request<RecapView>(`/api/versions/${versionId}/recap`),
+  saveRecap: (
+    versionId: string,
+    payload: { title: string; body: string; source_fingerprint: string },
+  ) =>
+    request<VersionDetail>(`/api/versions/${versionId}/recap`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   deleteBudget: (versionId: string, itemId: string) =>
     request<VersionDetail>(
       `/api/versions/${versionId}/budget-items/${encodeURIComponent(itemId)}`,

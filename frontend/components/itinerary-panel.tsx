@@ -26,6 +26,7 @@ import { PlacePhoto } from "@/components/place-photo";
 import { PlaceNavigation } from "@/components/place-navigation";
 import { RailTicketLink } from "@/components/rail-ticket-link";
 import { TravelLedger } from "@/components/travel-ledger";
+import { TravelRecap } from "@/components/travel-recap";
 import { OnTripControls } from "@/components/ontrip-controls";
 import { timeLabel, dayLabel } from "@/lib/travel-time";
 import { api, ApiError } from "@/lib/api";
@@ -295,6 +296,12 @@ export function ItineraryPanel({
                   : "建议行程 · 可直接对话调整"}
               </span>
             </div>
+            <TravelRecap
+              key={detail.version.id}
+              detail={detail}
+              disabled={!editable || disabled || busy}
+              onCommit={mutate}
+            />
             {advanced && (
               <RouteStrip
                 day={day}
