@@ -347,6 +347,7 @@ export interface DayPlan {
 }
 
 export interface Itinerary {
+  ended_at: string | null;
   recap?: {
     social_copy?: string;
     photos?: RecapPhoto[];
@@ -391,6 +392,7 @@ export interface LedgerSummary {
 }
 
 export interface RecapView {
+  ended_at: string | null;
   social_copy: string;
   photos: RecapPhoto[];
   cover_photo_id: string | null;
@@ -425,4 +427,23 @@ export interface RecapDraft {
   title: string;
   text: string;
   source_fingerprint: string;
+}
+
+export interface RecapArchiveItem {
+  session_id: string;
+  session_title: string;
+  session_archived: boolean;
+  branch_id: string;
+  branch_title: string;
+  version_id: string;
+  ended_at: string;
+  title: string;
+  destination: string | null;
+  completed_count: number;
+  unconfirmed_count: number;
+  expense_count: number;
+  net_expense_cents: number;
+  unsettled_count: number;
+  cover_photo_id: string | null;
+  stale: boolean;
 }

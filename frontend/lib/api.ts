@@ -31,6 +31,7 @@ import type {
   RecapView,
   RecapPhoto,
   RecapDraft,
+  RecapArchiveItem,
 } from "./types";
 import type {
   SettingsPayload,
@@ -87,6 +88,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  setJourneyStatus: (versionId: string, ended: boolean) =>
+    request<VersionDetail>(`/api/versions/${versionId}/journey-status`, {
+      method: "PUT",
+      body: JSON.stringify({ ended }),
+    }),
+  recapArchive: (page = 1, q = "") =>
+    request<{ items: RecapArchiveItem[]; total: number }>(
+      `/api/recap-archive?page=${page}&q=${encodeURIComponent(q)}`,
+    ),
   uploadTravelPhoto: (versionId: string, file: File) =>
     request<{ id: string; width: number; height: number }>(
       `/api/versions/${versionId}/travel-photos`,

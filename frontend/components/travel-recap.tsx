@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RecapWriter } from "@/components/recap-writer";
 import { RecapPhotos } from "@/components/recap-photos";
@@ -77,12 +78,56 @@ export function TravelRecap({
   }
   const field =
     "mt-1 w-full rounded-lg border border-teal-100 bg-white p-3 text-sm text-slate-700";
+  const ended = !!detail.itinerary?.ended_at;
+  const unconfirmed =
+    view?.days.reduce((n, day) => n + day.unconfirmed.length, 0) ?? 0;
   return (
     <section
       aria-label="旅行回顾"
       className="mt-5 rounded-2xl border border-teal-100 bg-teal-50/40 p-4 sm:p-5"
     >
       <h3 className="font-semibold text-teal-900">把旅程留下来</h3>
+      <div
+        aria-label="旅行结束状态"
+        className="mt-3 space-y-2 rounded-lg bg-white p-3 text-xs leading-6 text-slate-600"
+      >
+        <p role="status">
+          {ended
+            ? "当前方案已结束，回顾已收录。仍可补记活动、账目和回忆。"
+            : "当前方案尚未结束。结束后会收录到旅行回顾，原始活动和账目不变。"}
+        </p>
+        {ended && (
+          <p>
+            结束时间：
+            {new Date(detail.itinerary!.ended_at!).toLocaleString("zh-CN")}
+          </p>
+        )}
+        {view && (
+          <p>
+            还有{unconfirmed}项未确认到访、{view.unsettled_count}
+            项未结算。结束不会自动补全这些记录。
+          </p>
+        )}
+        {!view && <p>结束不会自动标记活动完成或费用结算，可继续补记。</p>}
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={disabled || busy || dirty}
+            className="rounded-lg border border-teal-100 px-3 py-2 text-teal-800 disabled:opacity-50"
+            onClick={() =>
+              void onCommit(() =>
+                api.setJourneyStatus(detail.version.id, !ended),
+              )
+            }
+          >
+            {ended ? "重新开启旅行" : "结束旅行并收录回顾"}
+          </button>
+          <Link href="/recaps" className="py-2 text-teal-800">
+            查看旅行回顾
+          </Link>
+        </div>
+        {dirty && <p>请先保存当前回顾的改动，再更改旅行状态。</p>}
+      </div>
       <p className="mt-2 text-xs leading-6 text-slate-600">
         根据已完成活动和已记支出整理回顾，没确认去过的地方会单独列出。回忆可以补写，原行程和账目保留。
       </p>
@@ -154,7 +199,9 @@ export function TravelRecap({
                   photos,
                   cover_photo_id: cover,
                 }),
-              );
+              ).then((saved) => {
+                if (saved) setDirty(false);
+              });
             }}
           >
             <fieldset

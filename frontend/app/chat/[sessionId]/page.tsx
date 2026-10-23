@@ -99,7 +99,11 @@ export default function ChatPage() {
       setDetail(data);
       const primary =
         data.branches.find((b) => b.is_primary) ?? data.branches[0];
-      setActiveBranchId((prev) => prev ?? primary?.id ?? null);
+      const requested = new URLSearchParams(window.location.search).get(
+        "branch",
+      );
+      const target = data.branches.find((branch) => branch.id === requested);
+      setActiveBranchId((prev) => prev ?? target?.id ?? primary?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载会话失败");
     }

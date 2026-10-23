@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CircleHelp,
+  BookOpen,
   GitBranch,
   LayoutGrid,
   MessageSquare,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "工作台", icon: LayoutGrid },
   { href: "/sessions", label: "会话", icon: MessageSquare },
+  { href: "/recaps", label: "旅行回顾", icon: BookOpen },
   { href: "/compare", label: "分支对比", icon: GitBranch },
   { href: "/settings", label: "设置", icon: Settings },
   { href: "/help", label: "帮助", icon: CircleHelp },
@@ -38,7 +40,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="flex items-center gap-1 overflow-x-auto">
             {NAV.map((item) => {
               const active =
-                item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
               const Icon = item.icon;
               return (
                 <Link
