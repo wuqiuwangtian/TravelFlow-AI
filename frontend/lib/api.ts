@@ -45,6 +45,12 @@ import type {
   SettingsSaveResult,
   SettingsUpdate,
 } from "./settings-types";
+import type {
+  StudioGraph,
+  StudioProject,
+  StudioRun,
+  StudioTemplate,
+} from "./studio-types";
 
 export const API_BASE = "/api/backend";
 
@@ -95,6 +101,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  studioTemplates: () => request<StudioTemplate[]>("/api/workflow/templates"),
+  validateStudio: (graph: unknown) =>
+    request<StudioGraph>("/api/workflow/validate", {
+      method: "POST",
+      body: JSON.stringify(graph),
+    }),
+  studioProject: (branch: string) =>
+    request<StudioProject>(`/api/branches/${branch}/studio`),
+  stopStudio: (branch: string, id: string) =>
+    request<{ message: string }>(
+      `/api/branches/${branch}/studio/runs/${id}/stop`,
+      { method: "POST" },
+    ),
+  saveStudio: (branch: string, graph: StudioGraph, expected_revision: number) =>
+    request<StudioProject>(`/api/branches/${branch}/studio`, {
+      method: "PUT",
+      body: JSON.stringify({ graph, expected_revision }),
+    }),
+  runStudio: (
+    branch: string,
+    payload: {
+      request_id: string;
+      expected_revision: number;
+      target_node: string | null;
+      force: boolean;
+    },
+  ) =>
+    request<StudioRun>(`/api/branches/${branch}/studio/runs`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   plannerPreview: (versionId: string, payload: PlannerRerunInput) =>
     request<PlannerPreview>(
       `/api/versions/${versionId}/workflow/planner-preview`,

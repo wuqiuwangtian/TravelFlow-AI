@@ -64,6 +64,9 @@ test("从原方案进入四个真实节点，查看需求预算不写入且手�
   await expect(page).toHaveURL(
     `/workflow/${seed.session_id}?branch=${seed.branch_id}`,
   );
+  await page
+    .getByRole("button", { name: "对话流程与单日优化", exact: true })
+    .click();
   await expect(graph(page).getByRole("button")).toHaveCount(4);
   await expect(
     graph(page).getByRole("button", { name: "行程、路线与预算", exact: true }),
@@ -120,7 +123,9 @@ test("分支与版本严格对应，旧快照可导出，迟到响应不覆盖�
   );
   const childFirst = await latest(page, seed.session_id, child.id);
   await say(page, seed.session_id, child.id, "第1天交通花了5元");
-  await page.goto(`/workflow/${seed.session_id}?branch=${child.id}`);
+  await page.goto(
+    `/workflow/${seed.session_id}?branch=${child.id}&view=process`,
+  );
   await expect(
     page.getByRole("combobox", { name: "选择方案", exact: true }),
   ).toHaveValue(child.id);
@@ -219,7 +224,7 @@ test("真实节点中断与加载错误能只读查看，返回重试恢复，�
     }
     return route.continue();
   });
-  await page.goto(`/workflow/${sid}?branch=${bid}`);
+  await page.goto(`/workflow/${sid}?branch=${bid}&view=process`);
   await expect(
     page.getByRole("alert").filter({ hasText: "流程暂时断开" }),
   ).toBeVisible();
@@ -233,12 +238,18 @@ test("真实节点中断与加载错误能只读查看，返回重试恢复，�
     .click();
   await send(page, "继续");
   await page.getByRole("link", { name: "高级流程", exact: true }).click();
+  await page
+    .getByRole("button", { name: "对话流程与单日优化", exact: true })
+    .click();
   await expect(inspector(page)).toContainText("已有数据");
   await expect(graph(page)).not.toContainText("记录中断");
   expect((await latest(page, sid, bid)).versions).toHaveLength(1);
   await page.getByRole("link", { name: "回到当前方案", exact: true }).click();
   await send(page, "第2站已完成");
   await page.getByRole("link", { name: "高级流程", exact: true }).click();
+  await page
+    .getByRole("button", { name: "对话流程与单日优化", exact: true })
+    .click();
   await expect(
     inspector(page).getByRole("heading", { name: "确认与修改", exact: true }),
   ).toBeVisible();

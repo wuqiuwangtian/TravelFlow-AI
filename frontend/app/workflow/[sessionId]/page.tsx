@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import PlannerRerun from "@/components/PlannerRerun";
+import WorkflowStudio from "@/components/workflow-studio";
 import type {
   SessionDetail,
   WorkflowNodeId,
@@ -51,6 +52,7 @@ export default function WorkflowPage() {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [notice, setNotice] = useState("");
+  const [mode, setMode] = useState<"studio" | "process">("studio");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,11 @@ export default function WorkflowPage() {
         if (cancelled) return;
         setDetail(result);
         const params = new URLSearchParams(window.location.search);
+        setMode(
+          params.get("view") === "process" || params.has("version")
+            ? "process"
+            : "studio",
+        );
         const requested = params.get("branch");
         const branch = requested
           ? result.branches.find((item) => item.id === requested)
@@ -120,6 +127,8 @@ export default function WorkflowPage() {
     setNotice("");
     const params = new URLSearchParams({ branch: next.branch });
     if (next.version) params.set("version", next.version);
+    if (mode === "process" || next.version) params.set("view", "process");
+    if (next.version) setMode("process");
     window.history.replaceState(
       null,
       "",
@@ -142,15 +151,39 @@ export default function WorkflowPage() {
   }
   const versions = selection ? (detail?.versions[selection.branch] ?? []) : [];
   const selected = data?.nodes.find((node) => node.id === selectedNode) ?? null;
+  function switchMode(next: "studio" | "process") {
+    setMode(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === "process") params.set("view", "process");
+    else {
+      params.delete("view");
+      params.delete("version");
+    }
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}?${params}`,
+    );
+    if (next === "studio" && selection?.version) {
+      setSelection({ branch: selection.branch, version: "" });
+      setBusy(true);
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
+    <div
+      className={`mx-auto px-4 py-8 sm:px-5 ${mode === "studio" ? "max-w-[1800px]" : "max-w-6xl"}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs tracking-widest text-teal-700">高级流程</p>
-          <h1 className="mt-2 text-2xl font-bold text-teal-950">规划节点</h1>
+          <h1 className="mt-2 text-2xl font-bold text-teal-950">
+            {mode === "studio" ? "把生成过程，搭成自己的工程" : "对话流程观察"}
+          </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
-            查看规划节点的输入与输出，也可在行程节点预览单日路线优化，再应用到同一份方案。历史版本保持只读。
+            {mode === "studio"
+              ? "从模板开始，连接输入、资料、生成与成稿。分支尝试不同方案，汇合成你需要的旅行计划；每一步都能单独查看和重跑。"
+              : "查看日常对话的固定编排与已保存数据，也可预览单日路线优化。历史版本保持只读。"}
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-teal-800">
@@ -164,6 +197,25 @@ export default function WorkflowPage() {
           </button>
         </div>
       </div>
+      <div
+        aria-label="高级流程模式"
+        className="mt-5 flex flex-wrap gap-2 text-sm"
+      >
+        <button
+          aria-pressed={mode === "studio"}
+          onClick={() => switchMode("studio")}
+          className={`rounded-lg px-4 py-2 ${mode === "studio" ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}
+        >
+          节点工程
+        </button>
+        <button
+          aria-pressed={mode === "process"}
+          onClick={() => switchMode("process")}
+          className={`rounded-lg px-4 py-2 ${mode === "process" ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}
+        >
+          对话流程与单日优化
+        </button>
+      </div>
       {notice && (
         <p
           role="status"
@@ -174,12 +226,24 @@ export default function WorkflowPage() {
       )}
 
       {detail && (
-        <div className="mt-6 rounded-2xl border border-teal-100 bg-white p-5">
+        <div
+          className={
+            mode === "studio"
+              ? "mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-teal-100 bg-white p-3"
+              : "mt-6 rounded-2xl border border-teal-100 bg-white p-5"
+          }
+        >
           <p className="break-words text-sm font-semibold text-slate-800">
             {detail.session.title}
             {detail.session.archived ? " · 会话已归档" : ""}
           </p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div
+            className={
+              mode === "studio"
+                ? "min-w-0 flex-1 sm:max-w-xs"
+                : "mt-4 grid gap-4 sm:grid-cols-2"
+            }
+          >
             <label className="text-xs text-slate-600">
               选择方案
               <select
@@ -200,31 +264,34 @@ export default function WorkflowPage() {
                 ))}
               </select>
             </label>
-            <label className="text-xs text-slate-600">
-              查看版本
-              <select
-                aria-label="查看版本"
-                disabled={metaBusy || !selection}
-                value={selection?.version ?? ""}
-                onChange={(e) =>
-                  selection && choose({ ...selection, version: e.target.value })
-                }
-                className="mt-2 block w-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-sm"
-              >
-                <option value="">当前过程</option>
-                {!!selection?.version &&
-                  !versions.some(
-                    (version) => version.id === selection.version,
-                  ) && (
-                    <option value={selection.version}>所选版本不可用</option>
-                  )}
-                {[...versions].reverse().map((version) => (
-                  <option key={version.id} value={version.id}>
-                    第{version.seq}版 · {version.summary}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {mode === "process" && (
+              <label className="text-xs text-slate-600">
+                查看版本
+                <select
+                  aria-label="查看版本"
+                  disabled={metaBusy || !selection}
+                  value={selection?.version ?? ""}
+                  onChange={(e) =>
+                    selection &&
+                    choose({ ...selection, version: e.target.value })
+                  }
+                  className="mt-2 block w-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                >
+                  <option value="">当前过程</option>
+                  {!!selection?.version &&
+                    !versions.some(
+                      (version) => version.id === selection.version,
+                    ) && (
+                      <option value={selection.version}>所选版本不可用</option>
+                    )}
+                  {[...versions].reverse().map((version) => (
+                    <option key={version.id} value={version.id}>
+                      第{version.seq}版 · {version.summary}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         </div>
       )}
@@ -249,239 +316,253 @@ export default function WorkflowPage() {
         </p>
       )}
 
-      {!metaBusy && !busy && !metaError && !error && data && (
-        <>
-          <section
-            aria-label="流程数据来源"
-            className="mt-5 rounded-xl bg-teal-50 p-4 text-xs leading-7 text-teal-900"
-          >
-            <p className="font-semibold">
-              {data.branch.title} ·{" "}
-              {data.historical
-                ? `第${data.version?.seq}版固定快照`
-                : "当前过程"}
-              {data.historical ? "（只读）" : " · 过程摘要"}
-            </p>
-            <p>
-              {data.source === "checkpoint"
-                ? "来源：本方案的过程记录"
-                : data.source === "saved_version"
-                  ? "来源：已保存版本，执行过程未完整保留"
-                  : "尚未开始对话，仅展示创建时的初始参考"}
-              {!data.historical && data.version
-                ? ` · 最近保存第${data.version.seq}版`
-                : ""}
-            </p>
-            <p>
-              读取于 {new Date(data.observed_at).toLocaleString("zh-CN")}
-              {data.checkpoint_at
-                ? ` · 过程记录保存于 ${new Date(data.checkpoint_at).toLocaleString("zh-CN")}`
-                : ""}
-            </p>
-            <p>
-              “已有数据”表示内容已保留，不代表营业、价格或全部执行步骤已核实；本页不是完整运行日志。
-            </p>
-            {data.busy && (
-              <p className="mt-2 font-medium text-amber-800">
-                此方案正在生成或更新，当前显示的是已取得的数据，可稍后刷新。
-              </p>
-            )}
-            {data.warnings.map((warning) => (
-              <p key={warning} className="mt-2 text-amber-800">
-                {warning}
-              </p>
-            ))}
-          </section>
-
-          <section
-            aria-label="规划流程节点"
-            className="mt-6 overflow-hidden rounded-2xl bg-slate-900 p-5 sm:p-7"
-            style={{
-              backgroundImage: "radial-gradient(#334155 1px, transparent 1px)",
-              backgroundSize: "18px 18px",
-            }}
-          >
-            <p className="mb-5 text-xs leading-6 text-slate-300">
-              需求齐全 → 检索资料 → 生成路书；生成后等待下一轮对话确认或修改。
-            </p>
-            <ol className="grid gap-5 xl:grid-cols-4">
-              {data.nodes.map((node, index) => {
-                const Icon = ICONS[node.id];
-                const state = STATES[node.state];
-                const output =
-                  node.outputs.find(
-                    (item) =>
-                      item.label ===
-                      (node.id === "collector"
-                        ? "仍需补充"
-                        : node.id === "researcher"
-                          ? "已保留引用"
-                          : node.id === "planner"
-                            ? "结构化行程"
-                            : "待确认操作"),
-                  ) ?? node.outputs[0];
-                return (
-                  <li key={node.id} className="relative min-w-0">
-                    <button
-                      aria-label={node.title}
-                      aria-pressed={selectedNode === node.id}
-                      onClick={() => setSelectedNode(node.id)}
-                      className={`relative w-full rounded-xl border-2 p-4 text-left text-white transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-300 ${selectedNode === node.id ? "border-teal-300 bg-slate-700" : "border-slate-600 bg-slate-800 hover:border-slate-400"}`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <Icon className="h-5 w-5 text-teal-300" />
-                        <span className="text-xs text-slate-400">
-                          0{index + 1}
-                        </span>
-                      </span>
-                      <span className="mt-4 block text-sm font-semibold">
-                        {node.title}
-                      </span>
-                      <span
-                        className={`mt-3 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${state.color}`}
-                      >
-                        {state.label}
-                      </span>
-                      <span className="mt-3 block break-words text-xs leading-6 text-slate-200">
-                        {output
-                          ? `${output.label}：${output.value}`
-                          : "暂无保留输出"}
-                      </span>
-                      <span
-                        aria-hidden
-                        className="absolute top-7 -left-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
-                      />
-                      <span
-                        aria-hidden
-                        className="absolute top-7 -right-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
-                      />
-                    </button>
-                    {index < data.nodes.length - 1 && (
-                      <span
-                        aria-hidden
-                        className="mt-3 flex justify-center text-teal-300 xl:absolute xl:top-6 xl:-right-5 xl:mt-0"
-                      >
-                        <ArrowDown className="h-4 w-4 xl:hidden" />
-                        <ArrowRight className="hidden h-4 w-4 xl:block" />
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          {selected && (
+      {!metaBusy &&
+        !busy &&
+        !metaError &&
+        !error &&
+        data &&
+        mode === "studio" && (
+          <WorkflowStudio key={data.branch.id} branchId={data.branch.id} />
+        )}
+      {!metaBusy &&
+        !busy &&
+        !metaError &&
+        !error &&
+        data &&
+        mode === "process" && (
+          <>
             <section
-              aria-label="节点详情"
-              className="mt-6 rounded-2xl border border-teal-100 bg-white p-5 sm:p-7"
+              aria-label="流程数据来源"
+              className="mt-5 rounded-xl bg-teal-50 p-4 text-xs leading-7 text-teal-900"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-teal-950">
-                  {selected.title}
-                </h2>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs ${STATES[selected.state].color}`}
-                >
-                  {STATES[selected.state].label}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-7 text-slate-500">
-                {selected.description}
+              <p className="font-semibold">
+                {data.branch.title} ·{" "}
+                {data.historical
+                  ? `第${data.version?.seq}版固定快照`
+                  : "当前过程"}
+                {data.historical ? "（只读）" : " · 过程摘要"}
               </p>
-              <div className="mt-5 grid gap-6 md:grid-cols-[1fr_2fr]">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">
-                    输入依据
-                  </h3>
-                  <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
-                    {selected.inputs.map((item) => (
-                      <li key={item} className="rounded-lg bg-slate-50 p-3">
-                        {item}
+              <p>
+                {data.source === "checkpoint"
+                  ? "来源：本方案的过程记录"
+                  : data.source === "saved_version"
+                    ? "来源：已保存版本，执行过程未完整保留"
+                    : "尚未开始对话，仅展示创建时的初始参考"}
+                {!data.historical && data.version
+                  ? ` · 最近保存第${data.version.seq}版`
+                  : ""}
+              </p>
+              <p>
+                读取于 {new Date(data.observed_at).toLocaleString("zh-CN")}
+                {data.checkpoint_at
+                  ? ` · 过程记录保存于 ${new Date(data.checkpoint_at).toLocaleString("zh-CN")}`
+                  : ""}
+              </p>
+              <p>
+                “已有数据”表示内容已保留，不代表营业、价格或全部执行步骤已核实；本页不是完整运行日志。
+              </p>
+              {data.busy && (
+                <p className="mt-2 font-medium text-amber-800">
+                  此方案正在生成或更新，当前显示的是已取得的数据，可稍后刷新。
+                </p>
+              )}
+              {data.warnings.map((warning) => (
+                <p key={warning} className="mt-2 text-amber-800">
+                  {warning}
+                </p>
+              ))}
+            </section>
+
+            <section
+              aria-label="规划流程节点"
+              className="mt-6 overflow-hidden rounded-2xl bg-slate-900 p-5 sm:p-7"
+              style={{
+                backgroundImage:
+                  "radial-gradient(#334155 1px, transparent 1px)",
+                backgroundSize: "18px 18px",
+              }}
+            >
+              <p className="mb-5 text-xs leading-6 text-slate-300">
+                需求齐全 → 检索资料 → 生成路书；生成后等待下一轮对话确认或修改。
+              </p>
+              <ol className="grid gap-5 xl:grid-cols-4">
+                {data.nodes.map((node, index) => {
+                  const Icon = ICONS[node.id];
+                  const state = STATES[node.state];
+                  const output =
+                    node.outputs.find(
+                      (item) =>
+                        item.label ===
+                        (node.id === "collector"
+                          ? "仍需补充"
+                          : node.id === "researcher"
+                            ? "已保留引用"
+                            : node.id === "planner"
+                              ? "结构化行程"
+                              : "待确认操作"),
+                    ) ?? node.outputs[0];
+                  return (
+                    <li key={node.id} className="relative min-w-0">
+                      <button
+                        aria-label={node.title}
+                        aria-pressed={selectedNode === node.id}
+                        onClick={() => setSelectedNode(node.id)}
+                        className={`relative w-full rounded-xl border-2 p-4 text-left text-white transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-300 ${selectedNode === node.id ? "border-teal-300 bg-slate-700" : "border-slate-600 bg-slate-800 hover:border-slate-400"}`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <Icon className="h-5 w-5 text-teal-300" />
+                          <span className="text-xs text-slate-400">
+                            0{index + 1}
+                          </span>
+                        </span>
+                        <span className="mt-4 block text-sm font-semibold">
+                          {node.title}
+                        </span>
+                        <span
+                          className={`mt-3 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${state.color}`}
+                        >
+                          {state.label}
+                        </span>
+                        <span className="mt-3 block break-words text-xs leading-6 text-slate-200">
+                          {output
+                            ? `${output.label}：${output.value}`
+                            : "暂无保留输出"}
+                        </span>
+                        <span
+                          aria-hidden
+                          className="absolute top-7 -left-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
+                        />
+                        <span
+                          aria-hidden
+                          className="absolute top-7 -right-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
+                        />
+                      </button>
+                      {index < data.nodes.length - 1 && (
+                        <span
+                          aria-hidden
+                          className="mt-3 flex justify-center text-teal-300 xl:absolute xl:top-6 xl:-right-5 xl:mt-0"
+                        >
+                          <ArrowDown className="h-4 w-4 xl:hidden" />
+                          <ArrowRight className="hidden h-4 w-4 xl:block" />
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+
+            {selected && (
+              <section
+                aria-label="节点详情"
+                className="mt-6 rounded-2xl border border-teal-100 bg-white p-5 sm:p-7"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-teal-950">
+                    {selected.title}
+                  </h2>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs ${STATES[selected.state].color}`}
+                  >
+                    {STATES[selected.state].label}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-slate-500">
+                  {selected.description}
+                </p>
+                <div className="mt-5 grid gap-6 md:grid-cols-[1fr_2fr]">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      输入依据
+                    </h3>
+                    <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
+                      {selected.inputs.map((item) => (
+                        <li key={item} className="rounded-lg bg-slate-50 p-3">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      已有输出与记录
+                    </h3>
+                    <dl className="mt-3 divide-y divide-slate-100 text-sm">
+                      {selected.outputs.map((item) => (
+                        <div
+                          key={item.label}
+                          className="grid gap-1 py-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-4"
+                        >
+                          <dt className="text-slate-500">{item.label}</dt>
+                          <dd className="min-w-0 break-words text-slate-800">
+                            {item.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                </div>
+                <div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-7 text-slate-600">
+                  {selected.notes.map((note) => (
+                    <p key={note}>{note}</p>
+                  ))}
+                </div>
+                <h3 className="mt-5 text-sm font-semibold text-slate-800">
+                  如何继续
+                </h3>
+                <ul className="mt-3 space-y-2 text-xs leading-7 text-slate-600">
+                  {data.edges
+                    .filter((edge) => edge.source === selected.id)
+                    .map((edge) => (
+                      <li key={`${edge.target}-${edge.trigger}`}>
+                        {edge.label} →{" "}
+                        {
+                          data.nodes.find((node) => node.id === edge.target)
+                            ?.title
+                        }
+                        （
+                        {edge.trigger === "automatic"
+                          ? "原流程自动衔接"
+                          : "等待下一条对话"}
+                        ）
                       </li>
                     ))}
-                  </ul>
+                </ul>
+                <div className="mt-5 flex flex-wrap gap-5 text-sm text-teal-800">
+                  <Link href={`/chat/${sessionId}?branch=${data.branch.id}`}>
+                    回原对话继续
+                  </Link>
+                  {data.version && (
+                    <a href={api.exportUrl(data.version.id, "html")} download>
+                      {data.historical
+                        ? "导出所选版本 HTML"
+                        : "导出最近保存版本 HTML"}
+                    </a>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-800">
-                    已有输出与记录
-                  </h3>
-                  <dl className="mt-3 divide-y divide-slate-100 text-sm">
-                    {selected.outputs.map((item) => (
-                      <div
-                        key={item.label}
-                        className="grid gap-1 py-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-4"
-                      >
-                        <dt className="text-slate-500">{item.label}</dt>
-                        <dd className="min-w-0 break-words text-slate-800">
-                          {item.value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              </div>
-              <div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-7 text-slate-600">
-                {selected.notes.map((note) => (
-                  <p key={note}>{note}</p>
-                ))}
-              </div>
-              <h3 className="mt-5 text-sm font-semibold text-slate-800">
-                如何继续
-              </h3>
-              <ul className="mt-3 space-y-2 text-xs leading-7 text-slate-600">
-                {data.edges
-                  .filter((edge) => edge.source === selected.id)
-                  .map((edge) => (
-                    <li key={`${edge.target}-${edge.trigger}`}>
-                      {edge.label} →{" "}
-                      {
-                        data.nodes.find((node) => node.id === edge.target)
-                          ?.title
-                      }
-                      （
-                      {edge.trigger === "automatic"
-                        ? "原流程自动衔接"
-                        : "等待下一条对话"}
-                      ）
-                    </li>
-                  ))}
-              </ul>
-              <div className="mt-5 flex flex-wrap gap-5 text-sm text-teal-800">
-                <Link href={`/chat/${sessionId}?branch=${data.branch.id}`}>
-                  回原对话继续
-                </Link>
-                {data.version && (
-                  <a href={api.exportUrl(data.version.id, "html")} download>
-                    {data.historical
-                      ? "导出所选版本 HTML"
-                      : "导出最近保存版本 HTML"}
-                  </a>
-                )}
-              </div>
-            </section>
-          )}
-          {selectedNode === "planner" &&
-            data.version &&
-            (data.historical ? (
-              <p className="mt-5 text-sm text-slate-500">
-                历史版本只读；切换“当前过程”后可优化当前方案。
-              </p>
-            ) : !data.busy && data.checkpoint_status === "available" ? (
-              <PlannerRerun
-                key={`${data.branch.id}-${data.version.id}`}
-                branchId={data.branch.id}
-                versionId={data.version.id}
-                onApplied={() => {
-                  setNotice(
-                    "单日优化已保存为新版本，原消费、人工预算、预约与回顾继续保留。",
-                  );
-                  reload();
-                }}
-              />
-            ) : null)}
-        </>
-      )}
+              </section>
+            )}
+            {selectedNode === "planner" &&
+              data.version &&
+              (data.historical ? (
+                <p className="mt-5 text-sm text-slate-500">
+                  历史版本只读；切换“当前过程”后可优化当前方案。
+                </p>
+              ) : !data.busy && data.checkpoint_status === "available" ? (
+                <PlannerRerun
+                  key={`${data.branch.id}-${data.version.id}`}
+                  branchId={data.branch.id}
+                  versionId={data.version.id}
+                  onApplied={() => {
+                    setNotice(
+                      "单日优化已保存为新版本，原消费、人工预算、预约与回顾继续保留。",
+                    );
+                    reload();
+                  }}
+                />
+              ) : null)}
+          </>
+        )}
     </div>
   );
 }

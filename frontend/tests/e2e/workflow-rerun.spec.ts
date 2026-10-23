@@ -38,7 +38,9 @@ test("单日优化预览可刷新恢复，应用回复丢失可重试且保留�
 }, info) => {
   const seed = await (await page.request.post(`${proxy}/test/moves`)).json();
   const before = await latest(page, seed.session_id, seed.branch_id);
-  await page.goto(`/workflow/${seed.session_id}?branch=${seed.branch_id}`);
+  await page.goto(
+    `/workflow/${seed.session_id}?branch=${seed.branch_id}&view=process`,
+  );
   await editor(page).getByLabel("优化日期", { exact: true }).selectOption("2");
   await editor(page)
     .getByLabel("市内默认交通", { exact: true })
@@ -132,7 +134,9 @@ test("重跑失败可重试、预览可丢弃，其他窗口新消费拒绝旧�
   page,
 }) => {
   const seed = await (await page.request.post(`${proxy}/test/moves`)).json();
-  await page.goto(`/workflow/${seed.session_id}?branch=${seed.branch_id}`);
+  await page.goto(
+    `/workflow/${seed.session_id}?branch=${seed.branch_id}&view=process`,
+  );
   await editor(page).getByLabel("优化日期", { exact: true }).selectOption("2");
   let failed = false;
   await page.route("**/workflow/planner-preview", async (route) => {
@@ -190,7 +194,9 @@ test("预约和旅中历史保留，存在固定时间冲突的预览不能应�
     await page.request.post(`${proxy}/test/linked?early_booking=true`)
   ).json();
   const before = await latest(page, seed.session_id, seed.branch_id);
-  await page.goto(`/workflow/${seed.session_id}?branch=${seed.branch_id}`);
+  await page.goto(
+    `/workflow/${seed.session_id}?branch=${seed.branch_id}&view=process`,
+  );
   await editor(page).getByLabel("优化日期", { exact: true }).selectOption("2");
   expect((await generate(page)).ok()).toBe(true);
   await expect(preview(page)).toContainText("暂不能应用");
