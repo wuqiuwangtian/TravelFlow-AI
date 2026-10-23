@@ -482,7 +482,11 @@ export default function ChatPage() {
                     clarification.options.length > 0 && (
                       <div
                         role="group"
-                        aria-label="地点候选选择"
+                        aria-label={
+                          clarification.kind === "expense"
+                            ? "消费记录选择"
+                            : "地点候选选择"
+                        }
                         className="my-2 grid max-h-64 min-w-0 gap-2 overflow-y-auto"
                       >
                         {clarification.options.map((option) => (

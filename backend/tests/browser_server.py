@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import uvicorn  # noqa: E402
 from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
+from expense_fixtures import expense_itinerary  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from place_fixtures import place_itinerary  # noqa: E402
 
@@ -99,6 +100,27 @@ async def place_trip():
     session = await store.create_session("地点候选验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     itinerary = place_itinerary()
+    req = requirements().model_copy(update={"duration_days": 2})
+    values = {
+        **initial_state(),
+        "requirements": req,
+        "itinerary": itinerary,
+        "plan_markdown": sync_markdown(MARKDOWN.replace("[1]", ""), itinerary, req),
+        "status": PlanStatus.REVIEWING,
+    }
+    config = await app.state.graph.aupdate_state(
+        thread_config(branch.id), values, as_node="planner"
+    )
+    await ChatService(graph=app.state.graph, store=store).record_version(branch.id, values, config)
+    return {"session_id": session.id, "branch_id": branch.id}
+
+
+@app.post("/test/expenses")
+async def expense_trip():
+    store = app.state.store
+    session = await store.create_session("同日消费候选验收")
+    branch = await store.create_branch(session.id, "主方案", is_primary=True)
+    itinerary = expense_itinerary()
     req = requirements().model_copy(update={"duration_days": 2})
     values = {
         **initial_state(),
