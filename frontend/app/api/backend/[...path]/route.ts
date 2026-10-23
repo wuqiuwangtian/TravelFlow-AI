@@ -26,7 +26,8 @@ async function proxy(
       path.length === 4 &&
       path[0] === "api" &&
       path[1] === "versions" &&
-      path[3] === "receipts"
+      request.method === "POST" &&
+      ["receipts", "travel-photos"].includes(path[3])
         ? 4 * 1024 * 1024
         : 256 * 1024;
     const reader = request.body?.getReader();

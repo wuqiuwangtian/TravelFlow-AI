@@ -7,6 +7,7 @@ from test_activity_moves import seed
 from test_receipts import receipt_image, upload
 
 from app.agents.checkpoint import build_serde, thread_config
+from app.core.config import Settings
 from app.core.errors import InvalidRequest
 from app.services.photo_service import normalise_photo, photo_export_html
 
@@ -200,3 +201,42 @@ async def test_export_size_bound(environment, monkeypatch):
     monkeypatch.setattr(store, "get_photo", large)
     with pytest.raises(InvalidRequest):
         await photo_export_html("<main></main>", plan, store, "trip")
+
+
+@pytest.mark.parametrize("asset", ["travel-photos", "receipts"])
+async def test_production_middleware_accepts_large_images_and_still_bounds_requests(
+    environment, monkeypatch, asset
+):
+    import random
+
+    import httpx
+
+    # 使用真实应用中间件，不启动生命周期或读取个人模型配置。
+    import app.core.config as config
+
+    monkeypatch.setattr(config, "get_settings", lambda: Settings(_env_file=None))
+    import app.main as main
+
+    monkeypatch.setattr(main, "get_settings", lambda: Settings(_env_file=None))
+    _, store, graph, _ = environment
+    _, bid, _ = await seed(environment)
+    vid = (await store.list_versions(bid))[-1].id
+    production = main.create_app()
+    production.state.store, production.state.graph = store, graph
+    out = BytesIO()
+    Image.frombytes("RGB", (400, 300), random.Random(0).randbytes(400 * 300 * 3)).save(
+        out, format="PNG"
+    )
+    raw = out.getvalue()
+    assert 256 * 1024 < len(raw) < 4 * 1024 * 1024
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=production), base_url="http://test"
+    ) as client:
+        response = await client.post(f"/api/versions/{vid}/{asset}", content=raw)
+        assert response.status_code == 200, response.text
+        oversized = await client.post(
+            f"/api/versions/{vid}/{asset}", content=b"x" * (4 * 1024 * 1024 + 1)
+        )
+        assert oversized.status_code == 413
+        text = await client.post("/api/chat", content=b"x" * (256 * 1024 + 1))
+        assert text.status_code == 413

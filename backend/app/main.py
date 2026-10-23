@@ -32,8 +32,7 @@ logger = get_logger(__name__)
 # 本机来源：localhost / 127.0.0.1 / [::1]，端口任意
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
 
-#: 请求体上限。本应用最大合法输入不过几千字，256KB 已非常宽松；
-#: 没有这道闸时 FastAPI 会先把整个 body 读进内存，可被用来打爆服务。
+#: 文字请求体上限；图片上传在中间件与路由中单独限制为4MB。
 MAX_REQUEST_BYTES = 256 * 1024
 
 
@@ -119,11 +118,19 @@ def create_app() -> FastAPI:
 
         为什么需要：FastAPI 会**先把整个请求体读进内存**，之后才校验
         ``message`` 的 ``max_length``。也就是说没有这道闸时，
-        一个几百 MB 的 body 就能把服务打爆。本应用最大的合法输入
-        不过几千字，256KB 已非常宽松。
+        一个几百 MB 的 body 就能把服务打爆。文字请求上限256KB；
+        旅行照片和凭证上传使用对应的4MB上限，并由路由限制流式读取。
         """
         raw_length = request.headers.get("content-length")
-        if raw_length and raw_length.isdigit() and int(raw_length) > MAX_REQUEST_BYTES:
+        parts = request.url.path.strip("/").split("/")
+        image_upload = (
+            request.method == "POST"
+            and len(parts) == 4
+            and parts[:2] == ["api", "versions"]
+            and parts[3] in {"receipts", "travel-photos"}
+        )
+        limit = 4 * 1024 * 1024 if image_upload else MAX_REQUEST_BYTES
+        if raw_length and raw_length.isdigit() and int(raw_length) > limit:
             logger.warning(
                 "请求体过大已拒绝",
                 extra={"extra_fields": {"path": request.url.path, "bytes": raw_length}},
@@ -133,7 +140,7 @@ def create_app() -> FastAPI:
                 content={
                     "error": {
                         "code": "PAYLOAD_TOO_LARGE",
-                        "message": f"请求内容过大（上限 {MAX_REQUEST_BYTES // 1024} KB）",
+                        "message": f"请求内容过大（上限 {limit // 1024} KB）",
                         "trace_id": new_trace_id(),
                     }
                 },
