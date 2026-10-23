@@ -36,6 +36,7 @@ import type {
   SavedPreferences,
   CareerFootprints,
   CareerMemories,
+  WorkflowView,
 } from "./types";
 import type {
   SettingsPayload,
@@ -92,6 +93,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  workflow: (branchId: string, versionId = "") =>
+    request<WorkflowView>(
+      `/api/branches/${branchId}/workflow${versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""}`,
+    ),
   careerFootprints: (page = 1, city = "") =>
     request<CareerFootprints>(
       `/api/travel-career/footprints?page=${page}&city=${encodeURIComponent(city)}`,

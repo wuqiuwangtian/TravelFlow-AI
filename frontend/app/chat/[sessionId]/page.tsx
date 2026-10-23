@@ -391,6 +391,14 @@ export default function ChatPage() {
               对比分支
             </Button>
           </Link>
+          {activeBranchId && (
+            <Link
+              href={`/workflow/${sessionId}?branch=${activeBranchId}${versionDetail && versions.at(-1)?.id !== versionDetail.version.id ? `&version=${versionDetail.version.id}` : ""}`}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-teal-800 hover:border-teal-400"
+            >
+              高级流程
+            </Link>
+          )}
         </div>
       </div>
 

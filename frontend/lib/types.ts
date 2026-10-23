@@ -527,6 +527,45 @@ export interface CareerMemories {
   total: number;
 }
 
+export type WorkflowNodeId = "collector" | "researcher" | "planner" | "refiner";
+export type WorkflowNodeState =
+  | "waiting"
+  | "needs_input"
+  | "available"
+  | "ready"
+  | "interrupted"
+  | "unknown";
+export interface WorkflowNode {
+  id: WorkflowNodeId;
+  title: string;
+  description: string;
+  state: WorkflowNodeState;
+  inputs: string[];
+  outputs: { label: string; value: string }[];
+  notes: string[];
+}
+export interface WorkflowView {
+  session: SessionInfo;
+  branch: BranchInfo;
+  version: VersionInfo | null;
+  historical: boolean;
+  source: "checkpoint" | "saved_version" | "empty";
+  checkpoint_status: "available" | "missing" | "unavailable" | "not_configured";
+  checkpoint_at: string | null;
+  observed_at: string;
+  busy: boolean;
+  plan_status: string | null;
+  nodes: WorkflowNode[];
+  edges: {
+    source: WorkflowNodeId;
+    target: WorkflowNodeId;
+    trigger: "automatic" | "next_message";
+    label: string;
+  }[];
+  focus_node: WorkflowNodeId;
+  warnings: string[];
+}
+
 export interface TravelCareer {
   summary: CareerFacts & {
     trip_count: number;

@@ -1,5 +1,6 @@
 """浏览器验收专用服务：真实接口、编排和持久化，模型与检索用固定替身。"""
 
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,11 +23,15 @@ from app.agents.nodes.collector import (  # noqa: E402
     DestinationIdea,
     DestinationOptions,
 )
+from app.agents.nodes.planner import PlanOutput  # noqa: E402
 from app.agents.nodes.refiner import RefineIntent  # noqa: E402
 from app.agents.state import initial_state  # noqa: E402
 from app.api import routes_chat, routes_export, routes_itinerary, routes_session, routes_system  # noqa: E402
 from app.core.config import Settings, get_settings  # noqa: E402
-from app.core.errors import register_exception_handlers  # noqa: E402
+from app.core.errors import (
+    LLMAuthenticationFailed,  # noqa: E402
+    register_exception_handlers,  # noqa: E402
+)
 from app.domain.enums import PlanStatus  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
@@ -37,7 +42,14 @@ from app.storage.session_store import SessionStore  # noqa: E402
 
 
 class BrowserLLM(FakeLLM):
+    failed_workflow_cases: set[str] = set()
+
     async def structured(self, messages, schema, **kwargs):
+        if schema is PlanOutput:
+            case = re.search(r"workflow-failure-([a-f0-9]{12})", messages[0].content)
+            if case and case[1] not in self.failed_workflow_cases:
+                self.failed_workflow_cases.add(case[1])
+                raise LLMAuthenticationFailed("验收用鉴权失败")
         if schema is RefineIntent and "这次清空偏好" in messages[0].content:
             return RefineIntent(intent="modify", clear_preferences=True)
         if schema is RecapWriting:
@@ -50,6 +62,14 @@ class BrowserLLM(FakeLLM):
             )
         if schema is CollectResult:
             text = messages[-1].content
+            case = re.search(r"北京流程中断验收([a-f0-9]{12})", text)
+            if case:
+                return CollectResult(
+                    extracted=requirements().model_copy(
+                        update={"preferences": ["workflow-failure-" + case[1]]}
+                    ),
+                    reply="开始生成验收方案",
+                )
             if text == "这次改成徒步":
                 return CollectResult(
                     extracted=Requirements(preferences=["徒步"]), reply="按本次徒步偏好继续"
