@@ -217,7 +217,7 @@ def test_undated_candidates_offer_selection_and_changed_source_invalidates_choic
     itinerary = expense_itinerary()
     itinerary.expenses[0].day = None
     pending = prepare_journey_message("咖啡消费改成18元", itinerary, Requirements()).clarification
-    assert pending.kind == "expense" and "未关联日期" in pending.expense_options[0].label
+    assert pending.kind == "expense" and "付款日未关联" in pending.expense_options[0].label
     changed = itinerary.model_copy(deep=True)
     changed.expenses.reverse()
     assert resume_journey_message("选第2笔", pending, changed, Requirements()) is None

@@ -67,13 +67,26 @@ def budget_overview(itinerary: Itinerary, requirements: "Requirements") -> Budge
             rows[row.id] = row
     for item in itinerary.budget_items:
         if item.source == "custom" or item.id in rows:
-            rows[item.id] = BudgetRow(**item.model_dump())
+            planned = rows.get(item.id)
+            row = BudgetRow(**item.model_dump())
+            if planned and item.source != "custom":
+                row.day = planned.day
+                row.activity_id = planned.activity_id
+            rows[item.id] = row
     refunds: dict[str, int] = {}
     for a in itinerary.adjustments:
         if a.kind == "refund" and a.status == "received":
             refunds[a.expense_id] = refunds.get(a.expense_id, 0) + a.amount_cents
     for entry in itinerary.expenses:
         row = rows.get(entry.budget_item_id or "")
+        if row is None and not entry.budget_item_id and entry.activity_id:
+            linked = [
+                r
+                for r in rows.values()
+                if r.activity_id == entry.activity_id and r.category == entry.category
+            ]
+            if len(linked) == 1:
+                row = linked[0]
         if row is None and not entry.budget_item_id and entry.day is not None:
             candidates = [
                 r

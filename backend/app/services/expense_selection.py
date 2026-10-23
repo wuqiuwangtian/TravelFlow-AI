@@ -5,6 +5,7 @@ import hashlib
 from app.core.errors import InvalidRequest
 from app.domain.clarification import ExpenseTarget
 from app.domain.itinerary import Expense, Itinerary
+from app.services.expense_dates import planned_expense_day
 
 
 def expense_fingerprint(expense: Expense) -> str:
@@ -21,10 +22,13 @@ def expense_targets(
     targets = []
     for expense in candidates:
         labels = [
-            f"第{expense.day}天" if expense.day is not None else "未关联日期",
+            f"付款第{expense.day}天" if expense.day is not None else "付款日未关联",
             expense.title,
             f"{expense.amount_cents / 100:.2f}元",
         ]
+        planned_day = planned_expense_day(working, expense)
+        if planned_day is not None and planned_day != expense.day:
+            labels.append(f"行程第{planned_day}天")
         for day in working.days:
             for station, activity in enumerate(day.activities, 1):
                 if activity.id == expense.activity_id:

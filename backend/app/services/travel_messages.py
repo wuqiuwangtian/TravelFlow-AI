@@ -19,6 +19,7 @@ from app.domain.itinerary import (
     Itinerary,
 )
 from app.domain.models import Requirements
+from app.services.expense_dates import expense_matches_day
 from app.services.expense_selection import selected_expense
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 
@@ -104,13 +105,17 @@ def handle_travel_message(
             )
         if ledger_edit:
             candidates = [
-                e for e in result.expenses if e.title in text and (day is None or e.day == day)
+                e
+                for e in result.expenses
+                if e.title in text and expense_matches_day(e, day, text, result)
             ]
             if expense_target:
                 entry = selected_expense(expense_target, candidates, result)
             elif len(candidates) != 1:
                 if len(candidates) > 1 and (
-                    len({e.day for e in candidates}) == 1 or any(e.day is None for e in candidates)
+                    day is not None
+                    or len({e.day for e in candidates}) == 1
+                    or any(e.day is None for e in candidates)
                 ):
                     return TravelReply(
                         "有多笔符合描述的消费，请选择要修改或移除的那一笔。",

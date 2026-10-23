@@ -656,8 +656,15 @@ def sync_markdown(markdown: str, itinerary: Itinerary, requirements: Requirement
             "请核对回款记录。\n\n"
         )
     for entry in itinerary.expenses:
+        from app.services.expense_dates import planned_expense_day
+
         day_label = f"第 {entry.day} 天" if entry.day else "未关联日期"
-        travel += f"- {day_label} · {_text(entry.title)}：{entry.amount_cents / 100:.2f} 元\n"
+        travel += (
+            f"- 付款日：{day_label} · {_text(entry.title)}：{entry.amount_cents / 100:.2f} 元\n"
+        )
+        planned_day = planned_expense_day(itinerary, entry)
+        if planned_day is not None and planned_day != entry.day:
+            travel += f"  关联行程：第 {planned_day} 天；付款日期保持原记录。\n"
         if entry.notes:
             travel += f"  {_text(entry.notes)}\n"
         for adjustment in itinerary.adjustments:

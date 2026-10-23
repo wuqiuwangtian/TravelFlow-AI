@@ -43,18 +43,19 @@ def validate_expense_link(itinerary: Itinerary, data: ExpenseInput) -> None:
         )
         if row is None or row.id.startswith("expense-"):
             raise InvalidRequest("预算项目不存在，请刷新后重新选择")
-        if row.day != data.day or row.category != data.category:
-            raise InvalidRequest("消费日期或类别与预算项目不一致")
+        if row.category != data.category:
+            raise InvalidRequest("消费类别与预算项目不一致")
     if data.day is not None and not any(day.day == data.day for day in itinerary.days):
         raise InvalidRequest("记账日期不在当前行程中")
     if data.activity_id:
         linked = [
-            day.day
+            a.id
             for day in itinerary.days
-            if any(a.id == data.activity_id for a in day.activities)
+            for a in day.activities
+            if a.id == data.activity_id and not a.is_context_anchor
         ]
-        if not linked or data.day != linked[0]:
-            raise InvalidRequest("关联活动与记账日期不一致")
+        if not linked:
+            raise InvalidRequest("关联活动不存在或不是实际停留点")
 
 
 def add_expense(itinerary: Itinerary, data: ExpenseCreate) -> bool:
