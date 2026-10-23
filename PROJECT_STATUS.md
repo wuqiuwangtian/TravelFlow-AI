@@ -41,7 +41,7 @@
 
 | 检查 | 结果 |
 | :--- | :--- |
-| 后端完整测试 `pytest -q` | 205项通过 |
+| 后端完整测试 `pytest -q` | 206项通过 |
 | 后端类型检查 `mypy app` | 83个源文件通过 |
 | 后端 `ruff check app tests` / `ruff format --check app` | 通过 |
 | 前端生产构建与 TypeScript 检查 | 通过 |

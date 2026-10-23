@@ -110,6 +110,27 @@ async def test_optional_stops_can_be_omitted_but_bookings_logistics_and_paid_sto
     assert preview.itinerary.days[1].replan_context.omitted_titles == ["可选绕路公园"]
 
 
+async def test_completed_stop_after_selected_origin_is_not_counted_again_in_future_timing():
+    original = linked_itinerary()
+    completed = ScheduledActivity(
+        id="recorded-stop",
+        title="已经完成的晚餐",
+        place_name="示例餐馆",
+        city="北京",
+        progress="completed",
+        start_time="19:00",
+        duration_minutes=30,
+        transport_minutes=0,
+    )
+    original.days[0].activities.insert(2, completed)
+    preview = await preview_linked_replan(original, LinkedReplanInput(first_day=1), REQ, SETTINGS)
+    assert not preview.conflicts
+    restored = next(a for a in preview.itinerary.days[0].activities if a.id == completed.id)
+    assert restored == completed
+    assert preview.itinerary.days[0].activities[-1].start_time == "01:20"
+    assert preview.itinerary.days[1].replan_context.time == "09:50"
+
+
 async def test_early_fixed_booking_blocks_apply_without_changing_its_time():
     original = linked_itinerary(early_booking=True)
     preview = await preview_linked_replan(original, LinkedReplanInput(first_day=1), REQ, SETTINGS)

@@ -11,6 +11,7 @@ from app.domain.linked_replan import LinkedActivityChange, LinkedReplanInput, Li
 from app.domain.models import Requirements
 from app.services.itinerary_service import enrich_itinerary
 from app.services.journey_messages import itinerary_fingerprint
+from app.services.replan_service import preserve_replan_scope
 from app.services.travel_time import minutes, time_label
 
 
@@ -48,6 +49,7 @@ async def preview_linked_replan(
     if first.replan_context:
         first.replan_context.preserve_logistics = True
         first.replan_context.protected_activity_ids = protected
+        preserve_replan_scope(candidate.model_copy(deep=True), candidate, number)
         candidate = await enrich_itinerary(candidate, requirements, settings, day_number=number)
         first = next(d for d in candidate.days if d.day == number)
         second = next(d for d in candidate.days if d.day == number + 1)
