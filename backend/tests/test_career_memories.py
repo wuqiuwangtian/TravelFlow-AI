@@ -254,3 +254,22 @@ async def test_changed_footprint_snapshot_rejected_and_missing_map_service_keeps
     ).status_code == 400
     assert (await client.get("/api/travel-career/map?snapshot=not-a-snapshot")).status_code == 400
     assert not respx.calls
+
+
+@respx.mock
+async def test_map_provider_failure_keeps_safe_footprint_message_and_records(environment):
+    client, store, _, _ = environment
+    client._transport.app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None, amap_api_key="career-map-test"
+    )
+    _, bid, _, plan = await trip(store)
+    plan.days[1].activities[0].progress = "completed"
+    await snapshot(store, bid, plan)
+    before = await footprints(client)
+    respx.get("https://restapi.amap.com/v3/staticmap").mock(
+        return_value=httpx.Response(503, text="upstream unavailable")
+    )
+    response = await client.get(f"/api/travel-career/map?snapshot={before['map_fingerprint']}")
+    assert response.status_code == 502 and "已保留到访记录" in response.text
+    assert "行程连线" not in response.text and "career-map-test" not in response.text
+    assert await footprints(client) == before

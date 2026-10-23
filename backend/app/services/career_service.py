@@ -5,7 +5,7 @@ import json
 from collections import Counter
 
 from app.core.config import Settings
-from app.core.errors import ConflictError, InvalidRequest
+from app.core.errors import ConflictError, InvalidRequest, ProviderError
 from app.domain.career import (
     CareerCity,
     CareerFootprint,
@@ -168,7 +168,12 @@ async def career_map(
             if point.location is not None
         ],
     )
-    return await map_asset("career-" + snapshot, day, settings)
+    try:
+        return await map_asset("career-" + snapshot, day, settings)
+    except ProviderError:
+        raise ProviderError(
+            "足迹地图暂时无法加载，已保留到访记录；可稍后重试或检查地图服务配置。"
+        ) from None
 
 
 async def travel_memories(

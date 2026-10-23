@@ -169,6 +169,18 @@ async def move_trip(ambiguous: bool = False, booked: bool = False, payment_unkno
     return await seed_linked_trip(itinerary)
 
 
+@app.post("/test/career")
+async def career_sample(city: str = "泉州"):
+    """测试城市独立，避免并行验收的照片分页互相干扰；只在隔离服务中注册。"""
+    itinerary = move_itinerary()
+    itinerary.days[0].activities[0].city = city
+    park = itinerary.days[1].activities[0]
+    park.city = city
+    assert park.place is not None
+    park.place.city = city
+    return await seed_linked_trip(itinerary)
+
+
 async def seed_linked_trip(itinerary):
     store = app.state.store
     session = await store.create_session("两天联动验收")

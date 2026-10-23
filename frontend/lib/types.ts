@@ -476,6 +476,55 @@ export interface CareerTrip extends CareerFacts {
   finished_branch_count: number;
   source_basis: "primary" | "latest_finished";
   cover_photo_id: string | null;
+  photo_count: number;
+}
+
+export interface CareerSource {
+  session_id: string;
+  session_title: string;
+  session_archived: boolean;
+  branch_id: string;
+  branch_title: string;
+  version_id: string;
+  title: string;
+  ended_at: string;
+}
+
+export interface CareerFootprint extends CareerSource {
+  day: number;
+  activity_id: string;
+  activity_title: string;
+  place_name: string;
+  city: string | null;
+  location: {
+    id: string;
+    name: string;
+    address: string;
+    longitude: number;
+    latitude: number;
+  } | null;
+}
+
+export interface CareerFootprints {
+  items: CareerFootprint[];
+  total: number;
+  located_count: number;
+  unlocated_count: number;
+  map_points: CareerFootprint[];
+  map_fingerprint: string;
+}
+
+export interface CareerMemory extends CareerSource {
+  photo_id: string;
+  caption: string;
+  day: number | null;
+  activity_id: string | null;
+  activity_title: string | null;
+}
+
+export interface CareerMemories {
+  items: CareerMemory[];
+  total: number;
 }
 
 export interface TravelCareer {

@@ -34,6 +34,8 @@ import type {
   RecapArchiveItem,
   TravelCareer,
   SavedPreferences,
+  CareerFootprints,
+  CareerMemories,
 } from "./types";
 import type {
   SettingsPayload,
@@ -90,6 +92,53 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  careerFootprints: (page = 1, city = "") =>
+    request<CareerFootprints>(
+      `/api/travel-career/footprints?page=${page}&city=${encodeURIComponent(city)}`,
+    ),
+  careerMemories: (page = 1, city = "") =>
+    request<CareerMemories>(
+      `/api/travel-career/memories?page=${page}&city=${encodeURIComponent(city)}`,
+    ),
+  careerMapImage: async (
+    snapshot: string,
+    city: string,
+    signal: AbortSignal,
+  ): Promise<Blob> => {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${API_BASE}/api/travel-career/map?snapshot=${snapshot}&city=${encodeURIComponent(city)}`,
+        {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(22_000)]),
+          cache: "no-store",
+        },
+      );
+    } catch {
+      throw new ApiError(
+        "MAP_UNAVAILABLE",
+        "地图连接暂时不可用，已保留到访记录。",
+        0,
+      );
+    }
+    if (!response.ok) {
+      let message = "地图暂时不可用，已保留到访记录。";
+      try {
+        const data = await response.json();
+        message = data?.error?.message ?? message;
+      } catch {
+        /* 保留安全提示 */
+      }
+      throw new ApiError("MAP_UNAVAILABLE", message, response.status);
+    }
+    if (!response.headers.get("content-type")?.startsWith("image/"))
+      throw new ApiError(
+        "MAP_UNAVAILABLE",
+        "地图服务未返回图片，已保留到访记录。",
+        502,
+      );
+    return response.blob();
+  },
   travelPreferences: () => request<SavedPreferences>("/api/travel-preferences"),
   saveTravelPreferences: (preferences: string[], expectedRevision: number) =>
     request<SavedPreferences>("/api/travel-preferences", {

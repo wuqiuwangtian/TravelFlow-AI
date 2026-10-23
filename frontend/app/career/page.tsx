@@ -5,6 +5,8 @@ import Link from "next/link";
 import { MapPin, ArrowUpRight } from "lucide-react";
 import { api } from "@/lib/api";
 import type { TravelCareer } from "@/lib/types";
+import { CareerFootprints } from "@/components/career-footprints";
+import { CareerMemories } from "@/components/career-memories";
 
 const money = (cents: number) =>
   `¥${(cents / 100).toLocaleString("zh-CN", {
@@ -203,6 +205,9 @@ export default function TravelCareerPage() {
                 )}
               </section>
 
+              <CareerFootprints key={`footprints-${city}`} city={city} />
+              <CareerMemories key={`memories-${city}`} city={city} />
+
               <section aria-label="生涯来源旅行" className="mt-9">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-lg font-semibold text-teal-950">
@@ -269,6 +274,11 @@ export default function TravelCareerPage() {
                         {item.unsettled_count > 0 && (
                           <p className="mt-1 text-xs text-amber-800">
                             还有{item.unsettled_count}项回款待到账。
+                          </p>
+                        )}
+                        {item.photo_count > 0 && (
+                          <p className="mt-2 text-xs text-slate-500">
+                            已选入{item.photo_count}张照片回忆
                           </p>
                         )}
                         <div className="mt-4 flex flex-wrap gap-5 text-sm text-teal-800">
