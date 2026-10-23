@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RecapWriter } from "@/components/recap-writer";
 import { RecapPhotos } from "@/components/recap-photos";
 import { api, API_BASE } from "@/lib/api";
 import type { VersionDetail, RecapView, RecapPhoto } from "@/lib/types";
@@ -21,6 +22,8 @@ export function TravelRecap({
   const [error, setError] = useState("");
   const [photos, setPhotos] = useState<RecapPhoto[]>([]);
   const [cover, setCover] = useState<string | null>(null);
+  const [socialCopy, setSocialCopy] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
     if (!detail.itinerary?.recap) return;
@@ -32,6 +35,7 @@ export function TravelRecap({
           setView(result);
           setTitle(result.title);
           setBody(result.body);
+          setSocialCopy(result.social_copy);
           setPhotos(result.photos);
           setCover(result.cover_photo_id);
         }
@@ -52,6 +56,7 @@ export function TravelRecap({
       setView(result);
       setTitle(result.title);
       setBody(result.body);
+      setSocialCopy(result.social_copy);
       setPhotos(result.photos);
       setCover(result.cover_photo_id);
       setDirty(false);
@@ -59,6 +64,15 @@ export function TravelRecap({
       setError(err instanceof Error ? err.message : "回顾加载失败，请重试。");
     } finally {
       setBusy(false);
+    }
+  }
+  async function copySocial() {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(socialCopy);
+      setCopyNotice("已复制文案，请自行选择图片并发布。");
+    } catch {
+      setCopyNotice("复制未成功，可在文案框中手动选择并复制。");
     }
   }
   const field =
@@ -94,7 +108,7 @@ export function TravelRecap({
               role="status"
               className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800"
             >
-              行程或账目已有变化。事实汇总已更新，请核对原回忆文字后保存。
+              行程或账目已有变化。事实汇总已更新，请核对回忆与朋友圈文案后保存。
             </p>
           )}
           <div
@@ -136,6 +150,7 @@ export function TravelRecap({
                   title,
                   body,
                   source_fingerprint: view.source_fingerprint,
+                  social_copy: socialCopy,
                   photos,
                   cover_photo_id: cover,
                 }),
@@ -172,6 +187,46 @@ export function TravelRecap({
                   }}
                 />
               </label>
+              <RecapWriter
+                versionId={detail.version.id}
+                fingerprint={view.source_fingerprint}
+                memory={body}
+                disabled={disabled || busy}
+                onBusy={setBusy}
+                onAdopt={(draft) => {
+                  if (draft.kind === "recap") setBody(draft.text);
+                  else setSocialCopy(draft.text);
+                  setDirty(true);
+                  setCopyNotice("");
+                }}
+              />
+              <label className="block text-xs text-slate-600">
+                朋友圈文案
+                <textarea
+                  rows={4}
+                  maxLength={2000}
+                  className={field}
+                  value={socialCopy}
+                  onChange={(e) => {
+                    setSocialCopy(e.target.value);
+                    setDirty(true);
+                    setCopyNotice("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!socialCopy.trim()}
+                className="text-xs text-teal-800 disabled:opacity-50"
+                onClick={() => void copySocial()}
+              >
+                复制朋友圈文案
+              </button>
+              {copyNotice && (
+                <p role="status" className="text-xs text-teal-800">
+                  {copyNotice}
+                </p>
+              )}
               <RecapPhotos
                 detail={detail}
                 photos={photos}
@@ -198,7 +253,7 @@ export function TravelRecap({
               : view.saved
                 ? "回顾已随当前版本保存。"
                 : "当前为事实模板，保存后可在版本历史中查看。"}{" "}
-            导出不附带票据图片、消费备注和订单资料；自己补写的文字会包含在导出中。
+            导出不附带票据图片、消费备注和订单资料；回忆正文会包含在回顾导出中；朋友圈文案单独复制发布。
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-teal-800">
             {(["markdown", "html"] as const).map((format) => (

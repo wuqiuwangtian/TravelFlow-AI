@@ -348,6 +348,7 @@ export interface DayPlan {
 
 export interface Itinerary {
   recap?: {
+    social_copy?: string;
     photos?: RecapPhoto[];
     cover_photo_id?: string | null;
     title: string;
@@ -390,6 +391,7 @@ export interface LedgerSummary {
 }
 
 export interface RecapView {
+  social_copy: string;
   photos: RecapPhoto[];
   cover_photo_id: string | null;
   source_fingerprint: string;
@@ -416,4 +418,11 @@ export interface RecapPhoto {
   day: number | null;
   activity_id: string | null;
   included: boolean;
+}
+
+export interface RecapDraft {
+  kind: "recap" | "social";
+  title: string;
+  text: string;
+  source_fingerprint: string;
 }

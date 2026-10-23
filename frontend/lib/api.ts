@@ -30,6 +30,7 @@ import type {
   TravelMode,
   RecapView,
   RecapPhoto,
+  RecapDraft,
 } from "./types";
 import type {
   SettingsPayload,
@@ -97,6 +98,19 @@ export const api = {
     ),
   travelPhotoUrl: (versionId: string, id: string) =>
     `${API_BASE}/api/versions/${versionId}/travel-photos/${id}`,
+  generateRecapDraft: (
+    versionId: string,
+    payload: {
+      kind: "recap" | "social";
+      source_fingerprint: string;
+      memory: string;
+      include_spending: boolean;
+    },
+  ) =>
+    request<RecapDraft>(`/api/versions/${versionId}/recap/draft`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   getRecap: (versionId: string) =>
     request<RecapView>(`/api/versions/${versionId}/recap`),
   saveRecap: (
@@ -107,6 +121,7 @@ export const api = {
       source_fingerprint: string;
       photos?: RecapPhoto[];
       cover_photo_id?: string | null;
+      social_copy?: string;
     },
   ) =>
     request<VersionDetail>(`/api/versions/${versionId}/recap`, {
