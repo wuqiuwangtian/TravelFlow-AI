@@ -144,7 +144,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     return day
 
 
-def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: int) -> None:
+def preserve_replan_scope(
+    previous: Itinerary, current: Itinerary, day_number: int, *, preserve_order: bool = False
+) -> None:
     """其他天逐项保留，当天从起点之后接上模型给出的未开始安排。"""
     old_day = next(d for d in previous.days if d.day == day_number)
     updated = next((d for d in current.days if d.day == day_number), old_day.model_copy(deep=True))
@@ -162,7 +164,7 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
             a
             for a in updated.activities
             if a.id not in prefix_ids
-            and (a.title, a.place_name) not in prefix_names
+            and (preserve_order or (a.title, a.place_name) not in prefix_names)
             and a.progress == "not_started"
             and not a.is_context_anchor
         ]
@@ -177,7 +179,8 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
                         for i, a in enumerate(remaining)
                         if a.id == old.id
                         or (
-                            a.place_name == old.place_name
+                            not preserve_order
+                            and a.place_name == old.place_name
                             and a.city == old.city
                             and bool(old.place_name)
                         )
@@ -188,15 +191,16 @@ def preserve_replan_scope(previous: Itinerary, current: Itinerary, day_number: i
                     remaining.append(old.model_copy(deep=True))
                 else:
                     remaining[found] = old.model_copy(deep=True)
-        remaining.sort(
-            key=lambda a: (
-                minutes(a.booking.start_time, a.booking.start_day_offset)
-                if a.booking
-                else minutes(a.start_time, a.start_day_offset)
-                if a.start_time
-                else 10**9
+        if not preserve_order:
+            remaining.sort(
+                key=lambda a: (
+                    minutes(a.booking.start_time, a.booking.start_day_offset)
+                    if a.booking
+                    else minutes(a.start_time, a.start_day_offset)
+                    if a.start_time
+                    else 10**9
+                )
             )
-        )
         if context.end_activity_id:
             remaining = [a for a in remaining if a.id != context.end_activity_id] + [
                 a for a in remaining if a.id == context.end_activity_id

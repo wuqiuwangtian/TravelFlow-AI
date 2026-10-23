@@ -35,6 +35,9 @@ _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
 ]
 
 _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
+    ("app.domain.linked_replan", "ActivityMove"),
+    ("app.domain.linked_replan", "MoveChoice"),
+    ("app.domain.linked_replan", "MoveClarification"),
     ("app.domain.linked_replan", "LinkedReplanPreview"),
     ("app.domain.linked_replan", "LinkedActivityChange"),
     ("app.domain.itinerary", "LinkedReplanNote"),

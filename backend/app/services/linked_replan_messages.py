@@ -31,7 +31,7 @@ def simple_link_request(text: str) -> bool:
 
 
 def linked_input(
-    text: str, itinerary: Itinerary, scope_day: int | None = None
+    text: str, itinerary: Itinerary, scope_day: int | None = None, *, allow_moves: bool = False
 ) -> LinkedReplanInput:
     numbers = sorted({_number(m) for m in re.findall(rf"第\s*({DAY_NUMBER})\s*天", text)})
     if len(numbers) > 2 or len(numbers) == 2 and numbers[1] != numbers[0] + 1:
@@ -47,7 +47,7 @@ def linked_input(
         raise InvalidRequest("请说明要联动的相邻两天，例如「联动调整第1天和第2天」。")
     if not 1 <= first <= 59:
         raise InvalidRequest("所选日期不在可联动的旅行范围内。")
-    if re.search(r"移到|挪到|换酒店|换一家|新增|增加景点|替换", text):
+    if not allow_moves and re.search(r"移到|挪到|换酒店|换一家|新增|增加景点|替换", text):
         raise InvalidRequest(
             "本阶段联动只调整两天的时间与可选停留；跨天搬移或更换地点请单独说明。原计划未改变。"
         )

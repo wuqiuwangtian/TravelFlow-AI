@@ -12,6 +12,7 @@ from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
 from expense_fixtures import expense_itinerary  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from linked_fixtures import linked_itinerary  # noqa: E402
+from move_fixtures import move_itinerary  # noqa: E402
 from place_fixtures import place_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
@@ -139,10 +140,23 @@ async def expense_trip():
 
 @app.post("/test/linked")
 async def linked_trip(early_booking: bool = False, optional_stop: bool = False):
+    return await seed_linked_trip(
+        linked_itinerary(early_booking=early_booking, optional_stop=optional_stop)
+    )
+
+
+@app.post("/test/moves")
+async def move_trip(ambiguous: bool = False, booked: bool = False, payment_unknown: bool = False):
+    itinerary = move_itinerary(ambiguous=ambiguous, booked=booked)
+    if payment_unknown:
+        itinerary.expenses[0].day = None
+    return await seed_linked_trip(itinerary)
+
+
+async def seed_linked_trip(itinerary):
     store = app.state.store
     session = await store.create_session("两天联动验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
-    itinerary = linked_itinerary(early_booking=early_booking, optional_stop=optional_stop)
     req = requirements().model_copy(update={"duration_days": 3})
     values = {
         **initial_state(),

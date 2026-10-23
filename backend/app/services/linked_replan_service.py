@@ -9,6 +9,7 @@ from app.core.errors import InvalidRequest
 from app.domain.itinerary import Itinerary, LinkedReplanNote, ReplanContext, ScheduledActivity
 from app.domain.linked_replan import LinkedActivityChange, LinkedReplanInput, LinkedReplanPreview
 from app.domain.models import Requirements
+from app.services.activity_move_service import apply_activity_moves
 from app.services.itinerary_service import enrich_itinerary
 from app.services.journey_messages import itinerary_fingerprint
 from app.services.replan_service import preserve_replan_scope
@@ -39,17 +40,26 @@ async def preview_linked_replan(
     if number not in days or number + 1 not in days:
         raise InvalidRequest("需要旅程中连续的两天，请说明例如「联动调整第1天和第2天」。")
     first, second = days[number], days[number + 1]
+    movement_notes = apply_activity_moves(candidate, data)
     if any(a.progress != "not_started" and not a.is_context_anchor for a in second.activities):
         raise InvalidRequest(
             "次日已有执行记录，请从次日的实际当前位置单独调整，避免改写已发生的旅程。"
         )
-    if not any(not a.is_context_anchor and a.progress != "skipped" for a in second.activities):
+    if not data.moves and not any(
+        not a.is_context_anchor and a.progress != "skipped" for a in second.activities
+    ):
         raise InvalidRequest("次日没有可衔接的安排，请先补充次日行程。")
-    protected = sorted({e.activity_id for e in original.expenses if e.activity_id})
+    protected = sorted(
+        {e.activity_id for e in original.expenses if e.activity_id}
+        | {m.activity_id for m in data.moves}
+    )
     if first.replan_context:
         first.replan_context.preserve_logistics = True
         first.replan_context.protected_activity_ids = protected
-        preserve_replan_scope(candidate.model_copy(deep=True), candidate, number)
+        preserve_replan_scope(
+            candidate.model_copy(deep=True), candidate, number, preserve_order=bool(data.moves)
+        )
+    if first.replan_context or data.moves:
         candidate = await enrich_itinerary(candidate, requirements, settings, day_number=number)
         first = next(d for d in candidate.days if d.day == number)
         second = next(d for d in candidate.days if d.day == number + 1)
@@ -159,7 +169,6 @@ async def preview_linked_replan(
     # 费用、附件和实际支付日期均不因时间调整被改写。
     candidate.expenses = [e.model_copy(deep=True) for e in original.expenses]
     candidate.adjustments = [a.model_copy(deep=True) for a in original.adjustments]
-    candidate.budget_items = [b.model_copy(deep=True) for b in original.budget_items]
     candidate.days = [
         d
         if d.day in {number, number + 1}
@@ -171,6 +180,7 @@ async def preview_linked_replan(
         second_day=number + 1,
         rest_minutes=data.rest_minutes,
         next_departure=anchor.start_time or "09:00",
+        movement_notes=movement_notes,
     )
     changes = []
     for day in candidate.days:
@@ -184,10 +194,15 @@ async def preview_linked_replan(
                 continue
             current = updated.get(activity.id)
             before = time_label(activity.start_time or "待定", activity.start_day_offset)
+            moved = next((m for m in data.moves if m.activity_id == activity.id), None)
             after = (
-                time_label(current.start_time or "待定", current.start_day_offset)
-                if current
-                else "本次精简"
+                f"移至第{moved.destination_day}天"
+                if moved
+                else (
+                    time_label(current.start_time or "待定", current.start_day_offset)
+                    if current
+                    else "本次精简"
+                )
             )
             changes.append(
                 LinkedActivityChange(
@@ -195,7 +210,13 @@ async def preview_linked_replan(
                     title=activity.title,
                     before=before,
                     after=after,
-                    status="omitted" if not current else "kept" if before == after else "shifted",
+                    status="moved_out"
+                    if moved and not current
+                    else "omitted"
+                    if not current
+                    else "kept"
+                    if before == after
+                    else "shifted",
                     protected=bool(
                         activity.booking
                         or not activity.time_is_suggested
@@ -205,6 +226,22 @@ async def preview_linked_replan(
                     ),
                 )
             )
+        for move in data.moves:
+            if move.destination_day == day.day:
+                incoming = next((a for a in day.activities if a.id == move.activity_id), None)
+                if incoming:
+                    changes.append(
+                        LinkedActivityChange(
+                            day=day.day,
+                            title=incoming.title,
+                            before=f"来自第{move.source_day}天",
+                            after=time_label(
+                                incoming.start_time or "待定", incoming.start_day_offset
+                            ),
+                            status="moved_in",
+                            protected=True,
+                        )
+                    )
     warnings = list(
         dict.fromkeys(w for d in (first, second) for w in d.warnings if "冲突" not in w)
     )
@@ -219,6 +256,12 @@ async def preview_linked_replan(
         prompt += "\n有未解决的时间冲突，请先调整条件；原计划和账目未改变。"
     else:
         prompt += "\n应用后两天、路线、预算与导出一起更新，只保存一个版本。"
+    if movement_notes:
+        prompt += (
+            "\n跨天搬移："
+            + "；".join(movement_notes)
+            + "。预算归到新行程日，付款日期、原始消费和凭证不变；变化的交通重新校验。"
+        )
     try:
         candidate = Itinerary.model_validate(candidate.model_dump())
     except ValidationError as exc:

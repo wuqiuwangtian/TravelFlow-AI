@@ -34,6 +34,7 @@ from app.domain.itinerary import ClockTime, Itinerary, ReplanInput
 from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
+from app.services.activity_move_messages import handle_move_message
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.journey_clarification import CANCEL, resume_journey_message
 from app.services.journey_messages import itinerary_fingerprint, prepare_journey_message
@@ -114,8 +115,11 @@ def make_refiner_node(
         pending = state.get("pending_journey")
         pending_place = state.get("pending_place")
         pending_linked = state.get("pending_linked")
+        pending_move = state.get("pending_move")
         human_messages = [m for m in state.get("messages", []) if m.type == "human"]
-        if (pending or pending_place or pending_linked) and CANCEL.fullmatch(user_text.strip()):
+        if (pending or pending_place or pending_linked or pending_move) and CANCEL.fullmatch(
+            user_text.strip()
+        ):
             return {
                 "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
                 "updated_at": datetime.now(),
@@ -218,6 +222,29 @@ def make_refiner_node(
                 ],
                 "updated_at": datetime.now(),
             }
+        if current:
+            move_reply = await handle_move_message(
+                user_text,
+                current,
+                requirements,
+                settings or Settings(),
+                pending_move
+                if pending_move
+                and len(human_messages) >= 2
+                and human_messages[-2].id == pending_move.after_message_id
+                else None,
+            )
+            if move_reply:
+                if move_reply.pending:
+                    move_reply.pending.after_message_id = human_messages[-1].id or ""
+                if move_reply.preview:
+                    move_reply.preview.after_message_id = human_messages[-1].id or ""
+                return {
+                    "pending_move": move_reply.pending,
+                    "pending_linked": move_reply.preview,
+                    "messages": [AIMessage(content=move_reply.reply)],
+                    "updated_at": datetime.now(),
+                }
         if simple_link_request(user_text):
             return await linked_preview()
         if current:
@@ -563,6 +590,7 @@ def make_refiner_node(
         result.setdefault("pending_journey", None)
         result.setdefault("pending_place", None)
         result.setdefault("pending_linked", None)
+        result.setdefault("pending_move", None)
         return result
 
     return refiner

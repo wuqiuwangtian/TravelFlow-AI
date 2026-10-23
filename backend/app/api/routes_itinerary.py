@@ -233,6 +233,7 @@ async def _save_revision(
         "pending_journey": None,
         "pending_place": None,
         "pending_linked": None,
+        "pending_move": None,
         "plan_markdown": detail.markdown,
         "itinerary": detail.itinerary,
         "requirements": requirements,

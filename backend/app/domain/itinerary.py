@@ -241,6 +241,7 @@ class LinkedReplanNote(BaseModel):
     second_day: int
     rest_minutes: int
     next_departure: ClockTime
+    movement_notes: list[str] = Field(default_factory=list, max_length=8)
 
 
 class DayPlan(BaseModel):

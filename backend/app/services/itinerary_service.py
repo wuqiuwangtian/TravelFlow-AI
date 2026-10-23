@@ -563,6 +563,12 @@ def render_days(itinerary: Itinerary) -> str:
                 f"预留{linked.rest_minutes / 60:g}小时休息，"
                 f"第{linked.second_day}天{linked.next_departure}出发。"
             )
+            if linked.movement_notes:
+                lines.append(
+                    "> 跨天搬移："
+                    + "；".join(_text(note) for note in linked.movement_notes)
+                    + "。预算归到新行程日，实际付款日期与凭证保留。"
+                )
         if day.replan_context and day.replan_context.omitted_titles:
             lines.append(
                 "> 为满足时间约束，本次移出后续安排："

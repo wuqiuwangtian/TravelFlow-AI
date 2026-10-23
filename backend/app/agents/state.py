@@ -16,7 +16,7 @@ from langgraph.graph.message import add_messages
 from app.domain.clarification import JourneyClarification, PlaceClarification
 from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.itinerary import Itinerary
-from app.domain.linked_replan import LinkedReplanPreview
+from app.domain.linked_replan import LinkedReplanPreview, MoveClarification
 from app.domain.models import Requirements, ResearchBundle, TodoItem
 
 
@@ -42,6 +42,7 @@ class PlanState(TypedDict, total=False):
     pending_journey: JourneyClarification | None
     pending_place: PlaceClarification | None
     pending_linked: LinkedReplanPreview | None
+    pending_move: MoveClarification | None
     chat_request: dict[str, str] | None
     completed_chat: dict[str, str] | None
 

@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.domain.itinerary import Place
-from app.domain.linked_replan import LinkedReplanPreview
+from app.domain.linked_replan import LinkedReplanPreview, MoveClarification
 
 ClarificationKind = Literal["day", "amount", "activity", "expense"]
 
@@ -55,11 +55,20 @@ class PlaceClarification(BaseModel):
 
 
 def clarification_prompt(
-    pending: JourneyClarification | PlaceClarification | LinkedReplanPreview | None,
+    pending: JourneyClarification
+    | PlaceClarification
+    | LinkedReplanPreview
+    | MoveClarification
+    | None,
 ) -> dict[str, Any] | None:
     if not pending:
         return None
     result: dict[str, Any] = {"kind": pending.kind, "prompt": pending.prompt}
+    if isinstance(pending, MoveClarification):
+        result["options"] = [
+            {"label": f"{i}. {c.label}", "reply": f"选第{i}个"}
+            for i, c in enumerate(pending.choices, 1)
+        ]
     if isinstance(pending, LinkedReplanPreview):
         result["changes"] = [c.model_dump() for c in pending.changes]
         result["conflicts"] = pending.conflicts

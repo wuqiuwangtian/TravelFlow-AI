@@ -251,6 +251,7 @@ class ChatService:
                 values.get("pending_journey")
                 or values.get("pending_place")
                 or values.get("pending_linked")
+                or values.get("pending_move")
             ),
         )
         if receipt:
