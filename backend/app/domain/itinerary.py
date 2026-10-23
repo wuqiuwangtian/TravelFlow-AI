@@ -274,6 +274,7 @@ class TravelRecap(BaseModel):
     title: str = Field(min_length=1, max_length=100, pattern=r"\S")
     body: str = Field(max_length=20000)
     source_fingerprint: str
+    social_copy: str = Field(default="", max_length=2000)
     photos: list[RecapPhoto] = Field(default_factory=list, max_length=40)
     cover_photo_id: ReceiptId | None = None
 

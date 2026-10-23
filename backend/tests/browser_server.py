@@ -30,12 +30,17 @@ from app.domain.enums import PlanStatus  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
 from app.services.itinerary_service import sync_markdown  # noqa: E402
+from app.services.recap_writing import RecapWriting  # noqa: E402
 from app.storage.database import create_connection  # noqa: E402
 from app.storage.session_store import SessionStore  # noqa: E402
 
 
 class BrowserLLM(FakeLLM):
     async def structured(self, messages, schema, **kwargs):
+        if schema is RecapWriting:
+            return RecapWriting(
+                title="故宫的旅行片段", text="故宫的一段漫步，成为值得回味的旅行片段。"
+            )
         if schema is DestinationOptions:
             return DestinationOptions(
                 ideas=[DestinationIdea(city="北京", reason="博物馆与城市漫步")]

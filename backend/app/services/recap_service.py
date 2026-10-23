@@ -57,6 +57,7 @@ def recap_view(itinerary: Itinerary, requirements: Requirements) -> dict[str, An
         "source_fingerprint": fingerprint,
         "title": saved.title if saved else f"{requirements.destination or '我的旅行'} · 旅行回顾",
         "body": saved.body if saved else template,
+        "social_copy": saved.social_copy if saved else "",
         "template": template,
         "saved": saved is not None,
         "stale": bool(saved and saved.source_fingerprint != fingerprint),

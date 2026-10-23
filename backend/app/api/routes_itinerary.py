@@ -45,6 +45,7 @@ from app.services.branch_lock import branch_guard
 from app.services.budget_service import budget_overview, save_budget_item
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.recap_writing import RecapDraftInput
 from app.services.receipt_service import MAX_RECEIPT_BYTES, normalise_receipt, recognise_receipt
 from app.services.replan_service import preserve_replan_scope, record_booking, set_replan_context
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
@@ -55,6 +56,34 @@ router = APIRouter(prefix="/api", tags=["itinerary"])
 
 class RecapInput(TravelRecap):
     source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+@router.post("/versions/{version_id}/recap/draft")
+async def recap_draft(
+    version_id: str,
+    payload: RecapDraftInput,
+    store: SessionStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+):
+    from app.services.recap_service import recap_view
+    from app.services.recap_writing import generate_recap_writing
+
+    detail = await _editable(store, version_id)
+    itinerary = _itinerary(detail)
+    requirements = detail.requirements or Requirements()
+    if recap_view(itinerary, requirements)["source_fingerprint"] != payload.source_fingerprint:
+        raise ConflictError("行程或账目已变化，请刷新回顾后再生成。")
+    result = await generate_recap_writing(
+        create_llm_provider(settings), itinerary, requirements, payload
+    )
+    # 模型等待期间可能发生编辑；旧草稿不能被作为当前版本的结果采用。
+    await _editable(store, version_id)
+    return {
+        "kind": payload.kind,
+        "title": result.title,
+        "text": result.text,
+        "source_fingerprint": payload.source_fingerprint,
+    }
 
 
 @router.get("/versions/{version_id}/recap")
