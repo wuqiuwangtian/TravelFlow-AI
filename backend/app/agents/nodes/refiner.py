@@ -120,7 +120,17 @@ def make_refiner_node(
                 "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
                 "updated_at": datetime.now(),
             }
-        if user_text.strip() in APPLY_LINKED:
+        apply_text = re.sub(r"^(?:好的?[，,、\s]*|请|帮我)\s*", "", user_text.strip()).rstrip(
+            "。！! "
+        )
+        applying = apply_text in APPLY_LINKED or bool(
+            pending_linked
+            and (
+                apply_text in {"应用", "确认", "确认应用", "就这样"}
+                or user_text.strip() in {"好", "好的"}
+            )
+        )
+        if applying:
             if (
                 not pending_linked
                 or not current
@@ -160,6 +170,18 @@ def make_refiner_node(
                 ],
                 "status": PlanStatus.REVIEWING,
                 "revision": revision + 1,
+                "updated_at": datetime.now(),
+            }
+
+        if pending_linked and any(command in user_text for command in APPLY_LINKED):
+            pending_linked.after_message_id = human_messages[-1].id or ""
+            return {
+                "pending_linked": pending_linked,
+                "messages": [
+                    AIMessage(
+                        content="目前仍是预览，原计划和账目尚未改变。应用只更新两天安排，实际账本保留；可点击「应用两天调整」，也可说「确认」或「取消这次操作」。"
+                    )
+                ],
                 "updated_at": datetime.now(),
             }
 

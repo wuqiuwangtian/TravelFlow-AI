@@ -258,6 +258,21 @@ async def test_conflicts_cannot_apply_and_cancel_leaves_no_partial_version(envir
     assert len(await store.list_versions(bid)) == 1
 
 
+@pytest.mark.parametrize("answer", ["确认", "好的，应用两天调整"])
+async def test_preview_question_and_short_confirmation_keep_trip_reviewing(environment, answer):
+    _, store, graph, _ = environment
+    _, bid, say = await seed(environment)
+    await say("联动调整第1天和第2天")
+    before = (await graph.aget_state(thread_config(bid))).values["itinerary"]
+    result = await say("应用两天调整会改记账吗？")
+    assert result["clarification"]["kind"] == "linked_replan"
+    assert (await graph.aget_state(thread_config(bid))).values["itinerary"] == before
+    assert len(await store.list_versions(bid)) == 1
+    applied = await say(answer)
+    assert applied["clarification"] is None and applied["status"] == "reviewing"
+    assert len(await store.list_versions(bid)) == 2
+
+
 async def test_new_topic_fork_and_manual_edit_invalidate_preview(environment):
     client, store, graph, _ = environment
     sid, bid, say = await seed(environment)
