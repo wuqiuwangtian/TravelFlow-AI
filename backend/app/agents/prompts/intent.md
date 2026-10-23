@@ -13,6 +13,7 @@ intent 字段填 approve / modify / unclear 之一；
 summary 字段用一句话概括用户想要什么（不超过 30 字）。
 不要把用户的原始消息原样抄进 summary。
 requirements 只提取本次明确改变的需求，未提到的字段留空；预算口径不明时不要猜测。
+preferences 可能来自本次选用的常用偏好，只作初始参考，本次明确偏好优先。更换或添加时返回本次希望保留的完整 preferences 列表；要求清空、不沿用本次偏好时 clear_preferences=true，preferences 可为空。此修改只影响本次旅行，不修改常用偏好库。
 needs_research：新增/替换景点或酒店、改变城市或日期、要求更新真实票价时为 true；只调整顺序、措辞、删减活动时为 false。
 on_trip：只有用户明确描述旅途中的出发时刻与当前地点时提取，例如“第2天14:00，我在景山，18:00前回酒店”。
 time 是本次从该处出发的时刻，end_time 是结束/抵达期限，end_location_name 是用户明确要求的结束地点。

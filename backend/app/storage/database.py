@@ -19,6 +19,15 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 SCHEMA = """
+-- 本机常用偏好。保留修订号，防止旧页面在删除后重新写回旧内容。
+CREATE TABLE IF NOT EXISTS travel_preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    preferences TEXT NOT NULL DEFAULT '[]',
+    revision INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT
+);
+INSERT OR IGNORE INTO travel_preferences(id) VALUES (1);
+
 -- 会话
 CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,
@@ -119,6 +128,7 @@ async def create_connection(db_path: str | Path) -> aiosqlite.Connection:
     await _ensure_column(conn, "plans", "todos", "TEXT NOT NULL DEFAULT '[]'")
     await _ensure_column(conn, "plans", "itinerary", "TEXT")
     await _ensure_column(conn, "plans", "requirements", "TEXT")
+    await _ensure_column(conn, "sessions", "initial_preferences", "TEXT NOT NULL DEFAULT '[]'")
     await conn.commit()
 
     logger.info("数据库就绪", extra={"extra_fields": {"path": str(path)}})

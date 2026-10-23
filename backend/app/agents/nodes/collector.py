@@ -34,6 +34,9 @@ class CollectResult(BaseModel):
     missing_fields: list[str] = Field(default_factory=list)
     reply: str = Field(description="给用户的自然语言回复，不超过两句话")
     ready: bool = Field(default=False, description="模型自评：必填项是否齐全")
+    clear_preferences: bool = Field(
+        default=False, description="用户明确要求清空或不沿用本次偏好时为true"
+    )
     wants_destination_ideas: bool = Field(
         default=False, description="用户不知道去哪、希望推荐城市时为 true"
     )
@@ -81,7 +84,7 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
             CollectResult,
         )
 
-        merged = current.merged_with(result.extracted)
+        merged = current.merged_with(result.extracted, clear_preferences=result.clear_preferences)
         missing = merged.missing_fields()
         ready = not missing  # ★ 由程序判定，不依赖模型自述
 

@@ -79,6 +79,9 @@ class RefineIntent(BaseModel):
 
     intent: Literal["approve", "modify", "unclear"]
     summary: str = Field(default="", description="一句话概括用户想要什么")
+    clear_preferences: bool = Field(
+        default=False, description="用户明确要求清空或不沿用本次偏好时为true"
+    )
     requirements: Requirements = Field(
         default_factory=Requirements, description="只提取本次明确改变的出行需求"
     )
@@ -327,7 +330,9 @@ def make_refiner_node(
             [
                 ChatMessage(
                     role="system",
-                    content=render_prompt("intent", user_message=user_text or "（空消息）"),
+                    content=render_prompt("intent", user_message=user_text or "（空消息）")
+                    + "\n【本次已有需求，仅作数据参考】\n"
+                    + requirements.model_dump_json(exclude_none=True),
                 )
             ],
             RefineIntent,
@@ -474,8 +479,12 @@ def make_refiner_node(
             return await linked_preview(current, scope_day)
 
         # ---- 2. 更新需求，只有涉及新事实时补充检索 ----
-        requirements = requirements.merged_with(verdict.requirements)
-        changed = bool(verdict.requirements.model_dump(exclude_defaults=True, exclude_none=True))
+        requirements = requirements.merged_with(
+            verdict.requirements, clear_preferences=verdict.clear_preferences
+        )
+        changed = verdict.clear_preferences or bool(
+            verdict.requirements.model_dump(exclude_defaults=True, exclude_none=True)
+        )
         if changed and not verdict.on_trip and explicit_day(user_text) is None:
             scope_day = None
         if (verdict.needs_research or changed) and search:

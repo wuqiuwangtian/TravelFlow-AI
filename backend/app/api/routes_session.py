@@ -9,11 +9,18 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.agents.checkpoint import thread_config
 from app.agents.state import initial_state
 from app.core.deps import get_graph, get_store
-from app.core.errors import BranchNotFound, ConfigError, InvalidRequest, SessionNotFound
+from app.core.errors import (
+    BranchNotFound,
+    ConfigError,
+    ConflictError,
+    InvalidRequest,
+    SessionNotFound,
+)
 from app.domain.career import TravelCareer
 from app.domain.clarification import clarification_prompt
 from app.domain.enums import PlanStatus
 from app.domain.models import ResearchBundle
+from app.domain.preferences import SavedPreferences, SavePreferences
 from app.domain.schemas import (
     BranchListResponse,
     ChatHistoryResponse,
@@ -31,6 +38,31 @@ from app.services.chat_service import ChatService
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
+
+
+@router.get(
+    "/travel-preferences", response_model=SavedPreferences, summary="查看主动保存的常用偏好"
+)
+async def get_travel_preferences(store: SessionStore = Depends(get_store)) -> SavedPreferences:
+    return await store.get_travel_preferences()
+
+
+@router.put("/travel-preferences", response_model=SavedPreferences, summary="主动保存常用偏好")
+async def save_travel_preferences(
+    payload: SavePreferences,
+    store: SessionStore = Depends(get_store),
+) -> SavedPreferences:
+    return await store.save_travel_preferences(
+        payload.preferences, expected_revision=payload.expected_revision
+    )
+
+
+@router.delete("/travel-preferences", response_model=SavedPreferences, summary="删除常用偏好")
+async def delete_travel_preferences(
+    revision: int = Query(..., ge=0),
+    store: SessionStore = Depends(get_store),
+) -> SavedPreferences:
+    return await store.save_travel_preferences([], expected_revision=revision)
 
 
 @router.get("/travel-career", response_model=TravelCareer, summary="基于实际记录的旅行生涯")
@@ -115,7 +147,15 @@ async def create_session(
     store: SessionStore = Depends(get_store),
 ) -> SessionDetailResponse:
     """新建会话，并自动创建一个主分支。"""
-    session = await store.create_session(payload.title)
+    preferences: list[str] = []
+    if payload.use_saved_preferences:
+        saved = await store.get_travel_preferences()
+        if not saved.preferences:
+            raise InvalidRequest("尚无已保存的常用偏好，可以直接新建旅行。")
+        if payload.preferences_revision != saved.revision:
+            raise ConflictError("常用偏好已变化，请重新查看并选择本次使用的偏好后再新建旅行。")
+        preferences = saved.preferences
+    session = await store.create_session(payload.title, initial_preferences=preferences)
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     refreshed = await store.get_session(session.id)
     return SessionDetailResponse(

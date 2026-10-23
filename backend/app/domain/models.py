@@ -49,9 +49,11 @@ class Requirements(BaseModel):
     def is_complete(self) -> bool:
         return not self.missing_fields()
 
-    def merged_with(self, other: Requirements) -> Requirements:
+    def merged_with(self, other: Requirements, *, clear_preferences: bool = False) -> Requirements:
         """用 ``other`` 中的非空字段覆盖自身，返回新对象（不改原对象）。"""
         data = self.model_dump()
+        if clear_preferences:
+            data["preferences"] = []
         for key, value in other.model_dump(exclude_none=True).items():
             if isinstance(value, list) and not value:
                 continue
@@ -129,6 +131,7 @@ class SessionInfo(BaseModel):
     updated_at: datetime
     archived: bool = False
     branch_count: int = 0
+    initial_preferences: list[str] = Field(default_factory=list)
 
 
 class BranchInfo(BaseModel):

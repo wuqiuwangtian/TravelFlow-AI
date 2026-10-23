@@ -21,6 +21,7 @@ from app.core.errors import InvalidRequest
 from app.core.logging import get_logger
 from app.domain.clarification import clarification_prompt
 from app.domain.enums import DetailLevel, PlanStatus
+from app.domain.models import Requirements
 from app.services.branch_lock import branch_guard
 from app.storage.session_store import SessionStore
 
@@ -138,6 +139,8 @@ class ChatService:
         if detail_level is not None:
             payload["detail_level"] = detail_level
 
+        await self._apply_initial_preferences(session_id, before.values or {}, payload)
+
         values = await self._graph.ainvoke(payload, config)
         values = dict(values)
 
@@ -180,6 +183,8 @@ class ChatService:
         if detail_level is not None:
             payload["detail_level"] = detail_level
 
+        await self._apply_initial_preferences(session_id, before.values or {}, payload)
+
         async for mode, chunk in self._graph.astream(
             payload, config, stream_mode=["custom", "updates"]
         ):
@@ -196,6 +201,19 @@ class ChatService:
             session_id, branch_id, values, config, receipt, previous_status
         )
         yield {"event": "done", "data": outcome}
+
+    async def _apply_initial_preferences(
+        self, session_id: str, values: dict, payload: dict
+    ) -> None:
+        # 只在空白会话首次输入前使用创建时明确选用的副本，不读取会变化的常用偏好。
+        if values.get("messages") or values.get("plan_markdown"):
+            return
+        current = values.get("requirements") or Requirements()
+        if current != Requirements():
+            return
+        session = await self._store.get_session(session_id)
+        if session and session.initial_preferences:
+            payload["requirements"] = Requirements(preferences=session.initial_preferences)
 
     @staticmethod
     def _request_receipt(request_id: str | None, message: str, level: DetailLevel | None):

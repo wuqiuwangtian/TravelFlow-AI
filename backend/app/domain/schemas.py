@@ -188,6 +188,8 @@ class ErrorResponse(BaseModel):
 # ---------------------------------------------------------------- 会话 / 分支 / 版本
 class CreateSessionRequest(BaseModel):
     title: str = Field(default="新的旅行", min_length=1, max_length=100)
+    use_saved_preferences: bool = False
+    preferences_revision: int | None = Field(default=None, ge=0)
 
 
 class UpdateSessionRequest(BaseModel):

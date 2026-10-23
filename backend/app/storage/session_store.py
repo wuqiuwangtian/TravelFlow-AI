@@ -14,6 +14,7 @@ from datetime import datetime
 
 import aiosqlite
 
+from app.core.errors import ConflictError
 from app.domain.itinerary import Itinerary
 from app.domain.models import (
     BranchInfo,
@@ -24,6 +25,7 @@ from app.domain.models import (
     VersionDetail,
     VersionInfo,
 )
+from app.domain.preferences import SavedPreferences
 
 
 def _now() -> str:
@@ -45,16 +47,57 @@ class SessionStore:
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
 
+    async def get_travel_preferences(self) -> SavedPreferences:
+        cursor = await self._conn.execute("SELECT * FROM travel_preferences WHERE id=1")
+        row = await cursor.fetchone()
+        assert row is not None
+        return SavedPreferences(
+            preferences=json.loads(row["preferences"]),
+            revision=row["revision"],
+            updated_at=_parse(row["updated_at"]) if row["updated_at"] else None,
+        )
+
+    async def save_travel_preferences(
+        self, preferences: list[str], *, expected_revision: int
+    ) -> SavedPreferences:
+        # 单条条件更新，不让两个窗口先读后写而互相覆盖。相同内容重试不增加修订。
+        current = await self.get_travel_preferences()
+        if current.preferences == preferences:
+            return current
+        cursor = await self._conn.execute(
+            "UPDATE travel_preferences SET preferences=?, revision=revision+1, updated_at=? "
+            "WHERE id=1 AND revision=?",
+            (json.dumps(preferences, ensure_ascii=False), _now(), expected_revision),
+        )
+        await self._conn.commit()
+        if cursor.rowcount != 1:
+            raise ConflictError("常用偏好已在其他页面变化，请重新载入后再保存或删除。")
+        return await self.get_travel_preferences()
+
     # ==================================================== 会话
-    async def create_session(self, title: str, *, session_id: str | None = None) -> SessionInfo:
+    async def create_session(
+        self,
+        title: str,
+        *,
+        session_id: str | None = None,
+        initial_preferences: list[str] | None = None,
+    ) -> SessionInfo:
         sid = session_id or uuid.uuid4().hex[:12]
         now = _now()
         await self._conn.execute(
-            "INSERT INTO sessions(id, title, created_at, updated_at, archived) VALUES (?,?,?,?,0)",
-            (sid, title, now, now),
+            "INSERT INTO sessions(id, title, created_at, updated_at, archived, "
+            "initial_preferences) "
+            "VALUES (?,?,?,?,0,?)",
+            (sid, title, now, now, json.dumps(initial_preferences or [], ensure_ascii=False)),
         )
         await self._conn.commit()
-        return SessionInfo(id=sid, title=title, created_at=_parse(now), updated_at=_parse(now))
+        return SessionInfo(
+            id=sid,
+            title=title,
+            created_at=_parse(now),
+            updated_at=_parse(now),
+            initial_preferences=initial_preferences or [],
+        )
 
     async def list_sessions(
         self,
@@ -488,6 +531,9 @@ class SessionStore:
             updated_at=_parse(row["updated_at"]),
             archived=bool(row["archived"]),
             branch_count=int(row["branch_count"]) if "branch_count" in keys else 0,
+            initial_preferences=json.loads(row["initial_preferences"])
+            if "initial_preferences" in keys
+            else [],
         )
 
     @staticmethod
