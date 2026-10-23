@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import httpx
@@ -56,6 +56,45 @@ router = APIRouter(prefix="/api", tags=["itinerary"])
 
 class RecapInput(TravelRecap):
     source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class JourneyStatusInput(BaseModel):
+    ended: bool
+
+
+@router.put("/versions/{version_id}/journey-status", response_model=VersionDetail)
+async def set_journey_status(
+    version_id: str,
+    payload: JourneyStatusInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.recap_service import recap_view
+
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        versions = await store.list_versions(original.version.branch_id)
+        detail = await _detail(store, versions[-1].id)
+        itinerary = _itinerary(detail)
+        if bool(itinerary.ended_at) == payload.ended:
+            return detail
+        if detail.version.id != version_id:
+            raise ConflictError("当前方案已变化，请刷新后再更改旅行状态。")
+        if payload.ended and itinerary.recap is None:
+            view = recap_view(itinerary, detail.requirements or Requirements())
+            itinerary.recap = TravelRecap(
+                title=view["title"],
+                body=view["body"],
+                source_fingerprint=view["source_fingerprint"],
+            )
+        itinerary.ended_at = datetime.now(UTC) if payload.ended else None
+        return await _save_revision(
+            store,
+            graph,
+            detail,
+            "结束旅行并收录回顾" if payload.ended else "重新开启旅行",
+            keep_plan_status=True,
+        )
 
 
 @router.post("/versions/{version_id}/recap/draft")

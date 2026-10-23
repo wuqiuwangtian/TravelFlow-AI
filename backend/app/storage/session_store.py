@@ -80,6 +80,36 @@ class SessionStore:
         rows = await cursor.fetchall()
         return [self._to_session(row) for row in rows]
 
+    async def list_recap_archive(
+        self, *, query: str | None = None, limit: int = 20, offset: int = 0
+    ) -> tuple[list[dict], int]:
+        # 每个分支只取当前版本；会话归档只隐藏会话，不等于结束旅行。
+        source = (
+            "FROM branches b JOIN sessions s ON s.id=b.session_id "
+            "JOIN versions v ON v.id=(SELECT vv.id FROM versions vv "
+            "WHERE vv.branch_id=b.id ORDER BY vv.seq DESC LIMIT 1) "
+            "JOIN plans p ON p.version_id=v.id "
+            "WHERE json_extract(p.itinerary,'$.ended_at') IS NOT NULL "
+        )
+        args: list[object] = []
+        if query:
+            source += (
+                "AND (s.title LIKE ? OR b.title LIKE ? OR "
+                "json_extract(p.requirements,'$.destination') LIKE ?) "
+            )
+            args.extend([f"%{query}%"] * 3)
+        cursor = await self._conn.execute("SELECT COUNT(*) " + source, args)
+        row = await cursor.fetchone()
+        total = int(row[0]) if row else 0
+        cursor = await self._conn.execute(
+            "SELECT s.id AS session_id, s.title AS session_title, s.archived AS session_archived, "
+            "b.id AS branch_id, b.title AS branch_title, v.id AS version_id "
+            + source
+            + "ORDER BY json_extract(p.itinerary,'$.ended_at') DESC, b.id LIMIT ? OFFSET ?",
+            [*args, limit, offset],
+        )
+        return [dict(r) for r in await cursor.fetchall()], total
+
     async def count_sessions(self, *, archived: bool = False, query: str | None = None) -> int:
         """会话总数（用于分页的 total，注意不是「本页数量」）。"""
         sql = ["SELECT COUNT(*) FROM sessions WHERE archived = ?"]

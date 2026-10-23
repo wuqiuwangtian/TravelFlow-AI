@@ -63,6 +63,7 @@ def recap_view(itinerary: Itinerary, requirements: Requirements) -> dict[str, An
         "stale": bool(saved and saved.source_fingerprint != fingerprint),
         "photos": [p.model_dump() for p in saved.photos] if saved else [],
         "cover_photo_id": saved.cover_photo_id if saved else None,
+        "ended_at": itinerary.model_dump(mode="json", include={"ended_at"})["ended_at"],
     }
 
 
@@ -71,6 +72,9 @@ def render_recap(view: dict[str, Any], *, as_html: bool = False) -> str:
     ledger = view["ledger"]
     lines = [
         f"# {view['title']}",
+        "旅行状态：已结束（结束时间：" + view["ended_at"] + "）"
+        if view.get("ended_at")
+        else "旅行状态：尚未结束",
         "",
         "## 我的回忆（用户可编辑）",
         view["body"],

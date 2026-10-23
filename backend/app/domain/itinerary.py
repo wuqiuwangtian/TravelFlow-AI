@@ -291,6 +291,7 @@ class TravelRecap(BaseModel):
 
 
 class Itinerary(BaseModel):
+    ended_at: datetime | None = None
     days: list[DayPlan] = Field(default_factory=list, max_length=60)
     map_status: Literal["unconfigured", "ready", "partial"] = "unconfigured"
     expenses: list[Expense] = Field(default_factory=list, max_length=2000)

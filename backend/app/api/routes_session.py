@@ -32,6 +32,44 @@ from app.storage.session_store import SessionStore
 router = APIRouter(prefix="/api", tags=["session"])
 
 
+@router.get("/recap-archive", summary="已结束方案的旅行回顾")
+async def recap_archive(
+    q: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    store: SessionStore = Depends(get_store),
+):
+    from app.domain.models import Requirements
+    from app.services.recap_service import recap_view
+
+    rows, total = await store.list_recap_archive(
+        query=q.strip() if q else None, limit=page_size, offset=(page - 1) * page_size
+    )
+    items = []
+    for row in rows:
+        detail = await store.get_version_detail(row["version_id"])
+        if detail is None or detail.itinerary is None:
+            continue
+        view = recap_view(detail.itinerary, detail.requirements or Requirements())
+        items.append(
+            {
+                **row,
+                "session_archived": bool(row["session_archived"]),
+                "ended_at": view["ended_at"],
+                "title": view["title"],
+                "destination": view["destination"],
+                "completed_count": sum(len(d["completed"]) for d in view["days"]),
+                "unconfirmed_count": sum(len(d["unconfirmed"]) for d in view["days"]),
+                "net_expense_cents": view["ledger"]["net_expense_cents"],
+                "expense_count": view["expense_count"],
+                "unsettled_count": view["unsettled_count"],
+                "cover_photo_id": view["cover_photo_id"],
+                "stale": view["stale"],
+            }
+        )
+    return {"items": items, "total": total}
+
+
 async def _require_session(store: SessionStore, session_id: str):
     session = await store.get_session(session_id)
     if session is None:
@@ -185,6 +223,10 @@ async def create_branch(
         )
         if values:
             assert graph is not None
+            if values.get("itinerary") is not None:
+                values["itinerary"] = values["itinerary"].model_copy(
+                    deep=True, update={"ended_at": None}
+                )
             values["pending_journey"] = None
             values["pending_place"] = None
             values["pending_linked"] = None
@@ -203,7 +245,7 @@ async def create_branch(
                 await store.save_plan(
                     vid,
                     markdown=source.markdown,
-                    itinerary=source.itinerary,
+                    itinerary=values.get("itinerary"),
                     requirements=source.requirements,
                     citations=source.citations,
                     todos=source.todos,
