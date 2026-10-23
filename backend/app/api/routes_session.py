@@ -34,12 +34,31 @@ from app.domain.schemas import (
     UpdateSessionRequest,
     VersionListResponse,
 )
+from app.domain.workflow import WorkflowView
 from app.search.base import SearchResult
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
+
+
+@router.get(
+    "/branches/{branch_id}/workflow",
+    response_model=WorkflowView,
+    summary="只读查看当前或指定版本的规划节点",
+)
+async def get_workflow_view(
+    branch_id: str,
+    request: Request,
+    version_id: str | None = Query(None, min_length=1, max_length=100),
+    store: SessionStore = Depends(get_store),
+) -> WorkflowView:
+    from app.services.workflow_service import workflow_view
+
+    return await workflow_view(
+        store, getattr(request.app.state, "graph", None), branch_id, version_id
+    )
 
 
 @router.get("/travel-career/footprints", response_model=CareerFootprints, summary="已完成地点足迹")

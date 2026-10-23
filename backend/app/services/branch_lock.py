@@ -9,6 +9,12 @@ from app.core.errors import BranchConflict
 _locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
 
 
+def branch_busy(branch_id: str) -> bool:
+    """只读查看分支是否正在更新，不获取或创建锁。"""
+    lock = _locks.get(branch_id)
+    return lock is not None and lock.locked()
+
+
 @asynccontextmanager
 async def branch_guard(branch_id: str):
     lock = _locks.setdefault(branch_id, asyncio.Lock())
