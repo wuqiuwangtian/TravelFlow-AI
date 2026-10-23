@@ -556,6 +556,13 @@ def render_days(itinerary: Itinerary) -> str:
             f"其中估算 {day.estimated_cost:g} 元；未计入 {day.unknown_cost_count} 项。"
         )
         lines.extend(f"> {_text(note)}" for note in [*day.schedule_notes, *day.warnings])
+        if day.linked_replan:
+            linked = day.linked_replan
+            lines.append(
+                f"> 最近两天联动：第{linked.first_day}—{linked.second_day}天，"
+                f"预留{linked.rest_minutes / 60:g}小时休息，"
+                f"第{linked.second_day}天{linked.next_departure}出发。"
+            )
         if day.replan_context and day.replan_context.omitted_titles:
             lines.append(
                 "> 为满足时间约束，本次移出后续安排："

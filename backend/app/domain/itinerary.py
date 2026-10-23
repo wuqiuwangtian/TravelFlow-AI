@@ -73,6 +73,8 @@ class ReplanContext(BaseModel):
     end_day_offset: int = Field(default=0, ge=0, le=60)
     end_activity_id: str | None = None
     omitted_titles: list[str] = Field(default_factory=list, max_length=40)
+    preserve_logistics: bool = False
+    protected_activity_ids: list[str] = Field(default_factory=list, max_length=2000)
     updated_at: datetime = Field(default_factory=datetime.now)
 
     @model_validator(mode="after")
@@ -234,6 +236,13 @@ class RouteLeg(BaseModel):
     source_indices: list[int] = Field(default_factory=list)
 
 
+class LinkedReplanNote(BaseModel):
+    first_day: int
+    second_day: int
+    rest_minutes: int
+    next_departure: ClockTime
+
+
 class DayPlan(BaseModel):
     day: int = Field(ge=1, le=60)
     title: str = ""
@@ -249,6 +258,7 @@ class DayPlan(BaseModel):
     estimated_cost: float = 0
     schedule_notes: list[str] = Field(default_factory=list)
     replan_context: ReplanContext | None = None
+    linked_replan: LinkedReplanNote | None = None
 
 
 class Itinerary(BaseModel):

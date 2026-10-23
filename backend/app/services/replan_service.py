@@ -226,12 +226,24 @@ def optional_to_remove(day: DayPlan) -> int | None:
         activity = day.activities[index]
         if index - 1 < len(day.legs):
             cursor += int((day.legs[index - 1].duration_seconds or 0) + 59) // 60
-        if activity.booking:
-            fixed = minutes(activity.booking.start_time, activity.booking.start_day_offset)
+        fixed_time = activity.booking.start_time if activity.booking else activity.start_time
+        fixed_offset = (
+            activity.booking.start_day_offset if activity.booking else activity.start_day_offset
+        )
+        if fixed_time and (activity.booking or not activity.time_is_suggested):
+            fixed = minutes(fixed_time, fixed_offset)
             if cursor > fixed and optional:
                 return optional[-1]
             cursor = max(cursor, fixed)
-        elif activity.progress == "not_started" and activity.id != context.end_activity_id:
+        elif (
+            activity.progress == "not_started"
+            and activity.id != context.end_activity_id
+            and activity.id not in context.protected_activity_ids
+            and (
+                not context.preserve_logistics
+                or activity.kind not in {"hotel", "station", "transport"}
+            )
+        ):
             optional.append(index)
         if activity.id != context.end_activity_id:
             cursor += activity.duration_minutes or 0
@@ -267,13 +279,18 @@ def context_warnings(day: DayPlan) -> list[str]:
         leg = day.legs[index - 1] if index - 1 < len(day.legs) else None
         unknown = unknown or leg is None or leg.duration_seconds is None
         cursor += int(((leg.duration_seconds if leg else 0) or 0) + 59) // 60
-        if activity.booking:
-            fixed = minutes(activity.booking.start_time, activity.booking.start_day_offset)
+        fixed_time = activity.booking.start_time if activity.booking else activity.start_time
+        fixed_offset = (
+            activity.booking.start_day_offset if activity.booking else activity.start_day_offset
+        )
+        if fixed_time and (activity.booking or not activity.time_is_suggested):
+            fixed = minutes(fixed_time, fixed_offset)
             if cursor > fixed:
+                label = "预约冲突" if activity.booking else "固定安排冲突"
                 warnings.append(
-                    f"预约冲突：「{activity.title}」预计无法在"
-                    f"{time_label(activity.booking.start_time, activity.booking.start_day_offset)}"
-                    "前抵达；预约时间保持不变。"
+                    f"{label}：「{activity.title}」预计无法在"
+                    f"{time_label(fixed_time, fixed_offset)}"
+                    "前抵达；固定时间保持不变。"
                 )
             cursor = max(cursor, fixed)
         if activity.id != context.end_activity_id:

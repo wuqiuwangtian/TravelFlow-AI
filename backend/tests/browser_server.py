@@ -11,6 +11,7 @@ import uvicorn  # noqa: E402
 from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
 from expense_fixtures import expense_itinerary  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from linked_fixtures import linked_itinerary  # noqa: E402
 from place_fixtures import place_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
@@ -122,6 +123,27 @@ async def expense_trip():
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     itinerary = expense_itinerary()
     req = requirements().model_copy(update={"duration_days": 2})
+    values = {
+        **initial_state(),
+        "requirements": req,
+        "itinerary": itinerary,
+        "plan_markdown": sync_markdown(MARKDOWN.replace("[1]", ""), itinerary, req),
+        "status": PlanStatus.REVIEWING,
+    }
+    config = await app.state.graph.aupdate_state(
+        thread_config(branch.id), values, as_node="planner"
+    )
+    await ChatService(graph=app.state.graph, store=store).record_version(branch.id, values, config)
+    return {"session_id": session.id, "branch_id": branch.id}
+
+
+@app.post("/test/linked")
+async def linked_trip(early_booking: bool = False, optional_stop: bool = False):
+    store = app.state.store
+    session = await store.create_session("两天联动验收")
+    branch = await store.create_branch(session.id, "主方案", is_primary=True)
+    itinerary = linked_itinerary(early_booking=early_booking, optional_stop=optional_stop)
+    req = requirements().model_copy(update={"duration_days": 3})
     values = {
         **initial_state(),
         "requirements": req,

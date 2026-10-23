@@ -248,7 +248,9 @@ class ChatService:
             version_id=version_id,
             missing_fields=list(values.get("missing_fields") or []),
             clarification=clarification_prompt(
-                values.get("pending_journey") or values.get("pending_place")
+                values.get("pending_journey")
+                or values.get("pending_place")
+                or values.get("pending_linked")
             ),
         )
         if receipt:

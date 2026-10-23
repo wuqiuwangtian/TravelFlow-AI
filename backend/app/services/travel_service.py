@@ -117,6 +117,9 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
     for old_day in previous.days:
         existing_day = next((d for d in current.days if d.day == old_day.day), None)
         if existing_day:
+            existing_day.linked_replan = (
+                old_day.linked_replan.model_copy(deep=True) if old_day.linked_replan else None
+            )
             existing_day.replan_context = (
                 old_day.replan_context.model_copy(deep=True) if old_day.replan_context else None
             )

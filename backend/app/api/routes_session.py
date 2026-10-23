@@ -187,6 +187,7 @@ async def create_branch(
             assert graph is not None
             values["pending_journey"] = None
             values["pending_place"] = None
+            values["pending_linked"] = None
             values["chat_request"] = None
             values["completed_chat"] = None
             config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
@@ -297,5 +298,6 @@ async def get_branch_messages(
         clarification=clarification_prompt(
             (snapshot.values or {}).get("pending_journey")
             or (snapshot.values or {}).get("pending_place")
+            or (snapshot.values or {}).get("pending_linked")
         ),
     )

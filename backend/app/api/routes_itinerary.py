@@ -232,6 +232,7 @@ async def _save_revision(
     patch = {
         "pending_journey": None,
         "pending_place": None,
+        "pending_linked": None,
         "plan_markdown": detail.markdown,
         "itinerary": detail.itinerary,
         "requirements": requirements,

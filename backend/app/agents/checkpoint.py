@@ -26,6 +26,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # 状态中会用到的自定义类型；新增领域模型时需同步登记
 _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
+    ("app.domain.linked_replan",),
     ("app.domain.clarification",),
     ("app.domain.models",),
     ("app.domain.itinerary",),
@@ -34,6 +35,9 @@ _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
 ]
 
 _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
+    ("app.domain.linked_replan", "LinkedReplanPreview"),
+    ("app.domain.linked_replan", "LinkedActivityChange"),
+    ("app.domain.itinerary", "LinkedReplanNote"),
     ("app.domain.clarification", "JourneyClarification"),
     ("app.domain.clarification", "PlaceClarification"),
     ("app.domain.clarification", "PlaceTarget"),

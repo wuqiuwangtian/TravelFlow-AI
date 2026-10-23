@@ -27,16 +27,24 @@ from app.agents.prompt_loader import render_prompt
 from app.agents.state import PlanState
 from app.agents.streaming import emit_notice, emit_progress
 from app.core.config import Settings
-from app.core.errors import InvalidRequest, SearchUnavailable
+from app.core.errors import AppError, InvalidRequest, SearchUnavailable
 from app.core.logging import get_logger
 from app.domain.enums import DetailLevel, PlanStatus
-from app.domain.itinerary import ClockTime, ReplanInput
+from app.domain.itinerary import ClockTime, Itinerary, ReplanInput
 from app.domain.models import Requirements
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
 from app.services.journey_clarification import CANCEL, resume_journey_message
-from app.services.journey_messages import prepare_journey_message
+from app.services.journey_messages import itinerary_fingerprint, prepare_journey_message
+from app.services.linked_replan_messages import (
+    APPLY_LINKED,
+    linked_input,
+    linked_preview_reply,
+    linked_requested,
+    simple_link_request,
+)
+from app.services.linked_replan_service import preview_linked_replan
 from app.services.place_messages import handle_place_message
 from app.services.replan_service import explicit_day, set_replan_context
 from app.services.travel_time import time_label
@@ -102,14 +110,94 @@ def make_refiner_node(
         revision = int(state.get("revision", 0))
 
         current = state.get("itinerary")
+        original_itinerary = current
         pending = state.get("pending_journey")
         pending_place = state.get("pending_place")
+        pending_linked = state.get("pending_linked")
         human_messages = [m for m in state.get("messages", []) if m.type == "human"]
-        if (pending or pending_place) and CANCEL.fullmatch(user_text.strip()):
+        if (pending or pending_place or pending_linked) and CANCEL.fullmatch(user_text.strip()):
             return {
                 "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
                 "updated_at": datetime.now(),
             }
+        if user_text.strip() in APPLY_LINKED:
+            if (
+                not pending_linked
+                or not current
+                or len(human_messages) < 2
+                or human_messages[-2].id != pending_linked.after_message_id
+                or pending_linked.itinerary_fingerprint != itinerary_fingerprint(current)
+            ):
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="没有可应用的有效两天预览，请重新发起联动调整。原计划未改变。"
+                        )
+                    ],
+                    "updated_at": datetime.now(),
+                }
+            if pending_linked.conflicts:
+                pending_linked.after_message_id = human_messages[-1].id or ""
+                return {
+                    "pending_linked": pending_linked,
+                    "messages": [
+                        AIMessage(
+                            content="当前方案还有冲突，尚未应用：\n"
+                            + "\n".join(pending_linked.conflicts)
+                        )
+                    ],
+                    "updated_at": datetime.now(),
+                }
+            return {
+                "itinerary": pending_linked.itinerary,
+                "plan_markdown": sync_markdown(
+                    plan_markdown, pending_linked.itinerary, requirements
+                ),
+                "messages": [
+                    AIMessage(
+                        content="两天调整已一起应用，路线、预算和导出已同步。预约和实际账本保留，只新增一个版本。"
+                    )
+                ],
+                "status": PlanStatus.REVIEWING,
+                "revision": revision + 1,
+                "updated_at": datetime.now(),
+            }
+
+        async def linked_preview(working: Itinerary | None = None, scope: int | None = None):
+            if original_itinerary is None:
+                return {
+                    "messages": [AIMessage(content="请先整理每日行程，再联动相邻两天。")],
+                    "updated_at": datetime.now(),
+                }
+            try:
+                data = linked_input(user_text, original_itinerary, scope)
+                preview = await preview_linked_replan(
+                    original_itinerary, data, requirements, settings or Settings(), working=working
+                )
+            except AppError as exc:
+                return {"messages": [AIMessage(content=exc.message)], "updated_at": datetime.now()}
+            preview.after_message_id = human_messages[-1].id or ""
+            return {
+                "pending_linked": preview,
+                "messages": [AIMessage(content=linked_preview_reply(preview))],
+                "updated_at": datetime.now(),
+            }
+
+        if linked_requested(user_text) and re.search(
+            r"如果|假如|不要(?:再)?(?:联动|一起调整|一起重排)|"
+            r"先别(?:联动|一起调整|一起重排)|能否|能不能|是否|[?？]",
+            user_text,
+        ):
+            return {
+                "messages": [
+                    AIMessage(
+                        content="两天联动会先展示时间变化、精简项目与预约冲突，应用前不改变原计划。需要时可说「联动调整第1天和第2天」。"
+                    )
+                ],
+                "updated_at": datetime.now(),
+            }
+        if simple_link_request(user_text):
+            return await linked_preview()
         if current:
             place_reply = await handle_place_message(
                 user_text,
@@ -149,6 +237,15 @@ def make_refiner_node(
             batch = prepare_journey_message(user_text, current, requirements)
         if batch and batch.clarification and human_messages:
             batch.clarification.after_message_id = human_messages[-1].id or ""
+        if batch and linked_requested(user_text):
+            return {
+                "messages": [
+                    AIMessage(
+                        content="本次没有保存任何操作。请先单独完成记账或预约记录，再发起两天联动，避免把未确认的账目混入调整预览。"
+                    )
+                ],
+                "updated_at": datetime.now(),
+            }
         if batch and not batch.refinement:
             updated_itinerary = batch.itinerary or current
             assert updated_itinerary is not None
@@ -221,6 +318,23 @@ def make_refiner_node(
             context_days = [d for d in current.days if d.replan_context]
             if verdict.on_trip:
                 update = verdict.on_trip
+                if linked_requested(user_text):
+                    pair = linked_input(user_text, current, scope_day)
+                    if (
+                        update.day is not None
+                        and update.day != pair.first_day
+                        or update.time not in user_text
+                        or update.location_name
+                        and update.location_name not in user_text
+                    ):
+                        return {
+                            "messages": [
+                                AIMessage(
+                                    content="请明确前一天的出发地点和时刻，例如「第1天23:30我在车站，联动第2天」。原计划未改变。"
+                                )
+                            ],
+                            "updated_at": datetime.now(),
+                        }
                 days_mentioned = set(
                     re.findall(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", user_text)
                 )
@@ -295,6 +409,20 @@ def make_refiner_node(
                 scope_day = latest.day
             if scope_day is not None and not any(d.day == scope_day for d in current.days):
                 scope_day = None
+
+        if linked_requested(user_text):
+            if verdict.needs_research or verdict.requirements.model_dump(
+                exclude_defaults=True, exclude_none=True
+            ):
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="本次两天联动先处理时间衔接；新地点、旅行天数或预算变化请单独提出，原计划未改变。"
+                        )
+                    ],
+                    "updated_at": datetime.now(),
+                }
+            return await linked_preview(current, scope_day)
 
         # ---- 2. 更新需求，只有涉及新事实时补充检索 ----
         requirements = requirements.merged_with(verdict.requirements)
@@ -412,6 +540,7 @@ def make_refiner_node(
         result = await refine_state(state)
         result.setdefault("pending_journey", None)
         result.setdefault("pending_place", None)
+        result.setdefault("pending_linked", None)
         return result
 
     return refiner
