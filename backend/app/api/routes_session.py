@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from app.agents.checkpoint import thread_config
 from app.agents.state import initial_state
+from app.core.config import Settings, get_settings
 from app.core.deps import get_graph, get_store
 from app.core.errors import (
     BranchNotFound,
@@ -16,7 +18,7 @@ from app.core.errors import (
     InvalidRequest,
     SessionNotFound,
 )
-from app.domain.career import TravelCareer
+from app.domain.career import CareerFootprints, CareerMemories, TravelCareer
 from app.domain.clarification import clarification_prompt
 from app.domain.enums import PlanStatus
 from app.domain.models import ResearchBundle
@@ -38,6 +40,58 @@ from app.services.chat_service import ChatService
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
+
+
+@router.get("/travel-career/footprints", response_model=CareerFootprints, summary="已完成地点足迹")
+async def get_career_footprints(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    city: str | None = Query(None, max_length=100),
+    store: SessionStore = Depends(get_store),
+) -> CareerFootprints:
+    from app.services.career_service import travel_footprints
+
+    return await travel_footprints(
+        store, page=page, page_size=page_size, city=(city or "").strip() or None
+    )
+
+
+@router.get(
+    "/travel-career/memories", response_model=CareerMemories, summary="已选入回顾的照片回忆"
+)
+async def get_career_memories(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(6, ge=1, le=100),
+    city: str | None = Query(None, max_length=100),
+    store: SessionStore = Depends(get_store),
+) -> CareerMemories:
+    from app.services.career_service import travel_memories
+
+    return await travel_memories(
+        store, page=page, page_size=page_size, city=(city or "").strip() or None
+    )
+
+
+@router.get("/travel-career/map", summary="已确认到访地点的高德静态地图")
+async def get_career_map(
+    snapshot: str = Query(..., pattern=r"^[a-f0-9]{64}$"),
+    city: str | None = Query(None, max_length=100),
+    store: SessionStore = Depends(get_store),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    from app.services.career_service import career_map
+
+    data, content_type = await career_map(
+        store, settings, city=(city or "").strip() or None, snapshot=snapshot
+    )
+    return Response(
+        data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get(
