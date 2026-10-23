@@ -119,7 +119,17 @@ export function TravelLedger({
       setEditing(null);
     }
   }
-  const linkedDay = itinerary.days.find((item) => item.day === draft?.day);
+  function plannedDay(entry: Expense) {
+    const row = detail.budget_overview?.rows.find(
+      (item) => item.id === entry.budget_item_id,
+    );
+    const activityId = entry.activity_id || row?.activity_id;
+    return (
+      itinerary?.days.find((item) =>
+        item.activities.some((activity) => activity.id === activityId),
+      )?.day ?? row?.day
+    );
+  }
   return (
     <section
       aria-label="旅行记账"
@@ -294,7 +304,7 @@ export function TravelLedger({
             )}
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs text-slate-600">
-                所属日期
+                付款日期
                 <select
                   className={`${field} mt-1`}
                   value={draft.day ?? ""}
@@ -302,7 +312,6 @@ export function TravelLedger({
                     setDraft({
                       ...draft,
                       day: e.target.value ? Number(e.target.value) : null,
-                      activity_id: null,
                     })
                   }
                 >
@@ -352,10 +361,16 @@ export function TravelLedger({
                     }
                   >
                     <option value="">不关联活动</option>
-                    {linkedDay?.activities.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.title}
-                      </option>
+                    {itinerary.days.map((item) => (
+                      <optgroup key={item.day} label={`行程第${item.day}天`}>
+                        {item.activities
+                          .filter((activity) => !activity.is_context_anchor)
+                          .map((a) => (
+                            <option key={a.id} value={a.id}>
+                              第{item.day}天 · {a.title}
+                            </option>
+                          ))}
+                      </optgroup>
                     ))}
                   </select>
                 </label>
@@ -416,9 +431,15 @@ export function TravelLedger({
                       {entry.title}
                     </p>
                     <p className="mt-1 text-[11px] text-slate-400">
-                      {entry.day ? `第 ${entry.day} 天` : "未关联日期"} ·{" "}
+                      {entry.day ? `付款第 ${entry.day} 天` : "付款日未关联"} ·{" "}
                       {categories[entry.category]}
                     </p>
+                    {plannedDay(entry) != null &&
+                      plannedDay(entry) !== entry.day && (
+                        <p className="mt-1 text-[11px] text-teal-700">
+                          关联行程第 {plannedDay(entry)} 天 · 付款日期未改变
+                        </p>
+                      )}
                   </div>
                   <span className="shrink-0 text-sm font-semibold text-slate-700">
                     {money(entry.amount_cents)}

@@ -511,9 +511,11 @@ export default function ChatPage() {
                         aria-label={
                           clarification.kind === "expense"
                             ? "消费记录选择"
-                            : clarification.kind === "linked_replan"
-                              ? "两天调整操作"
-                              : "地点候选选择"
+                            : clarification.kind === "move_activity"
+                              ? "搬移景点选择"
+                              : clarification.kind === "linked_replan"
+                                ? "两天调整操作"
+                                : "地点候选选择"
                         }
                         className="my-2 grid max-h-64 min-w-0 gap-2 overflow-y-auto"
                       >

@@ -85,7 +85,7 @@ export interface ChatClarification {
     title: string;
     before: string;
     after: string;
-    status: "kept" | "shifted" | "omitted";
+    status: "kept" | "shifted" | "omitted" | "moved_in" | "moved_out";
     protected: boolean;
   }[];
   conflicts?: string[];
@@ -342,6 +342,7 @@ export interface DayPlan {
     second_day: number;
     rest_minutes: number;
     next_departure: string;
+    movement_notes?: string[];
   } | null;
 }
 

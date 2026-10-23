@@ -349,6 +349,12 @@ export function ItineraryPanel({
                 {day.linked_replan.rest_minutes / 60}小时休息，第
                 {day.linked_replan.second_day}天
                 {day.linked_replan.next_departure}出发。预约与实际记录保留。
+                {!!day.linked_replan.movement_notes?.length && (
+                  <span className="block">
+                    跨天搬移：{day.linked_replan.movement_notes.join("；")}。
+                    付款日期与凭证保留。
+                  </span>
+                )}
               </p>
             )}
             {itinerary?.days.some((item) => item.day === day.day + 1) &&
@@ -670,6 +676,36 @@ export function ItineraryPanel({
                       disabled={!editable || disabled || busy}
                       onCommit={mutate}
                     />
+                    {active.progress === "not_started" &&
+                      !active.booking &&
+                      active.time_is_suggested &&
+                      !active.is_context_anchor &&
+                      !["hotel", "station", "transport"].includes(
+                        active.kind,
+                      ) && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {itinerary?.days
+                            .filter(
+                              (target) => Math.abs(target.day - day.day) === 1,
+                            )
+                            .map((target) => (
+                              <button
+                                key={target.day}
+                                type="button"
+                                aria-label={`将${active.title}移到第${target.day}天`}
+                                disabled={!editable || disabled || busy}
+                                onClick={() =>
+                                  onAsk(
+                                    `把第${day.day}天第${activeIndex + 1}站「${active.title}」移到第${target.day}天`,
+                                  )
+                                }
+                                className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                              >
+                                移到第{target.day}天，先看预览
+                              </button>
+                            ))}
+                        </div>
+                      )}
                   </div>
                 )}
                 <div className="rounded-xl bg-slate-50 p-4">

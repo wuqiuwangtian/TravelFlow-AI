@@ -31,13 +31,21 @@ export function LinkedReplanPreview({
                       className={
                         change.status === "omitted"
                           ? "text-rose-700"
-                          : "text-slate-600"
+                          : change.status === "moved_in" ||
+                              change.status === "moved_out"
+                            ? "text-teal-700"
+                            : "text-slate-600"
                       }
                     >
                       {change.before} → {change.after}
                     </p>
                     {change.protected && (
-                      <p className="text-[11px] text-teal-700">固定项目保留</p>
+                      <p className="text-[11px] text-teal-700">
+                        {change.status === "moved_in" ||
+                        change.status === "moved_out"
+                          ? "地点与关联记录保留"
+                          : "固定项目保留"}
+                      </p>
                     )}
                   </li>
                 ))}

@@ -68,7 +68,7 @@ export function BudgetPanel({
       title: previous?.title ?? row.title,
       amount: value,
       category: previous?.category ?? row.category,
-      day: previous?.day ?? row.day,
+      day: previous ? previous.day : row.day,
       activity_id: previous?.activity_id ?? row.activity_id,
       notes: previous?.notes ?? "",
       receipt_ids: previous?.receipt_ids ?? [],
