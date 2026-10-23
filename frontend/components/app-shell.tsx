@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   CircleHelp,
   BookOpen,
+  MapPin,
   GitBranch,
   LayoutGrid,
   MessageSquare,
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/", label: "工作台", icon: LayoutGrid },
   { href: "/sessions", label: "会话", icon: MessageSquare },
   { href: "/recaps", label: "旅行回顾", icon: BookOpen },
+  { href: "/career", label: "旅行生涯", icon: MapPin },
   { href: "/compare", label: "分支对比", icon: GitBranch },
   { href: "/settings", label: "设置", icon: Settings },
   { href: "/help", label: "帮助", icon: CircleHelp },

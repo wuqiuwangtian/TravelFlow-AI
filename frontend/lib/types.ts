@@ -447,3 +447,37 @@ export interface RecapArchiveItem {
   cover_photo_id: string | null;
   stale: boolean;
 }
+
+export interface CareerFacts {
+  completed_count: number;
+  unlocated_completed_count: number;
+  expense_count: number;
+  unsettled_count: number;
+  ledger: LedgerSummary;
+}
+
+export interface CareerTrip extends CareerFacts {
+  session_id: string;
+  session_title: string;
+  session_archived: boolean;
+  branch_id: string;
+  branch_title: string;
+  version_id: string;
+  title: string;
+  ended_at: string;
+  cities: string[];
+  finished_branch_count: number;
+  source_basis: "primary" | "latest_finished";
+  cover_photo_id: string | null;
+}
+
+export interface TravelCareer {
+  summary: CareerFacts & {
+    trip_count: number;
+    city_count: number;
+    trips_without_expenses: number;
+  };
+  cities: { name: string; trip_count: number }[];
+  items: CareerTrip[];
+  total: number;
+}

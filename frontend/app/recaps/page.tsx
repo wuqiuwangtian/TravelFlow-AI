@@ -38,6 +38,9 @@ export default function RecapArchivePage() {
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
       <h1 className="text-xl font-bold text-teal-900">旅行回顾</h1>
+      <Link href="/career" className="mt-3 inline-block text-sm text-teal-800">
+        查看我的旅行生涯 →
+      </Link>
       <p className="mt-2 text-sm leading-7 text-slate-500">
         收录已结束的旅行方案，补记后同步更新。每个方案单独展示；会话归档不会结束旅行，重新开启后会移出此处，历史版本仍保留。
       </p>

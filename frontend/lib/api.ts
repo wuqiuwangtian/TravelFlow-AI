@@ -32,6 +32,7 @@ import type {
   RecapPhoto,
   RecapDraft,
   RecapArchiveItem,
+  TravelCareer,
 } from "./types";
 import type {
   SettingsPayload,
@@ -88,6 +89,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  travelCareer: (page = 1, city = "") =>
+    request<TravelCareer>(
+      `/api/travel-career?page=${page}&city=${encodeURIComponent(city)}`,
+    ),
   setJourneyStatus: (versionId: string, ended: boolean) =>
     request<VersionDetail>(`/api/versions/${versionId}/journey-status`, {
       method: "PUT",
