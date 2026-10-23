@@ -1,0 +1,62 @@
+"""选择精确消费；不通过把内部 ID 拼进自然语言来改变解析结果。"""
+
+import hashlib
+
+from app.core.errors import InvalidRequest
+from app.domain.clarification import ExpenseTarget
+from app.domain.itinerary import Expense, Itinerary
+
+
+def expense_fingerprint(expense: Expense) -> str:
+    # 多项操作澄清后从原账本重放，新增消费的 UUID 和时间戳会重新生成。
+    values = expense.model_dump_json(exclude={"id", "created_at", "updated_at"})
+    return hashlib.sha256(values.encode()).hexdigest()
+
+
+def expense_targets(
+    candidates: list[Expense], working: Itinerary, original: Itinerary
+) -> list[ExpenseTarget]:
+    saved_ids = {e.id for e in original.expenses}
+    indices = {e.id: i for i, e in enumerate(working.expenses)}
+    targets = []
+    for expense in candidates:
+        labels = [
+            f"第{expense.day}天" if expense.day is not None else "未关联日期",
+            expense.title,
+            f"{expense.amount_cents / 100:.2f}元",
+        ]
+        for day in working.days:
+            for station, activity in enumerate(day.activities, 1):
+                if activity.id == expense.activity_id:
+                    labels.append(f"第{station}站 {activity.title}")
+        if expense.notes:
+            labels.append(expense.notes[:100])
+        if expense.receipt_ids:
+            labels.append(f"{len(expense.receipt_ids)}张凭证")
+        if expense.id not in saved_ids:
+            labels.append("本次新增")
+        # 同日、同金额、同备注的消费也保持可区分的账本顺序。
+        labels.append(f"账本第{indices[expense.id] + 1}笔")
+        targets.append(
+            ExpenseTarget(
+                index=indices[expense.id],
+                expense_id=expense.id if expense.id in saved_ids else None,
+                fingerprint=expense_fingerprint(expense),
+                label=" · ".join(labels),
+            )
+        )
+    return targets
+
+
+def selected_expense(
+    target: ExpenseTarget, candidates: list[Expense], itinerary: Itinerary
+) -> Expense:
+    if target.index < len(itinerary.expenses):
+        expense = itinerary.expenses[target.index]
+        if (
+            any(e.id == expense.id for e in candidates)
+            and (target.expense_id is None or target.expense_id == expense.id)
+            and target.fingerprint == expense_fingerprint(expense)
+        ):
+            return expense
+    raise InvalidRequest("这笔消费已发生变化，请重新说明要操作的消费。")

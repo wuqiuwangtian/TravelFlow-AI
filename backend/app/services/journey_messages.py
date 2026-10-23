@@ -5,16 +5,18 @@ import re
 from dataclasses import dataclass, field
 
 from app.core.errors import AppError
-from app.domain.clarification import JourneyClarification
+from app.domain.clarification import ExpenseTarget, JourneyClarification
 from app.domain.itinerary import Itinerary
 from app.domain.models import Requirements
 from app.services.adjustment_messages import handle_adjustment_message
 from app.services.booking_messages import handle_booking_message
+from app.services.expense_selection import expense_targets
 from app.services.replan_service import explicit_day
 from app.services.travel_messages import TravelReply, handle_travel_message
 
 _RECORD = re.compile(
     r"记账|记一笔|花了|付了|支付了|消费了|支出|记错|实付|消费.*(?:改成|改为|删除|移除)|"
+    r"(?:删除|移除|撤销)[^，,；;。\n]*消费|"
     r"退款|退了|退回|报销|已预约|已经预约|预约好了|已经订好|已订好|记录已有预约|"
     r"(?:清除|取消|删除)预约记录|恢复未开始|跳过|不去这站|"
     r"已完成|完成了|标记完成|逛完|游览完|游完|正在游览|正在逛|开始这一站|开始游览"
@@ -104,7 +106,9 @@ def prepare_journey_message(
     *,
     clauses: list[str] | None = None,
     day_scopes: list[int | None] | None = None,
+    expense_selections: dict[int, ExpenseTarget] | None = None,
 ) -> JourneyMessage | None:
+    expense_selections = expense_selections or {}
     clauses = _clauses(text) if clauses is None else clauses
     if day_scopes is None:
         day_scopes = []
@@ -135,6 +139,7 @@ def prepare_journey_message(
                 "day": "直接回复「第2天」即可继续这次操作。",
                 "amount": "直接回复正确金额，例如「86元」，即可继续这次操作。",
                 "activity": "直接回复「第1天第2站」即可继续这次操作。",
+                "expense": "点击候选或回复「选第2笔」即可继续这次操作。",
             }[action.clarification]
             reason += "\n" + hint + "也可以说「取消这次操作」。"
             pending = JourneyClarification(
@@ -144,7 +149,19 @@ def prepare_journey_message(
                 index=index,
                 prompt=prefix + reason,
                 itinerary_fingerprint=itinerary_fingerprint(itinerary),
+                expense_options=expense_targets(
+                    action.expense_candidates or [], working, itinerary
+                ),
+                expense_selections=expense_selections,
             )
+            if pending.kind == "expense":
+                options = "\n".join(
+                    f"{i}. {target.label}"
+                    for i, target in enumerate(pending.expense_options[:8], 1)
+                )
+                reason += "\n" + options
+                if len(pending.expense_options) > 8:
+                    reason += "\n更多记录可回复「下一页消费」。"
         return JourneyMessage(replies=[prefix + reason], clarification=pending)
 
     if len(clauses) > 12:
@@ -179,8 +196,12 @@ def prepare_journey_message(
             booking = handle_booking_message(scoped, working)
             action: TravelReply | None = (
                 booking
-                or handle_adjustment_message(scoped, working)
-                or handle_travel_message(scoped, working, requirements)
+                or handle_adjustment_message(
+                    scoped, working, expense_target=expense_selections.get(index)
+                )
+                or handle_travel_message(
+                    scoped, working, requirements, expense_target=expense_selections.get(index)
+                )
             )
         except AppError as exc:
             return fail(index, exc.message)
@@ -198,5 +219,6 @@ def prepare_journey_message(
             )
         working = action.itinerary
         result.itinerary = working
-        result.replies.append(action.reply)
+        selected = expense_selections.get(index)
+        result.replies.append((f"已选消费：{selected.label}\n" if selected else "") + action.reply)
     return result

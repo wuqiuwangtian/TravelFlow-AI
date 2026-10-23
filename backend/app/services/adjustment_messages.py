@@ -6,12 +6,16 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from app.core.errors import AppError
+from app.domain.clarification import ExpenseTarget
 from app.domain.itinerary import AdjustmentCreate, AdjustmentInput, Itinerary
 from app.services.adjustment_service import add_adjustment, edit_adjustment, remove_adjustment
+from app.services.expense_selection import selected_expense
 from app.services.travel_messages import AMOUNT_PATTERN, TravelReply, _number
 
 
-def handle_adjustment_message(text: str, itinerary: Itinerary) -> TravelReply | None:
+def handle_adjustment_message(
+    text: str, itinerary: Itinerary, *, expense_target: ExpenseTarget | None = None
+) -> TravelReply | None:
     if not re.search(r"退款|退了|退回|报销", text):
         return None
     if re.search(r"如果|预计|打算|能不能|能否|是否|吗|[?？]|不要|不是|不退", text):
@@ -27,14 +31,25 @@ def handle_adjustment_message(text: str, itinerary: Itinerary) -> TravelReply | 
     day_match = re.search(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", text)
     day = _number(day_match[1]) if day_match else None
     expenses = [e for e in itinerary.expenses if e.title in text and (day is None or e.day == day)]
-    if len(expenses) != 1:
+    if expense_target:
+        expense = selected_expense(expense_target, expenses, itinerary)
+    elif len(expenses) != 1:
+        if len(expenses) > 1 and (
+            len({e.day for e in expenses}) == 1 or any(e.day is None for e in expenses)
+        ):
+            return TravelReply(
+                "有多笔符合描述的原始消费，请选择这次回款对应的那一笔。",
+                clarification="expense",
+                expense_candidates=expenses,
+            )
         return TravelReply(
             "请说明这笔回款对应哪项原始消费，例如「第2天门票退款到账20元」；原始消费还没记时请先记入。",
             clarification="day"
             if len(expenses) > 1 and len({e.day for e in expenses}) > 1
             else None,
         )
-    expense = expenses[0]
+    else:
+        expense = expenses[0]
     existing = [a for a in itinerary.adjustments if a.expense_id == expense.id and a.kind == kind]
     deleting = bool(re.search(r"删除|移除|撤销", text))
     editing = bool(re.search(r"更正|记错|改成|改为", text))
@@ -105,7 +120,9 @@ def handle_adjustment_message(text: str, itinerary: Itinerary) -> TravelReply | 
                 edit_adjustment(result, old.id, data)
             else:
                 if not amounts:
-                    return TravelReply("请给出这笔回款的总金额，例如「门票退款到账20元」。")
+                    return TravelReply(
+                        "请给出这笔回款的总金额，例如「门票退款到账20元」。", clarification="amount"
+                    )
                 data = AdjustmentCreate(
                     expense_id=expense.id,
                     kind=kind,
@@ -115,7 +132,9 @@ def handle_adjustment_message(text: str, itinerary: Itinerary) -> TravelReply | 
                 )
                 add_adjustment(result, data)
     except ValidationError:
-        return TravelReply("回款金额需大于0，最多两位小数，请重新说明金额。")
+        return TravelReply(
+            "回款金额需大于0，最多两位小数，请重新说明金额。", clarification="amount"
+        )
     except AppError as exc:
         return TravelReply(exc.message)
     status = "已到账" if data.status == "received" else "待到账"

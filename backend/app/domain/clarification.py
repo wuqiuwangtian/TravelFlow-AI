@@ -7,7 +7,16 @@ from pydantic import BaseModel, Field
 
 from app.domain.itinerary import Place
 
-ClarificationKind = Literal["day", "amount", "activity"]
+ClarificationKind = Literal["day", "amount", "activity", "expense"]
+
+
+class ExpenseTarget(BaseModel):
+    """账本位置与内容同时绑定；本轮草稿中的新消费尚无持久 ID。"""
+
+    index: int = Field(ge=0, le=1999)
+    expense_id: str | None = None
+    fingerprint: str
+    label: str
 
 
 class JourneyClarification(BaseModel):
@@ -18,6 +27,9 @@ class JourneyClarification(BaseModel):
     prompt: str
     itinerary_fingerprint: str
     after_message_id: str = ""
+    expense_options: list[ExpenseTarget] = Field(default_factory=list, max_length=2000)
+    expense_selections: dict[int, ExpenseTarget] = Field(default_factory=dict)
+    expense_page: int = Field(default=0, ge=0)
 
 
 class PlaceTarget(BaseModel):
@@ -47,6 +59,18 @@ def clarification_prompt(
     if not pending:
         return None
     result: dict[str, Any] = {"kind": pending.kind, "prompt": pending.prompt}
+    if isinstance(pending, JourneyClarification) and pending.kind == "expense":
+        start = pending.expense_page * 8
+        end = min(start + 8, len(pending.expense_options))
+        result["prompt"] = pending.prompt
+        result["options"] = [
+            {"label": f"{i + 1}. {t.label}", "reply": f"选第{i + 1}笔"}
+            for i, t in enumerate(pending.expense_options[start:end], start)
+        ]
+        if start:
+            result["options"].append({"label": "上一页消费", "reply": "上一页消费"})
+        if end < len(pending.expense_options):
+            result["options"].append({"label": "下一页消费", "reply": "下一页消费"})
     if isinstance(pending, PlaceClarification):
         result["prompt"] = "\n".join(
             line

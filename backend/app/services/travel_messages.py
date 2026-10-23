@@ -9,15 +9,17 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from app.core.errors import AppError
-from app.domain.clarification import ClarificationKind
+from app.domain.clarification import ClarificationKind, ExpenseTarget
 from app.domain.itinerary import (
     ActivityProgress,
+    Expense,
     ExpenseCategory,
     ExpenseCreate,
     ExpenseInput,
     Itinerary,
 )
 from app.domain.models import Requirements
+from app.services.expense_selection import selected_expense
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 
 AMOUNT_PATTERN = r"(?<![0-9A-Za-z.,，+\-])([+-]?\d+(?:\.\d+)?)\s*(?:元|块钱?|RMB|CNY)"
@@ -28,6 +30,7 @@ class TravelReply:
     reply: str
     itinerary: Itinerary | None = None
     clarification: ClarificationKind | None = None
+    expense_candidates: list[Expense] | None = None
 
 
 def _number(text: str) -> int:
@@ -41,7 +44,11 @@ def _number(text: str) -> int:
 
 
 def handle_travel_message(
-    text: str, itinerary: Itinerary, requirements: Requirements
+    text: str,
+    itinerary: Itinerary,
+    requirements: Requirements,
+    *,
+    expense_target: ExpenseTarget | None = None,
 ) -> TravelReply | None:
     text = re.sub(
         r"(?<!\d)(\d{1,3}(?:,\d{3})+(?:\.\d+)?)(?!\d)",
@@ -99,14 +106,25 @@ def handle_travel_message(
             candidates = [
                 e for e in result.expenses if e.title in text and (day is None or e.day == day)
             ]
-            if len(candidates) != 1:
+            if expense_target:
+                entry = selected_expense(expense_target, candidates, result)
+            elif len(candidates) != 1:
+                if len(candidates) > 1 and (
+                    len({e.day for e in candidates}) == 1 or any(e.day is None for e in candidates)
+                ):
+                    return TravelReply(
+                        "有多笔符合描述的消费，请选择要修改或移除的那一笔。",
+                        clarification="expense",
+                        expense_candidates=candidates,
+                    )
                 return TravelReply(
                     "这笔消费还不能唯一确定，请说明消费名称和第几天，或在「消费明细」中更正。",
                     clarification="day"
                     if len(candidates) > 1 and len({e.day for e in candidates}) > 1
                     else None,
                 )
-            entry = candidates[0]
+            else:
+                entry = candidates[0]
             if deleting:
                 remove_expense(result, entry.id)
                 return TravelReply(f"已移除「{entry.title}」这笔消费，历史版本仍保留。", result)
