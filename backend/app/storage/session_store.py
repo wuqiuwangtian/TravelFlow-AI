@@ -26,6 +26,7 @@ from app.domain.models import (
     VersionInfo,
 )
 from app.domain.preferences import SavedPreferences
+from app.domain.workflow import PlannerPreview
 
 
 def _now() -> str:
@@ -46,6 +47,39 @@ class SessionStore:
 
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
+
+    async def get_workflow_preview(
+        self, branch_id: str, request_id: str | None = None
+    ) -> PlannerPreview | None:
+        sql = "SELECT preview FROM workflow_previews WHERE branch_id=?"
+        params = [branch_id]
+        if request_id is not None:
+            sql += " AND request_id=?"
+            params.append(request_id)
+        sql += " ORDER BY created_at DESC LIMIT 1"
+        cursor = await self._conn.execute(sql, params)
+        row = await cursor.fetchone()
+        return PlannerPreview.model_validate_json(row["preview"]) if row else None
+
+    async def save_workflow_preview(self, preview: PlannerPreview) -> None:
+        await self._conn.execute(
+            "INSERT INTO workflow_previews(branch_id,request_id,preview,created_at) "
+            "VALUES (?,?,?,?)",
+            (
+                preview.branch_id,
+                preview.request_id,
+                preview.model_dump_json(),
+                preview.created_at.isoformat(),
+            ),
+        )
+        await self._conn.commit()
+
+    async def delete_workflow_preview(self, branch_id: str, request_id: str) -> None:
+        await self._conn.execute(
+            "DELETE FROM workflow_previews WHERE branch_id=? AND request_id=?",
+            (branch_id, request_id),
+        )
+        await self._conn.commit()
 
     async def get_travel_preferences(self) -> SavedPreferences:
         cursor = await self._conn.execute("SELECT * FROM travel_preferences WHERE id=1")

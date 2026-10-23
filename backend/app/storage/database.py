@@ -109,6 +109,15 @@ CREATE TABLE IF NOT EXISTS chat_receipts (
     outcome TEXT NOT NULL,
     PRIMARY KEY(branch_id, request_id)
 );
+
+-- 局部节点重跑只保存预览；应用时才生成正式路书版本。
+CREATE TABLE IF NOT EXISTS workflow_previews (
+    branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    request_id TEXT NOT NULL,
+    preview TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(branch_id, request_id)
+);
 """
 
 

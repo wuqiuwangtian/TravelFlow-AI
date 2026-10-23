@@ -37,6 +37,7 @@ from app.domain.itinerary import (
 )
 from app.domain.models import Requirements, VersionDetail
 from app.domain.schemas import ConnectionTestResponse
+from app.domain.workflow import PlannerPreview, PlannerRerunInput
 from app.llm.factory import create_llm_provider
 from app.maps.amap import AmapProvider
 from app.maps.assets import map_asset
@@ -373,6 +374,7 @@ async def _save_revision(
     summary: str,
     *,
     keep_plan_status: bool = False,
+    trigger: str = "itinerary_edit",
 ) -> VersionDetail:
     """同时更新图状态和版本快照，下一轮对话接着修改后的行程继续。"""
     branch_id = detail.version.branch_id
@@ -405,7 +407,7 @@ async def _save_revision(
         branch_id,
         values,
         updated,
-        trigger="itinerary_edit",
+        trigger=trigger,
         summary=summary,
     )
     if version_id is None:
@@ -423,6 +425,115 @@ async def _save_revision(
     if branch:
         await store.touch_session(branch.session_id)
     return await _detail(store, version_id)
+
+
+@router.post("/versions/{version_id}/workflow/planner-preview", response_model=PlannerPreview)
+async def planner_preview(
+    version_id: str,
+    payload: PlannerRerunInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+    settings: Settings = Depends(get_settings),
+):
+    from app.services.workflow_rerun import checkpoint_id, ensure_available, preview_day
+
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        detail = await _editable(store, version_id)
+        snapshot = await graph.aget_state(thread_config(detail.version.branch_id))
+        ensure_available(detail, snapshot)
+        if any(
+            v.trigger == "workflow_rerun:" + payload.request_id
+            for v in await store.list_versions(detail.version.branch_id)
+        ):
+            raise ConflictError("该重跑请求已应用，请使用新请求生成下一次预览。")
+        existing = await store.get_workflow_preview(detail.version.branch_id, payload.request_id)
+        if existing:
+            if existing.parameters != payload or existing.base_version_id != version_id:
+                raise ConflictError("同一次重跑的参数已变化，请重新生成预览。")
+            if existing.source_checkpoint != checkpoint_id(snapshot):
+                raise ConflictError("方案或对话已变化，请刷新后重新生成预览。")
+            return existing
+        result = await preview_day(
+            detail, snapshot, payload, create_llm_provider(settings), settings
+        )
+        await store.save_workflow_preview(result)
+        return result
+
+
+@router.get("/branches/{branch_id}/workflow/planner-preview", response_model=PlannerPreview | None)
+async def current_planner_preview(
+    branch_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.workflow_rerun import checkpoint_id
+
+    versions = await store.list_versions(branch_id)
+    preview = await store.get_workflow_preview(branch_id)
+    if not preview or not versions or versions[-1].id != preview.base_version_id:
+        return None
+    snapshot = await graph.aget_state(thread_config(branch_id))
+    return preview if checkpoint_id(snapshot) == preview.source_checkpoint else None
+
+
+@router.delete("/branches/{branch_id}/workflow/planner-preview/{request_id}", status_code=204)
+async def discard_planner_preview(
+    branch_id: str,
+    request_id: str,
+    store: SessionStore = Depends(get_store),
+):
+    async with branch_guard(branch_id):
+        await store.delete_workflow_preview(branch_id, request_id)
+
+
+@router.post(
+    "/branches/{branch_id}/workflow/planner-preview/{request_id}/apply",
+    response_model=VersionDetail,
+)
+async def apply_planner_preview(
+    branch_id: str,
+    request_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.workflow_rerun import checkpoint_id, ensure_available
+
+    async with branch_guard(branch_id):
+        versions = await store.list_versions(branch_id)
+        trigger = "workflow_rerun:" + request_id
+        # 回包丢失或应用后又继续编辑，重试都回到同一结果，不额外生成版本。
+        applied = next((v for v in versions if v.trigger == trigger), None)
+        if applied:
+            return await _detail(store, applied.id)
+        preview = await store.get_workflow_preview(branch_id, request_id)
+        if not preview:
+            raise InvalidRequest("未找到预览，请先生成单日优化建议。")
+        if preview.conflicts:
+            raise ConflictError("预览存在固定安排或时间衔接冲突，请处理后重新生成，原方案未修改。")
+        detail = await _editable(store, preview.base_version_id)
+        snapshot = await graph.aget_state(thread_config(branch_id))
+        ensure_available(detail, snapshot)
+        if checkpoint_id(snapshot) != preview.source_checkpoint:
+            raise ConflictError("方案或对话已变化，原记录未修改，请刷新后重新生成预览。")
+        assert detail.itinerary is not None
+        detail.itinerary.days = [
+            preview.after if d.day == preview.after.day else d for d in detail.itinerary.days
+        ]
+        # 新顺序可能让原先可查的连线失效，不能继续沿用“地图已完整校验”。
+        days = detail.itinerary.days
+        detail.itinerary.map_status = (
+            "ready"
+            if all(d.activities and d.checked_at for d in days)
+            and all(a.place or a.kind == "free_time" for d in days for a in d.activities)
+            and all(leg.status in {"ok", "planned"} for d in days for leg in d.legs)
+            else "partial"
+            if any(d.checked_at for d in days) or detail.itinerary.map_status != "unconfigured"
+            else "unconfigured"
+        )
+        return await _save_revision(
+            store, graph, detail, f"局部优化第{preview.after.day}天路线", trigger=trigger
+        )
 
 
 @router.get("/maps/places", summary="搜索高德地点候选")

@@ -1,5 +1,6 @@
 """浏览器验收专用服务：真实接口、编排和持久化，模型与检索用固定替身。"""
 
+import json
 import re
 import sys
 from contextlib import asynccontextmanager
@@ -34,6 +35,7 @@ from app.core.errors import (
 )
 from app.domain.enums import PlanStatus  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
+from app.domain.workflow import DayOrder  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
 from app.services.itinerary_service import sync_markdown  # noqa: E402
 from app.services.recap_writing import RecapWriting  # noqa: E402
@@ -45,6 +47,17 @@ class BrowserLLM(FakeLLM):
     failed_workflow_cases: set[str] = set()
 
     async def structured(self, messages, schema, **kwargs):
+        if schema is DayOrder:
+            inputs = json.loads(messages[-1].content)
+            result, group = [], []
+            for activity in inputs["activities"]:
+                if activity["fixed"]:
+                    result.extend(reversed(group))
+                    group = []
+                    result.append(activity["id"])
+                else:
+                    group.append(activity["id"])
+            return DayOrder(activity_ids=[*result, *reversed(group)])
         if schema is PlanOutput:
             case = re.search(r"workflow-failure-([a-f0-9]{12})", messages[0].content)
             if case and case[1] not in self.failed_workflow_cases:
