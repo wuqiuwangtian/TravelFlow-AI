@@ -59,7 +59,7 @@ test("事实模板可编辑保存，刷新保留，重复保存不增加版本�
   await recap
     .getByRole("textbox", { name: "我的回忆", exact: true })
     .fill("尚未保存的文字");
-  await expect(recap).toContainText("文字尚未保存");
+  await expect(recap).toContainText("改动尚未保存");
   const link = recap.getByRole("link", { name: "导出回顾 HTML", exact: true });
   const output = await page.request.get((await link.getAttribute("href"))!);
   const html = await output.text();

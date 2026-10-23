@@ -29,6 +29,7 @@ import type {
   VersionInfo,
   TravelMode,
   RecapView,
+  RecapPhoto,
 } from "./types";
 import type {
   SettingsPayload,
@@ -85,11 +86,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  uploadTravelPhoto: (versionId: string, file: File) =>
+    request<{ id: string; width: number; height: number }>(
+      `/api/versions/${versionId}/travel-photos`,
+      {
+        method: "POST",
+        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+      },
+    ),
+  travelPhotoUrl: (versionId: string, id: string) =>
+    `${API_BASE}/api/versions/${versionId}/travel-photos/${id}`,
   getRecap: (versionId: string) =>
     request<RecapView>(`/api/versions/${versionId}/recap`),
   saveRecap: (
     versionId: string,
-    payload: { title: string; body: string; source_fingerprint: string },
+    payload: {
+      title: string;
+      body: string;
+      source_fingerprint: string;
+      photos?: RecapPhoto[];
+      cover_photo_id?: string | null;
+    },
   ) =>
     request<VersionDetail>(`/api/versions/${versionId}/recap`, {
       method: "PUT",

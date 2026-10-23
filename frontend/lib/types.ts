@@ -347,7 +347,13 @@ export interface DayPlan {
 }
 
 export interface Itinerary {
-  recap?: { title: string; body: string; source_fingerprint: string } | null;
+  recap?: {
+    photos?: RecapPhoto[];
+    cover_photo_id?: string | null;
+    title: string;
+    body: string;
+    source_fingerprint: string;
+  } | null;
   days: DayPlan[];
   map_status: "unconfigured" | "ready" | "partial";
   expenses: Expense[];
@@ -384,6 +390,8 @@ export interface LedgerSummary {
 }
 
 export interface RecapView {
+  photos: RecapPhoto[];
+  cover_photo_id: string | null;
   source_fingerprint: string;
   title: string;
   body: string;
@@ -400,4 +408,12 @@ export interface RecapView {
   expense_count: number;
   unsettled_count: number;
   unknown_count: number;
+}
+
+export interface RecapPhoto {
+  id: string;
+  caption: string;
+  day: number | null;
+  activity_id: string | null;
+  included: boolean;
 }

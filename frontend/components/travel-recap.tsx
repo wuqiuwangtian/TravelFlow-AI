@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RecapPhotos } from "@/components/recap-photos";
 import { api, API_BASE } from "@/lib/api";
-import type { VersionDetail, RecapView } from "@/lib/types";
+import type { VersionDetail, RecapView, RecapPhoto } from "@/lib/types";
 
 export function TravelRecap({
   detail,
@@ -18,6 +19,8 @@ export function TravelRecap({
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [photos, setPhotos] = useState<RecapPhoto[]>([]);
+  const [cover, setCover] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
     if (!detail.itinerary?.recap) return;
@@ -29,6 +32,8 @@ export function TravelRecap({
           setView(result);
           setTitle(result.title);
           setBody(result.body);
+          setPhotos(result.photos);
+          setCover(result.cover_photo_id);
         }
       })
       .catch((err) => {
@@ -47,6 +52,8 @@ export function TravelRecap({
       setView(result);
       setTitle(result.title);
       setBody(result.body);
+      setPhotos(result.photos);
+      setCover(result.cover_photo_id);
       setDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "回顾加载失败，请重试。");
@@ -129,6 +136,8 @@ export function TravelRecap({
                   title,
                   body,
                   source_fingerprint: view.source_fingerprint,
+                  photos,
+                  cover_photo_id: cover,
                 }),
               );
             }}
@@ -163,6 +172,18 @@ export function TravelRecap({
                   }}
                 />
               </label>
+              <RecapPhotos
+                detail={detail}
+                photos={photos}
+                cover={cover}
+                disabled={disabled || busy}
+                onBusy={setBusy}
+                onChange={(items, selected) => {
+                  setPhotos(items);
+                  setCover(selected);
+                  setDirty(true);
+                }}
+              />
               <button
                 type="submit"
                 className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
@@ -173,7 +194,7 @@ export function TravelRecap({
           </form>
           <p className="text-xs text-slate-500">
             {dirty
-              ? "文字尚未保存，导出使用已保存内容；请先保存。"
+              ? "改动尚未保存，导出使用已保存内容；请先保存。"
               : view.saved
                 ? "回顾已随当前版本保存。"
                 : "当前为事实模板，保存后可在版本历史中查看。"}{" "}
@@ -190,6 +211,15 @@ export function TravelRecap({
                 导出回顾 {format === "html" ? "HTML" : "Markdown"}
               </a>
             ))}
+            {view.photos?.some((p) => p.included) && (
+              <a
+                href={`${API_BASE}/api/versions/${detail.version.id}/recap/export?format=html&include_photos=true`}
+                download
+                className="rounded-lg border border-teal-100 bg-white px-3 py-2"
+              >
+                导出图文 HTML
+              </a>
+            )}
           </div>
         </div>
       )}
