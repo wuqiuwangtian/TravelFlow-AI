@@ -118,6 +118,20 @@ CREATE TABLE IF NOT EXISTS workflow_previews (
     created_at TEXT NOT NULL,
     PRIMARY KEY(branch_id, request_id)
 );
+
+CREATE TABLE IF NOT EXISTS workflow_projects (
+    branch_id TEXT PRIMARY KEY REFERENCES branches(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    graph TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    id TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(branch_id,id)
+);
 """
 
 

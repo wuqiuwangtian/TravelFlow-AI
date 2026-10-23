@@ -1,5 +1,7 @@
 """浏览器验收专用服务：真实接口、编排和持久化，模型与检索用固定替身。"""
 
+import asyncio
+import hashlib
 import json
 import re
 import sys
@@ -27,7 +29,14 @@ from app.agents.nodes.collector import (  # noqa: E402
 from app.agents.nodes.planner import PlanOutput  # noqa: E402
 from app.agents.nodes.refiner import RefineIntent  # noqa: E402
 from app.agents.state import initial_state  # noqa: E402
-from app.api import routes_chat, routes_export, routes_itinerary, routes_session, routes_system  # noqa: E402
+from app.api import (  # noqa: E402
+    routes_chat,
+    routes_export,
+    routes_itinerary,
+    routes_session,
+    routes_studio,  # noqa: E402
+    routes_system,
+)
 from app.core.config import Settings, get_settings  # noqa: E402
 from app.core.errors import (
     LLMAuthenticationFailed,  # noqa: E402
@@ -45,6 +54,18 @@ from app.storage.session_store import SessionStore  # noqa: E402
 
 class BrowserLLM(FakeLLM):
     failed_workflow_cases: set[str] = set()
+
+    async def chat(self, messages, **kwargs):
+        if "测试失败节点" in messages[0].content:
+            raise LLMAuthenticationFailed("验收用模型鉴权失败")
+        if "测试慢速节点" in messages[0].content:
+            await asyncio.sleep(20)
+        if "你是旅行规划工程中的一个生成节点" in messages[0].content:
+            fingerprint = hashlib.sha256("".join(m.content for m in messages).encode()).hexdigest()[
+                :10
+            ]
+            return MARKDOWN + "\n节点产物指纹：" + fingerprint
+        return await super().chat(messages, **kwargs)
 
     async def structured(self, messages, schema, **kwargs):
         if schema is DayOrder:
@@ -110,6 +131,8 @@ async def lifespan(app):
     app.dependency_overrides[get_settings] = lambda: settings
     # 整理旧路书走独立模型工厂，也必须使用替身，不能尝试读取真实模型配置。
     routes_itinerary.create_llm_provider = lambda settings: BrowserLLM()
+    routes_studio.create_llm_provider = lambda settings: BrowserLLM()
+    routes_studio.create_search_provider = lambda settings: FakeSearch()
     with TemporaryDirectory(prefix="travelflow-browser-") as folder:
         db = Path(folder) / "acceptance.db"
         conn = await create_connection(db)
@@ -128,6 +151,7 @@ app = FastAPI(lifespan=lifespan)
 register_exception_handlers(app)
 for router in (routes_session, routes_chat, routes_export, routes_itinerary, routes_system):
     app.include_router(router.router)
+app.include_router(routes_studio.router)
 
 
 @app.post("/test/legacy")

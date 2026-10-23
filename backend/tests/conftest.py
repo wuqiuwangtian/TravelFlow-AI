@@ -11,7 +11,14 @@ from app.agents.itinerary_output import PlanDetails
 from app.agents.nodes.collector import CollectResult
 from app.agents.nodes.planner import PlanOutput
 from app.agents.nodes.refiner import RefineIntent, RevisionOutput
-from app.api import routes_chat, routes_export, routes_itinerary, routes_session, routes_system
+from app.api import (
+    routes_chat,
+    routes_export,
+    routes_itinerary,
+    routes_session,
+    routes_studio,
+    routes_system,
+)
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.domain.itinerary import Activity, DayDraft
@@ -138,6 +145,7 @@ async def environment(tmp_path):
     register_exception_handlers(app)
     for router in (routes_session, routes_chat, routes_itinerary, routes_export, routes_system):
         app.include_router(router.router)
+    app.include_router(routes_studio.router)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:

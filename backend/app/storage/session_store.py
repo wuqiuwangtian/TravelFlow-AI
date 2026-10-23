@@ -27,6 +27,7 @@ from app.domain.models import (
 )
 from app.domain.preferences import SavedPreferences
 from app.domain.workflow import PlannerPreview
+from app.storage.workbench_store import WorkbenchStore
 
 
 def _now() -> str:
@@ -47,6 +48,7 @@ class SessionStore:
 
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
+        self.workbench = WorkbenchStore(conn)
 
     async def get_workflow_preview(
         self, branch_id: str, request_id: str | None = None
