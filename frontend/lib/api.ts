@@ -37,6 +37,8 @@ import type {
   CareerFootprints,
   CareerMemories,
   WorkflowView,
+  PlannerPreview,
+  PlannerRerunInput,
 } from "./types";
 import type {
   SettingsPayload,
@@ -93,6 +95,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  plannerPreview: (versionId: string, payload: PlannerRerunInput) =>
+    request<PlannerPreview>(
+      `/api/versions/${versionId}/workflow/planner-preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  currentPlannerPreview: (branchId: string) =>
+    request<PlannerPreview | null>(
+      `/api/branches/${branchId}/workflow/planner-preview`,
+    ),
+  applyPlannerPreview: (branchId: string, requestId: string) =>
+    request<VersionDetail>(
+      `/api/branches/${branchId}/workflow/planner-preview/${requestId}/apply`,
+      {
+        method: "POST",
+      },
+    ),
+  discardPlannerPreview: (branchId: string, requestId: string) =>
+    request<void>(
+      `/api/branches/${branchId}/workflow/planner-preview/${requestId}`,
+      {
+        method: "DELETE",
+      },
+    ),
   workflow: (branchId: string, versionId = "") =>
     request<WorkflowView>(
       `/api/branches/${branchId}/workflow${versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""}`,

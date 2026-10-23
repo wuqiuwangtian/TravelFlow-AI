@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import PlannerRerun from "@/components/PlannerRerun";
 import type {
   SessionDetail,
   WorkflowNodeId,
@@ -49,6 +50,7 @@ export default function WorkflowPage() {
   const [metaError, setMetaError] = useState("");
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +117,7 @@ export default function WorkflowPage() {
   }, [selection]);
 
   function choose(next: Selection) {
+    setNotice("");
     const params = new URLSearchParams({ branch: next.branch });
     if (next.version) params.set("version", next.version);
     window.history.replaceState(
@@ -144,12 +147,10 @@ export default function WorkflowPage() {
     <div className="mx-auto max-w-6xl px-5 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs tracking-widest text-teal-700">
-            高级流程 · 只读
-          </p>
+          <p className="text-xs tracking-widest text-teal-700">高级流程</p>
           <h1 className="mt-2 text-2xl font-bold text-teal-950">规划节点</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
-            查看当前规划的数据如何串起来。节点展示已有输入和输出，选择节点或切换版本只影响查看内容；调整仍在原对话完成。
+            查看规划节点的输入与输出，也可在行程节点预览单日路线优化，再应用到同一份方案。历史版本保持只读。
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-teal-800">
@@ -163,6 +164,14 @@ export default function WorkflowPage() {
           </button>
         </div>
       </div>
+      {notice && (
+        <p
+          role="status"
+          className="mt-5 rounded-xl bg-teal-50 p-4 text-sm text-teal-800"
+        >
+          {notice}
+        </p>
+      )}
 
       {detail && (
         <div className="mt-6 rounded-2xl border border-teal-100 bg-white p-5">
@@ -251,7 +260,7 @@ export default function WorkflowPage() {
               {data.historical
                 ? `第${data.version?.seq}版固定快照`
                 : "当前过程"}
-              （只读）
+              {data.historical ? "（只读）" : " · 过程摘要"}
             </p>
             <p>
               {data.source === "checkpoint"
@@ -452,6 +461,25 @@ export default function WorkflowPage() {
               </div>
             </section>
           )}
+          {selectedNode === "planner" &&
+            data.version &&
+            (data.historical ? (
+              <p className="mt-5 text-sm text-slate-500">
+                历史版本只读；切换“当前过程”后可优化当前方案。
+              </p>
+            ) : !data.busy && data.checkpoint_status === "available" ? (
+              <PlannerRerun
+                key={`${data.branch.id}-${data.version.id}`}
+                branchId={data.branch.id}
+                versionId={data.version.id}
+                onApplied={() => {
+                  setNotice(
+                    "单日优化已保存为新版本，原消费、人工预算、预约与回顾继续保留。",
+                  );
+                  reload();
+                }}
+              />
+            ) : null)}
         </>
       )}
     </div>

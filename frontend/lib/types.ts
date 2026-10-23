@@ -566,6 +566,27 @@ export interface WorkflowView {
   warnings: string[];
 }
 
+export interface PlannerRerunInput {
+  request_id: string;
+  day: number;
+  travel_mode: "auto" | "walking" | "transit" | "driving";
+  instruction: string;
+}
+export interface PlannerPreview {
+  request_id: string;
+  branch_id: string;
+  base_version_id: string;
+  source_checkpoint: string;
+  parameters: PlannerRerunInput;
+  before: DayPlan;
+  after: DayPlan;
+  protected_ids: string[];
+  budget_before: BudgetOverview;
+  budget_after: BudgetOverview;
+  created_at: string;
+  conflicts: string[];
+}
+
 export interface TravelCareer {
   summary: CareerFacts & {
     trip_count: number;
