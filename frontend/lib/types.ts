@@ -1,7 +1,10 @@
 /** 与后端 DTO 对应的类型定义（见 backend/app/domain/schemas.py）。 */
 
 export type DetailLevel =
-  "L1_minimal" | "L2_standard" | "L3_detailed" | "L4_butler";
+  | "L1_minimal"
+  | "L2_standard"
+  | "L3_detailed"
+  | "L4_butler";
 
 export const DETAIL_LEVEL_LABELS: Record<DetailLevel, string> = {
   L1_minimal: "极简",
@@ -77,6 +80,16 @@ export interface ChatClarification {
   kind: string;
   prompt: string;
   options?: { label: string; reply: string }[];
+  changes?: {
+    day: number;
+    title: string;
+    before: string;
+    after: string;
+    status: "kept" | "shifted" | "omitted";
+    protected: boolean;
+  }[];
+  conflicts?: string[];
+  warnings?: string[];
 }
 
 export interface ChatResponse {
@@ -121,7 +134,13 @@ export interface VersionDetail {
 }
 
 export type TravelMode =
-  "auto" | "walking" | "transit" | "driving" | "rail" | "flight" | "transfer";
+  | "auto"
+  | "walking"
+  | "transit"
+  | "driving"
+  | "rail"
+  | "flight"
+  | "transfer";
 
 export interface TravelRequirements {
   destination: string | null;
@@ -177,7 +196,11 @@ export interface ScheduledActivity extends Activity {
   id: string;
   place: Place | null;
   place_status:
-    "pending" | "matched" | "ambiguous" | "not_found" | "unavailable";
+    | "pending"
+    | "matched"
+    | "ambiguous"
+    | "not_found"
+    | "unavailable";
   candidates: Place[];
   match_reason: string;
   time_is_suggested: boolean;
@@ -215,9 +238,17 @@ export interface ReplanInput {
 }
 
 export type ActivityProgress =
-  "not_started" | "in_progress" | "completed" | "skipped";
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "skipped";
 export type ExpenseCategory =
-  "transport" | "lodging" | "meal" | "ticket" | "shopping" | "other";
+  | "transport"
+  | "lodging"
+  | "meal"
+  | "ticket"
+  | "shopping"
+  | "other";
 
 export interface ExpenseInput {
   title: string;
@@ -306,6 +337,12 @@ export interface DayPlan {
   estimated_cost: number;
   schedule_notes: string[];
   replan_context: ReplanContext | null;
+  linked_replan?: {
+    first_day: number;
+    second_day: number;
+    rest_minutes: number;
+    next_departure: string;
+  } | null;
 }
 
 export interface Itinerary {

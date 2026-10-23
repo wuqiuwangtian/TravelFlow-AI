@@ -4,7 +4,13 @@ import next from "eslint-config-next";
 
 const config = [
   {
-    ignores: [".next/**", "node_modules/**", "next-env.d.ts"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "next-env.d.ts",
+      "test-results/**",
+      "playwright-report/**",
+    ],
   },
   ...next,
   {

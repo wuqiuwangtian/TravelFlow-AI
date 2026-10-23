@@ -338,6 +338,37 @@ export function ItineraryPanel({
                   ))}
               </div>
             )}
+            {day.linked_replan && (
+              <p
+                role="status"
+                aria-label="两天联动说明"
+                className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-xs leading-6 text-teal-800"
+              >
+                最近联动第{day.linked_replan.first_day}—
+                {day.linked_replan.second_day}天：预留
+                {day.linked_replan.rest_minutes / 60}小时休息，第
+                {day.linked_replan.second_day}天
+                {day.linked_replan.next_departure}出发。预约与实际记录保留。
+              </p>
+            )}
+            {itinerary?.days.some((item) => item.day === day.day + 1) &&
+              (day.replan_context ||
+                day.activities.some(
+                  (activity) => activity.start_day_offset > 0,
+                )) && (
+                <button
+                  type="button"
+                  disabled={!editable || disabled || busy}
+                  onClick={() =>
+                    onAsk(
+                      `联动调整第${day.day}天和第${day.day + 1}天，预留8小时休息`,
+                    )
+                  }
+                  className="mt-3 rounded-lg border border-teal-200 px-3 py-2 text-xs text-teal-800 hover:bg-teal-50 disabled:opacity-40"
+                >
+                  联动调整第{day.day}天和第{day.day + 1}天
+                </button>
+              )}
             {day.warnings
               .filter((warning) =>
                 /冲突|跨日|超过.*24|跨越午夜|前段预约/.test(warning),

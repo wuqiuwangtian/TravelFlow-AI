@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ItineraryPanel } from "@/components/itinerary-panel";
+import { LinkedReplanPreview } from "@/components/linked-replan-preview";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, ApiError, chatStream } from "@/lib/api";
@@ -500,6 +501,9 @@ export default function ChatPage() {
                   <p className="whitespace-pre-wrap break-words">
                     {clarification.prompt}
                   </p>
+                  {clarification.kind === "linked_replan" && (
+                    <LinkedReplanPreview preview={clarification} />
+                  )}
                   {clarification.options &&
                     clarification.options.length > 0 && (
                       <div
@@ -507,7 +511,9 @@ export default function ChatPage() {
                         aria-label={
                           clarification.kind === "expense"
                             ? "消费记录选择"
-                            : "地点候选选择"
+                            : clarification.kind === "linked_replan"
+                              ? "两天调整操作"
+                              : "地点候选选择"
                         }
                         className="my-2 grid max-h-64 min-w-0 gap-2 overflow-y-auto"
                       >
