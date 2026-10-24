@@ -10,6 +10,13 @@ from app.core.deps import get_graph, get_store
 from app.core.errors import BranchNotFound, ConflictError, InvalidRequest, LLMTimeout
 from app.domain.models import VersionDetail
 from app.domain.studio_adoption import AdoptionContext, AdoptionInput, AdoptionPreview
+from app.domain.studio_library import (
+    DeleteUserTemplate,
+    LoadUserTemplate,
+    SaveUserTemplate,
+    UserTemplate,
+    UserTemplateSummary,
+)
 from app.domain.workbench import SaveStudio, StudioGraph, StudioProject, StudioRun, StudioRunInput
 from app.llm.factory import create_llm_provider
 from app.search.factory import create_search_provider
@@ -32,6 +39,63 @@ async def get_templates():
     return templates()
 
 
+@router.get("/workflow/user-templates", response_model=list[UserTemplateSummary])
+async def get_user_templates(store: SessionStore = Depends(get_store)):
+    return await store.studio_library.list()
+
+
+@router.get("/workflow/user-templates/{template_id}", response_model=UserTemplate)
+async def get_user_template(template_id: str, store: SessionStore = Depends(get_store)):
+    return await store.studio_library.get(template_id)
+
+
+@router.post("/workflow/user-templates", response_model=UserTemplate)
+async def create_user_template(payload: SaveUserTemplate, store: SessionStore = Depends(get_store)):
+    if payload.expected_revision:
+        raise InvalidRequest("新建模板不能指定旧修订号。")
+    async with branch_guard("studio-template-library"):
+        return await store.studio_library.save(payload)
+
+
+@router.put("/workflow/user-templates/{template_id}", response_model=UserTemplate)
+async def update_user_template(
+    template_id: str, payload: SaveUserTemplate, store: SessionStore = Depends(get_store)
+):
+    if not payload.expected_revision:
+        raise InvalidRequest("更新模板需要当前修订号。")
+    async with branch_guard("studio-template-library"):
+        return await store.studio_library.save(payload, template_id)
+
+
+@router.delete("/workflow/user-templates/{template_id}", status_code=204)
+async def delete_user_template(
+    template_id: str, payload: DeleteUserTemplate, store: SessionStore = Depends(get_store)
+):
+    async with branch_guard("studio-template-library"):
+        await store.studio_library.delete(template_id, payload)
+
+
+@router.post(
+    "/branches/{branch_id}/studio/template-drafts/{template_id}", response_model=StudioGraph
+)
+async def load_user_template(
+    branch_id: str,
+    template_id: str,
+    payload: LoadUserTemplate,
+    store: SessionStore = Depends(get_store),
+):
+    await branch_exists(store, branch_id)
+    template = await store.studio_library.get(template_id)
+    if template.revision != payload.expected_revision:
+        raise ConflictError("模板已变化，请刷新模板库后再载入。")
+    graph = template.graph.model_copy(deep=True)
+    seed = await requirements_seed(store, branch_id)
+    for node in graph.nodes:
+        if node.id in template.trip_input_ids:
+            node.parameters.text = seed
+    return graph
+
+
 @router.post("/workflow/validate", response_model=StudioGraph)
 async def validate_project(graph: StudioGraph):
     topology(graph)
@@ -48,6 +112,11 @@ async def get_project(branch_id: str, store: SessionStore = Depends(get_store)):
             if run.status == "running":
                 run.status, run.finished_at = "interrupted", datetime.now(UTC)
                 await store.workbench.write_run(run)
+    project.requirements_seed = await requirements_seed(store, branch_id)
+    return project
+
+
+async def requirements_seed(store: SessionStore, branch_id: str) -> str:
     versions = await store.list_versions(branch_id)
     if versions:
         detail = await store.get_version_detail(versions[-1].id)
@@ -65,8 +134,8 @@ async def get_project(branch_id: str, store: SessionStore = Depends(get_store)):
                 f"出发日期：{requirements.departure_date or '尚未确定'}",
                 f"偏好：{'、'.join(requirements.preferences) or '暂无特别要求'}",
             ]
-            project.requirements_seed = "\n".join(values)
-    return project
+            return "\n".join(values)
+    return ""
 
 
 @router.put("/branches/{branch_id}/studio", response_model=StudioProject)

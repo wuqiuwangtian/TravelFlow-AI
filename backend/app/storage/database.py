@@ -141,6 +141,24 @@ CREATE TABLE IF NOT EXISTS workflow_adoptions (
     created_at TEXT NOT NULL,
     PRIMARY KEY(branch_id,request_id)
 );
+
+-- 跨旅行复用的个人工程模板；删除后仅留修订墓碑，避免旧请求复活内容。
+CREATE TABLE IF NOT EXISTS workflow_user_templates (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    graph TEXT NOT NULL,
+    trip_input_ids TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    name_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_request_id TEXT NOT NULL,
+    last_fingerprint TEXT NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_templates_name
+    ON workflow_user_templates(name_key) WHERE deleted=0;
 """
 
 
