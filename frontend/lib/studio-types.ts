@@ -5,7 +5,8 @@ export type StudioKind =
   | "output"
   | "plan"
   | "route"
-  | "budget";
+  | "budget"
+  | "select";
 export type StudioPort = "text" | "sources" | "itinerary" | "budget";
 export interface StudioNode {
   id: string;
@@ -19,6 +20,11 @@ export interface StudioNode {
     temperature: number;
     max_results: number;
     travel_mode: "auto" | "walking" | "transit" | "driving";
+    max_attractions_per_day: number | null;
+    required_places: string;
+    excluded_places: string;
+    attraction_stay_minutes: number | null;
+    route_order: "original" | "nearby";
   };
 }
 export interface StudioEdge {
@@ -54,6 +60,29 @@ export interface NodeArtifact {
     todos: import("./types").VersionDetail["todos"];
     warnings: string[];
     route_status: "unchecked" | "unconfigured" | "partial" | "ready";
+    selection: {
+      node_title: string;
+      before_count: number;
+      after_count: number;
+      decisions: {
+        day: number;
+        activity_id: string;
+        title: string;
+        action: "removed" | "kept" | "duration";
+        reason: string;
+      }[];
+    } | null;
+    optimization: {
+      day: number;
+      before: string[];
+      after: string[];
+      before_meters: number | null;
+      after_meters: number | null;
+      before_travel_minutes: number | null;
+      after_travel_minutes: number | null;
+      changed: boolean;
+      reason: string;
+    }[];
   } | null;
   budget: {
     plan_key: string;

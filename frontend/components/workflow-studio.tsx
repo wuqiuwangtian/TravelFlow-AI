@@ -827,6 +827,114 @@ export default function WorkflowStudio({
                     />
                   </label>
                 )}
+                {node.kind === "select" && (
+                  <div className="space-y-4">
+                    <label className="block">
+                      每日景点上限
+                      <select
+                        aria-label="每日景点上限"
+                        value={node.parameters.max_attractions_per_day ?? ""}
+                        onChange={(e) =>
+                          parameters({
+                            max_attractions_per_day: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                          })
+                        }
+                        className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                      >
+                        <option value="">不限制</option>
+                        {Array.from({ length: 20 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            {i + 1}处
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      必去景点
+                      <textarea
+                        aria-label="必去景点名单"
+                        maxLength={2000}
+                        value={node.parameters.required_places ?? ""}
+                        onChange={(e) =>
+                          parameters({ required_places: e.target.value })
+                        }
+                        placeholder="每行一个名称或关键词，最多20项"
+                        className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-2"
+                      />
+                    </label>
+                    <label className="block">
+                      排除景点
+                      <textarea
+                        aria-label="排除景点名单"
+                        maxLength={2000}
+                        value={node.parameters.excluded_places ?? ""}
+                        onChange={(e) =>
+                          parameters({ excluded_places: e.target.value })
+                        }
+                        placeholder="只从上游景点中筛选，不会添加新地点"
+                        className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-2"
+                      />
+                    </label>
+                    <label className="block">
+                      景点建议停留
+                      <select
+                        aria-label="景点建议停留"
+                        value={node.parameters.attraction_stay_minutes ?? ""}
+                        onChange={(e) =>
+                          parameters({
+                            attraction_stay_minutes: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                          })
+                        }
+                        className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                      >
+                        <option value="">沿用上游</option>
+                        {[30, 60, 90, 120, 180, 240].map((n) => (
+                          <option key={n} value={n}>
+                            {n}分钟
+                          </option>
+                        ))}
+                        {node.parameters.attraction_stay_minutes &&
+                          ![30, 60, 90, 120, 180, 240].includes(
+                            node.parameters.attraction_stay_minutes,
+                          ) && (
+                            <option
+                              value={node.parameters.attraction_stay_minutes}
+                            >
+                              {node.parameters.attraction_stay_minutes}分钟
+                            </option>
+                          )}
+                      </select>
+                    </label>
+                    <p className="leading-6 text-slate-500">
+                      必去与固定项目优先保留，可能超过数量上限。住宿、餐饮、车站及已执行记录不参与删减；找不到必去地点、规则矛盾或筛成空白日会提示修正。调整后请连接路线校验。
+                    </p>
+                  </div>
+                )}
+                {node.kind === "route" && (
+                  <label className="block">
+                    路线顺序
+                    <select
+                      aria-label="路线顺序策略"
+                      value={node.parameters.route_order ?? "original"}
+                      onChange={(e) =>
+                        parameters({
+                          route_order: e.target.value as "original" | "nearby",
+                        })
+                      }
+                      className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                    >
+                      <option value="original">沿用上游顺序</option>
+                      <option value="nearby">减少折返（确认坐标）</option>
+                    </select>
+                    <p className="mt-2 leading-6 text-slate-500">
+                      每日首站及固定项目作为分段锚点，只重排中间的普通景点。依据直线距离取舍后重新核验交通；无确认坐标时保留顺序，不保证实际用时更短。
+                    </p>
+                  </label>
+                )}
                 {node.kind === "route" && (
                   <label className="block">
                     市内默认交通

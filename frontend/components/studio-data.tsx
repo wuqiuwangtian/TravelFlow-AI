@@ -36,6 +36,85 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
             {plan.days.reduce((sum, day) => sum + day.activities.length, 0)}
             个活动 · {routeLabels[plan.route_status]}
           </p>
+          {plan.selection && (
+            <details
+              aria-label="景点筛选记录"
+              open
+              className="rounded-lg border border-pink-100 bg-white p-2"
+            >
+              <summary className="cursor-pointer font-medium">
+                {plan.selection.node_title} · {plan.selection.before_count} →{" "}
+                {plan.selection.after_count}个活动
+              </summary>
+              {!plan.selection.decisions.length && (
+                <p className="mt-2 text-slate-500">
+                  全部沿用上游，没有移除或改动。
+                </p>
+              )}
+              <ul className="mt-2 space-y-2">
+                {plan.selection.decisions.map((d, i) => (
+                  <li
+                    key={`${d.activity_id}-${i}`}
+                    className={
+                      d.action === "removed"
+                        ? "text-amber-800"
+                        : "text-teal-800"
+                    }
+                  >
+                    第{d.day}天 ·{" "}
+                    {d.action === "removed"
+                      ? "移除"
+                      : d.action === "duration"
+                        ? "调整停留"
+                        : "保留"}{" "}
+                    · {d.title}
+                    <br />
+                    {d.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {!!plan.optimization?.length && (
+            <details
+              aria-label="路线顺序核对"
+              open
+              className="rounded-lg border border-blue-100 bg-white p-2"
+            >
+              <summary className="cursor-pointer font-medium">
+                路线顺序核对
+              </summary>
+              <ul className="mt-2 space-y-3">
+                {plan.optimization.map((order) => (
+                  <li key={order.day}>
+                    <p className="font-medium">
+                      第{order.day}天 ·{" "}
+                      {order.changed ? "已调整顺序" : "沿用上游"}
+                    </p>
+                    <p className="text-slate-500">{order.reason}</p>
+                    <p>原：{order.before.join(" → ")}</p>
+                    <p>现：{order.after.join(" → ")}</p>
+                    {(order.before_travel_minutes != null ||
+                      order.after_travel_minutes != null) && (
+                      <p className="text-slate-600">
+                        地图交通合计：{order.before_travel_minutes ?? "待核实"}{" "}
+                        → {order.after_travel_minutes ?? "待核实"}分钟
+                      </p>
+                    )}
+                    {order.before_meters !== null &&
+                      order.after_meters !== null && (
+                        <p className="text-teal-800">
+                          地点间直线合计{" "}
+                          {(order.before_meters / 1000).toFixed(1)} →{" "}
+                          {(order.after_meters / 1000).toFixed(1)}
+                          公里；非实际路程或耗时。
+                        </p>
+                      )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {plan.days.map((day) => (
             <details key={day.day} className="rounded-lg bg-white p-2">
               <summary className="cursor-pointer font-medium">

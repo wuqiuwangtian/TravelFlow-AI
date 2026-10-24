@@ -501,16 +501,41 @@ export default function StudioLibrary({
                 </div>
                 <details className="text-xs leading-6">
                   <summary className="cursor-pointer">
-                    核对节点指令与检索设置
+                    核对节点指令与参数
                   </summary>
                   {editor.graph.nodes
-                    .filter((n) => n.parameters.prompt)
+                    .filter(
+                      (n) =>
+                        n.parameters.prompt ||
+                        ["select", "route"].includes(n.kind),
+                    )
                     .map((n) => (
                       <div key={n.id} className="mt-3 rounded bg-slate-50 p-3">
                         <p className="font-medium">{n.title}</p>
                         <p className="max-h-40 overflow-auto whitespace-pre-wrap break-words">
                           {n.parameters.prompt}
                         </p>
+                        {n.kind === "select" && (
+                          <p className="mt-2 whitespace-pre-wrap break-words">
+                            每日上限：
+                            {n.parameters.max_attractions_per_day ?? "不限制"}
+                            ；停留：
+                            {n.parameters.attraction_stay_minutes ?? "沿用上游"}
+                            <br />
+                            必去：{n.parameters.required_places || "无"}
+                            <br />
+                            排除：{n.parameters.excluded_places || "无"}
+                          </p>
+                        )}
+                        {n.kind === "route" && (
+                          <p className="mt-2">
+                            顺序：
+                            {n.parameters.route_order === "nearby"
+                              ? "减少直线折返"
+                              : "沿用上游"}
+                            ；默认交通：{n.parameters.travel_mode}
+                          </p>
+                        )}
                       </div>
                     ))}
                 </details>

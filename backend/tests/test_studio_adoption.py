@@ -19,9 +19,11 @@ from app.domain.itinerary import (
 )
 from app.domain.models import ResearchBundle
 from app.domain.studio_adoption import StudioPlanDraft
+from app.domain.studio_data import StudioPlanData
 from app.domain.workbench import NodeArtifact, NodeExecution, StudioRun, StudioSource
 from app.search.base import SearchResult
 from app.services.branch_lock import branch_guard
+from app.services.itinerary_service import build_itinerary
 from app.services.studio_templates import templates
 
 
@@ -440,3 +442,45 @@ async def test_bookings_remain_exact_when_arrival_is_known_and_applied_receipt_s
     await client.delete(path(bid) + "/adopt-request-0001")
     replay = await apply(client, bid)
     assert replay.json() == adopted.json()
+
+
+async def test_structured_adoption_rebuilds_text_without_stale_source_budget(
+    environment, monkeypatch
+):
+    client, store, _, _ = environment
+    _, bid, _ = await seed(environment)
+    before = await latest(store, bid)
+    run = await source(store, bid)
+    draft = adoption_draft()
+    artifact = run.nodes[0].artifact
+    assert artifact is not None
+    artifact.plan = StudioPlanData(
+        requirements=draft.requirements,
+        days=build_itinerary(draft.days, draft.requirements).days,
+    )
+    artifact.text = "# 原稿旧日程\n\n原稿旧预算999元，全团小计1079元。\n"
+    await store.workbench.write_run(run)
+
+    def unexpected_model(settings):
+        raise AssertionError("已有结构化数据不应再次提取")
+
+    monkeypatch.setattr(routes_studio, "create_llm_provider", unexpected_model)
+    response = await preview(client, bid)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert not data["conflicts"]
+    assert "999" not in data["markdown"] and "1079" not in data["markdown"]
+    assert "原稿旧" not in data["markdown"]
+    assert data["markdown"].count("## 四、每日详细行程") == 1
+    assert data["markdown"].count("## 五、费用预估") == 1
+    assert "北京" in data["markdown"]
+    adopted = await apply(client, bid)
+    assert adopted.status_code == 200, adopted.text
+    assert adopted.json()["markdown"] == data["markdown"]
+    assert (
+        adopted.json()["itinerary"]["expenses"]
+        == before.itinerary.model_dump(mode="json")["expenses"]
+    )
+    assert (await store.get_version_detail(before.version.id)) == before
+    saved_source = await store.workbench.run(bid, run.id)
+    assert "999" in saved_source.nodes[0].artifact.text

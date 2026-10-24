@@ -30,6 +30,11 @@ export const NODE_KINDS: Record<
     subtitle: "模型生成可校验的每日行程数据",
     color: "#60a5fa",
   },
+  select: {
+    title: "景点筛选",
+    subtitle: "按必去、排除和数量规则筛选日程",
+    color: "#f472b6",
+  },
   route: {
     title: "路线校验",
     subtitle: "地图定位、交通与跨日衔接检查",
@@ -62,6 +67,7 @@ export const INPUTS: Record<
     { id: "context", type: "text", title: "需求" },
     { id: "sources", type: "sources", title: "资料" },
   ],
+  select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   output: [
@@ -79,6 +85,7 @@ export const OUTPUTS: Record<
   search: [{ id: "sources", type: "sources", title: "资料" }],
   generate: [{ id: "text", type: "text", title: "文本" }],
   plan: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "budget", type: "budget", title: "预算" }],
   output: [],
@@ -110,7 +117,7 @@ export function connectError(graph: StudioGraph, edge: StudioEdge): string {
   )
     return "端口不兼容：文本、资料、行程和预算分别连接同类型端口。";
   if (
-    ["route", "budget", "output"].includes(target.kind) &&
+    ["route", "budget", "output", "select"].includes(target.kind) &&
     ["itinerary", "budget"].includes(edge.target_port) &&
     graph.edges.some(
       (e) => e.target === edge.target && e.target_port === edge.target_port,
@@ -181,6 +188,11 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
       temperature: 0.5,
       max_results: 5,
       travel_mode: "auto",
+      max_attractions_per_day: kind === "select" ? 3 : null,
+      required_places: "",
+      excluded_places: "",
+      attraction_stay_minutes: null,
+      route_order: "original",
     },
   };
 }

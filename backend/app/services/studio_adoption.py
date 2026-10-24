@@ -593,9 +593,26 @@ async def create_preview(
         ]
         if previous.recap:
             retained.append("保留回顾原文、照片、封面与文案；事实变化后沿用原有核对提示")
-    markdown = sync_markdown(
-        source_markers(artifact.text, artifact, new_indices), candidate, requirements
-    )
+    if artifact.plan:
+        # 正式正文只呈现合并后的事实；源成稿的旧日程、预算和过程记录留在工程快照。
+        def label(value: str | None) -> str:
+            return (value or "待确定").replace("\n", " ").replace("\r", " ")
+
+        body = (
+            "# 旅行计划\n\n"
+            f"目的地：{label(requirements.destination)}；出发地：{label(requirements.origin)}；"
+            f"{requirements.duration_days or '待确定'}天，"
+            f"{requirements.travelers or '待确定'}人。\n\n"
+            f"出发日期：{requirements.departure_date or '待确定'}。\n\n"
+            + (
+                "偏好：" + "、".join(requirements.preferences) + "。\n"
+                if requirements.preferences
+                else ""
+            )
+        )
+    else:
+        body = source_markers(artifact.text, artifact, new_indices)
+    markdown = sync_markdown(body, candidate, requirements)
     node = next(n for n in run.graph.nodes if n.id == node_id)
     return AdoptionPreview(
         request_id=payload.request_id,
