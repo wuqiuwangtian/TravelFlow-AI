@@ -22,6 +22,7 @@ import type {
   StudioTemplate,
 } from "@/lib/studio-types";
 import StudioCanvas from "./studio-canvas";
+import StudioAdoption from "./studio-adoption";
 
 const empty = (): StudioGraph => ({
   schema_version: 1,
@@ -46,7 +47,13 @@ const NODE_STATES = {
   blocked: "上游阻塞",
 };
 
-export default function WorkflowStudio({ branchId }: { branchId: string }) {
+export default function WorkflowStudio({
+  branchId,
+  sessionId,
+}: {
+  branchId: string;
+  sessionId: string;
+}) {
   const [project, setProject] = useState<StudioProject | null>(null);
   const [graph, setGraph] = useState<StudioGraph>(empty);
   const graphRef = useRef(graph);
@@ -368,7 +375,7 @@ export default function WorkflowStudio({ branchId }: { branchId: string }) {
             {project
               ? `修订 ${project.revision} · ${dirty ? "有未保存修改" : "已保存"}`
               : "读取工程…"}{" "}
-            · 运行生成独立草稿，正式行程采用前可先核对。
+            · 成稿输出可整理为采用预览，确认后同步正式行程。
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -902,6 +909,20 @@ export default function WorkflowStudio({ branchId }: { branchId: string }) {
                             复制正文
                           </button>
                         </div>
+                        {node.kind === "output" &&
+                          activeRun &&
+                          activeRun.status !== "running" &&
+                          ["succeeded", "cached"].includes(
+                            execution.status,
+                          ) && (
+                            <StudioAdoption
+                              key={`${branchId}-${activeRun.id}-${node.id}`}
+                              sessionId={sessionId}
+                              branchId={branchId}
+                              run={activeRun}
+                              nodeId={node.id}
+                            />
+                          )}
                       </>
                     )}
                   </>

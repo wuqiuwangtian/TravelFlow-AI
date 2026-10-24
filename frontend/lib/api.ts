@@ -51,6 +51,7 @@ import type {
   StudioRun,
   StudioTemplate,
 } from "./studio-types";
+import type { AdoptionContext, AdoptionPreview } from "./studio-types";
 
 export const API_BASE = "/api/backend";
 
@@ -101,6 +102,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  adoptionContext: (branch: string, run: string, node: string) =>
+    request<AdoptionContext>(
+      `/api/branches/${branch}/studio/runs/${run}/nodes/${node}/adoption`,
+    ),
+  previewAdoption: (
+    branch: string,
+    run: string,
+    node: string,
+    payload: { request_id: string; base_key: string; source_key: string },
+  ) =>
+    request<AdoptionPreview>(
+      `/api/branches/${branch}/studio/runs/${run}/nodes/${node}/adoption`,
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
+  applyAdoption: (branch: string, run: string, node: string, id: string) =>
+    request<VersionDetail>(
+      `/api/branches/${branch}/studio/runs/${run}/nodes/${node}/adoption/${id}/apply`,
+      { method: "POST" },
+    ),
+  discardAdoption: (branch: string, run: string, node: string, id: string) =>
+    request<void>(
+      `/api/branches/${branch}/studio/runs/${run}/nodes/${node}/adoption/${id}`,
+      { method: "DELETE" },
+    ),
   studioTemplates: () => request<StudioTemplate[]>("/api/workflow/templates"),
   validateStudio: (graph: unknown) =>
     request<StudioGraph>("/api/workflow/validate", {

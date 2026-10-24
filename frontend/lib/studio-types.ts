@@ -70,3 +70,43 @@ export interface StudioTemplate {
   description: string;
   graph: StudioGraph;
 }
+
+export interface AdoptionChange {
+  day: number;
+  activity_id: string;
+  title: string;
+  status: "added" | "removed" | "updated" | "preserved" | "unchanged";
+  reason: string;
+  before: string;
+  after: string;
+}
+export interface AdoptionPreview {
+  request_id: string;
+  branch_id: string;
+  run_id: string;
+  node_id: string;
+  source_title: string;
+  source_revision: number;
+  source_created_at: string;
+  source_key: string;
+  base_key: string;
+  base_version_id: string | null;
+  before_requirements: import("./types").TravelRequirements;
+  requirements: import("./types").TravelRequirements;
+  itinerary: import("./types").Itinerary;
+  markdown: string;
+  budget_before: import("./types").BudgetOverview | null;
+  budget_after: import("./types").BudgetOverview;
+  changes: AdoptionChange[];
+  retained: string[];
+  conflicts: string[];
+  warnings: string[];
+  created_at: string;
+}
+export interface AdoptionContext {
+  base_version_id: string | null;
+  base_key: string;
+  source_key: string;
+  blocker: string | null;
+  preview: AdoptionPreview | null;
+}

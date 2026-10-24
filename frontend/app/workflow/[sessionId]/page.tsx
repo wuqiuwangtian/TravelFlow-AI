@@ -322,7 +322,11 @@ export default function WorkflowPage() {
         !error &&
         data &&
         mode === "studio" && (
-          <WorkflowStudio key={data.branch.id} branchId={data.branch.id} />
+          <WorkflowStudio
+            key={data.branch.id}
+            branchId={data.branch.id}
+            sessionId={sessionId}
+          />
         )}
       {!metaBusy &&
         !busy &&

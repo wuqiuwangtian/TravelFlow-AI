@@ -155,6 +155,7 @@ export interface TravelRequirements {
   duration_days: number | null;
   budget: number | null;
   travelers: number | null;
+  preferences: string[];
   departure_date: string | null;
   budget_basis: "per_person" | "total" | null;
 }
