@@ -25,6 +25,21 @@ export const NODE_KINDS: Record<
     subtitle: "为这一小步编写独立指令",
     color: "#a78bfa",
   },
+  plan: {
+    title: "景点与日程",
+    subtitle: "模型生成可校验的每日行程数据",
+    color: "#60a5fa",
+  },
+  route: {
+    title: "路线校验",
+    subtitle: "地图定位、交通与跨日衔接检查",
+    color: "#34d399",
+  },
+  budget: {
+    title: "预算汇总",
+    subtitle: "程序计算分类预估与预算差额",
+    color: "#fb923c",
+  },
   output: {
     title: "成稿输出",
     subtitle: "汇总上游内容，保留来源",
@@ -40,10 +55,20 @@ export const INPUTS: Record<
   generate: [
     { id: "context", type: "text", title: "上下文" },
     { id: "sources", type: "sources", title: "资料" },
+    { id: "itinerary", type: "itinerary", title: "行程" },
+    { id: "budget", type: "budget", title: "预算" },
   ],
+  plan: [
+    { id: "context", type: "text", title: "需求" },
+    { id: "sources", type: "sources", title: "资料" },
+  ],
+  route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  budget: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   output: [
     { id: "content", type: "text", title: "正文" },
     { id: "sources", type: "sources", title: "资料" },
+    { id: "itinerary", type: "itinerary", title: "行程" },
+    { id: "budget", type: "budget", title: "预算" },
   ],
 };
 export const OUTPUTS: Record<
@@ -53,9 +78,26 @@ export const OUTPUTS: Record<
   input: [{ id: "text", type: "text", title: "文本" }],
   search: [{ id: "sources", type: "sources", title: "资料" }],
   generate: [{ id: "text", type: "text", title: "文本" }],
+  plan: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  budget: [{ id: "budget", type: "budget", title: "预算" }],
   output: [],
 };
 export const WIDTH = 242;
+export const PORT_COLORS: Record<StudioPort, string> = {
+  text: "#2dd4bf",
+  sources: "#fbbf24",
+  itinerary: "#60a5fa",
+  budget: "#fb923c",
+};
+export const PORT_LABELS: Record<StudioPort, string> = {
+  text: "文本",
+  sources: "资料",
+  itinerary: "行程",
+  budget: "预算",
+};
+export const nodeHeight = (kind: StudioKind) =>
+  Math.max(174, 115 + INPUTS[kind].length * 28);
 export const portY = (index: number) => 89 + index * 28;
 export function connectError(graph: StudioGraph, edge: StudioEdge): string {
   const source = graph.nodes.find((n) => n.id === edge.source),
@@ -66,7 +108,15 @@ export function connectError(graph: StudioGraph, edge: StudioEdge): string {
     OUTPUTS[source.kind].find((p) => p.id === edge.source_port)?.type !==
     INPUTS[target.kind].find((p) => p.id === edge.target_port)?.type
   )
-    return "端口不兼容：绿色文本接文本，黄色资料接资料。";
+    return "端口不兼容：文本、资料、行程和预算分别连接同类型端口。";
+  if (
+    ["route", "budget", "output"].includes(target.kind) &&
+    ["itinerary", "budget"].includes(edge.target_port) &&
+    graph.edges.some(
+      (e) => e.target === edge.target && e.target_port === edge.target_port,
+    )
+  )
+    return "此端口只接收一份数据，请先断开旧连线，再选择另一套方案。";
   if (graph.edges.some((e) => JSON.stringify(e) === JSON.stringify(edge)))
     return "这两个端口已经连接。";
   const todo = [edge.target],
@@ -125,11 +175,12 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
     parameters: {
       text: "",
       prompt:
-        kind === "generate"
+        kind === "generate" || kind === "plan"
           ? "根据上游输入完成这一小步任务，明确估算与待核实事项。"
           : "",
       temperature: 0.5,
       max_results: 5,
+      travel_mode: "auto",
     },
   };
 }

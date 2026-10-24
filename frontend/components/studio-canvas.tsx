@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { INPUTS, NODE_KINDS, OUTPUTS, WIDTH, portY } from "@/lib/studio-graph";
+import {
+  INPUTS,
+  NODE_KINDS,
+  OUTPUTS,
+  PORT_COLORS,
+  PORT_LABELS,
+  WIDTH,
+  nodeHeight,
+  portY,
+} from "@/lib/studio-graph";
 import type {
   StudioEdge,
   StudioGraph,
@@ -78,7 +87,8 @@ export default function StudioCanvas({
     const minX = Math.min(...nodes.map((n) => n.x)),
       minY = Math.min(...nodes.map((n) => n.y));
     const width = Math.max(...nodes.map((n) => n.x)) + WIDTH - minX;
-    const height = Math.max(...nodes.map((n) => n.y)) + 180 - minY;
+    const height =
+      Math.max(...nodes.map((n) => n.y + nodeHeight(n.kind))) - minY;
     const zoom = Math.max(
       0.2,
       Math.min(1, (box.width - 60) / width, (box.height - 80) / height),
@@ -288,9 +298,7 @@ export default function StudioCanvas({
                   <path
                     d={d}
                     fill="none"
-                    stroke={
-                      edge.source_port === "sources" ? "#fbbf24" : "#2dd4bf"
-                    }
+                    stroke={PORT_COLORS[edge.source_port]}
                     strokeWidth="2"
                     opacity=".7"
                   />
@@ -344,8 +352,13 @@ export default function StudioCanvas({
               <article
                 key={node.id}
                 data-node={node.id}
-                className={`absolute h-[174px] rounded-xl border bg-slate-800 shadow-xl ${selected === node.id ? "border-teal-300 ring-1 ring-teal-300/30" : "border-slate-600"}`}
-                style={{ left: node.x, top: node.y, width: WIDTH }}
+                className={`absolute rounded-xl border bg-slate-800 shadow-xl ${selected === node.id ? "border-teal-300 ring-1 ring-teal-300/30" : "border-slate-600"}`}
+                style={{
+                  left: node.x,
+                  top: node.y,
+                  width: WIDTH,
+                  height: nodeHeight(node.kind),
+                }}
               >
                 <button
                   aria-label={`选择节点 ${node.title}`}
@@ -384,7 +397,7 @@ export default function StudioCanvas({
                       data-input-node={node.id}
                       data-input-port={port.id}
                       aria-label={`${node.title} 输入 ${port.title}`}
-                      title={`输入 ${port.title}（${port.type === "sources" ? "资料" : "文本"}）`}
+                      title={`输入 ${port.title}（${PORT_LABELS[port.type]}）`}
                       onClick={() => finish(node.id, port.id)}
                       disabled={disabled}
                       className="absolute -left-[11px] h-[22px] w-[22px] p-[5px]"
@@ -392,8 +405,7 @@ export default function StudioCanvas({
                       <span
                         className="block h-3 w-3 rounded-full border-2 border-slate-900"
                         style={{
-                          backgroundColor:
-                            port.type === "sources" ? "#fbbf24" : "#2dd4bf",
+                          backgroundColor: PORT_COLORS[port.type],
                         }}
                       />
                     </button>
@@ -424,8 +436,7 @@ export default function StudioCanvas({
                       <span
                         className="block h-3 w-3 rounded-full border-2 border-slate-900"
                         style={{
-                          backgroundColor:
-                            port.type === "sources" ? "#fbbf24" : "#2dd4bf",
+                          backgroundColor: PORT_COLORS[port.type],
                         }}
                       />
                     </button>
@@ -443,7 +454,7 @@ export default function StudioCanvas({
       <div className="border-t border-slate-700 px-4 py-3 text-[11px] leading-5 text-slate-400">
         拖动节点标题移动 · 拖动背景平移 · Ctrl＋滚轮缩放 ·
         从输出拖到输入，或依次点击端口连接 ·
-        点击连线删除。绿色为文本，黄色为资料。
+        点击连线删除。绿色为文本，黄色为资料，蓝色为行程，橙色为预算。
       </div>
     </div>
   );

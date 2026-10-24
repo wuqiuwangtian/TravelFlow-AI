@@ -1,5 +1,12 @@
-export type StudioKind = "input" | "search" | "generate" | "output";
-export type StudioPort = "text" | "sources";
+export type StudioKind =
+  | "input"
+  | "search"
+  | "generate"
+  | "output"
+  | "plan"
+  | "route"
+  | "budget";
+export type StudioPort = "text" | "sources" | "itinerary" | "budget";
 export interface StudioNode {
   id: string;
   kind: StudioKind;
@@ -11,13 +18,20 @@ export interface StudioNode {
     prompt: string;
     temperature: number;
     max_results: number;
+    travel_mode: "auto" | "walking" | "transit" | "driving";
   };
 }
 export interface StudioEdge {
   source: string;
   target: string;
   source_port: StudioPort;
-  target_port: "context" | "query" | "sources" | "content";
+  target_port:
+    | "context"
+    | "query"
+    | "sources"
+    | "content"
+    | "itinerary"
+    | "budget";
 }
 export interface StudioGraph {
   schema_version: 1;
@@ -34,6 +48,19 @@ export interface StudioSource {
 export interface NodeArtifact {
   text: string;
   sources: StudioSource[];
+  plan: {
+    requirements: import("./types").TravelRequirements;
+    days: import("./types").DayPlan[];
+    todos: import("./types").VersionDetail["todos"];
+    warnings: string[];
+    route_status: "unchecked" | "unconfigured" | "partial" | "ready";
+  } | null;
+  budget: {
+    plan_key: string;
+    overview: import("./types").BudgetOverview;
+    categories: Record<string, number>;
+    warnings: string[];
+  } | null;
 }
 export interface NodeExecution {
   node_id: string;

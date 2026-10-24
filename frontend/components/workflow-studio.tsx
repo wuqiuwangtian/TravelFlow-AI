@@ -23,6 +23,7 @@ import type {
 } from "@/lib/studio-types";
 import StudioCanvas from "./studio-canvas";
 import StudioAdoption from "./studio-adoption";
+import StudioData from "./studio-data";
 
 const empty = (): StudioGraph => ({
   schema_version: 1,
@@ -734,7 +735,7 @@ export default function WorkflowStudio({
                     />
                   </label>
                 )}
-                {(node.kind === "generate" || node.kind === "search") && (
+                {["generate", "plan", "search"].includes(node.kind) && (
                   <label className="block">
                     {node.kind === "search" ? "补充检索词" : "本节点生成指令"}
                     <textarea
@@ -746,7 +747,7 @@ export default function WorkflowStudio({
                     />
                   </label>
                 )}
-                {node.kind === "generate" && (
+                {(node.kind === "generate" || node.kind === "plan") && (
                   <label className="block">
                     生成温度 {node.parameters.temperature}
                     <input
@@ -783,6 +784,35 @@ export default function WorkflowStudio({
                       className="mt-2 w-full rounded-lg border border-slate-200 p-2"
                     />
                   </label>
+                )}
+                {node.kind === "route" && (
+                  <label className="block">
+                    市内默认交通
+                    <select
+                      aria-label="路线默认交通"
+                      value={node.parameters.travel_mode ?? "auto"}
+                      onChange={(e) =>
+                        parameters({
+                          travel_mode: e.target
+                            .value as StudioNode["parameters"]["travel_mode"],
+                        })
+                      }
+                      className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                    >
+                      <option value="auto">智能衔接</option>
+                      <option value="walking">步行</option>
+                      <option value="transit">公共交通</option>
+                      <option value="driving">驾车／打车</option>
+                    </select>
+                    <p className="mt-2 leading-6 text-slate-500">
+                      明确标注的铁路、航班和接驳仍沿用原安排。未配置地图或服务失败时保留建议，不冒充已校验。
+                    </p>
+                  </label>
+                )}
+                {node.kind === "budget" && (
+                  <p className="leading-6 text-slate-500">
+                    按上游行程中的活动及路段计算全团预估，统一人数和费用口径；不调用模型，不产生实际消费。未知和未列项目另行提示。
+                  </p>
                 )}
               </fieldset>
               {!snapshot && (
@@ -861,6 +891,7 @@ export default function WorkflowStudio({
                     )}
                     {execution.artifact && (
                       <>
+                        <StudioData artifact={execution.artifact} />
                         <div
                           aria-label="节点生成内容"
                           className="prose-report mt-4 max-h-[440px] overflow-auto break-words text-xs"
