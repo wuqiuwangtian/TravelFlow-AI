@@ -221,7 +221,9 @@ def summarise_day(day: DayPlan, requirements: Requirements) -> None:
             and b.start_time
             and a.duration_minutes
             and leg.duration_seconds is not None
-            and _minutes(b.start_time) - _minutes(a.start_time) - a.duration_minutes
+            and _minutes(b.start_time, b.start_day_offset)
+            - _minutes(a.start_time, a.start_day_offset)
+            - a.duration_minutes
             < leg.duration_seconds / 60
         ):
             day.warnings.append(f"「{a.title}」到「{b.title}」预留交通时间不足。")

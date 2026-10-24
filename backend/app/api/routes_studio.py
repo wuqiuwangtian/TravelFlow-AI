@@ -6,8 +6,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_store
-from app.core.errors import BranchNotFound, ConflictError
+from app.core.deps import get_graph, get_store
+from app.core.errors import BranchNotFound, ConflictError, InvalidRequest, LLMTimeout
+from app.domain.models import VersionDetail
+from app.domain.studio_adoption import AdoptionContext, AdoptionInput, AdoptionPreview
 from app.domain.workbench import SaveStudio, StudioGraph, StudioProject, StudioRun, StudioRunInput
 from app.llm.factory import create_llm_provider
 from app.search.factory import create_search_provider
@@ -138,3 +140,152 @@ async def stop_run(branch_id: str, run_id: str, store: SessionStore = Depends(ge
     if task and not task.done():
         task.cancel()
     return {"message": "停止请求已处理，已完成的节点产物会保留。"}
+
+
+@router.get(
+    "/branches/{branch_id}/studio/runs/{run_id}/nodes/{node_id}/adoption",
+    response_model=AdoptionContext,
+)
+async def adoption_context(
+    branch_id: str,
+    run_id: str,
+    node_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.studio_adoption import adoption_base, source_artifact
+
+    await branch_exists(store, branch_id)
+    _, _, source_key = await source_artifact(store, branch_id, run_id, node_id)
+    base = await adoption_base(store, graph, branch_id)
+    preview = await store.workbench.adoption(branch_id, run_id=run_id, node_id=node_id)
+    if preview and (preview.base_key != base.key or preview.source_key != source_key):
+        preview = None
+    return AdoptionContext(
+        base_version_id=base.detail.version.id if base.detail else None,
+        base_key=base.key,
+        source_key=source_key,
+        blocker=base.blocker,
+        preview=preview,
+    )
+
+
+@router.post(
+    "/branches/{branch_id}/studio/runs/{run_id}/nodes/{node_id}/adoption",
+    response_model=AdoptionPreview,
+)
+async def preview_adoption(
+    branch_id: str,
+    run_id: str,
+    node_id: str,
+    payload: AdoptionInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+    settings: Settings = Depends(get_settings),
+):
+    from app.services.studio_adoption import adoption_base, create_preview, source_artifact
+
+    await branch_exists(store, branch_id)
+    async with branch_guard(branch_id):
+        run, artifact, source_key = await source_artifact(store, branch_id, run_id, node_id)
+        base = await adoption_base(store, graph, branch_id)
+        if base.blocker:
+            raise ConflictError(base.blocker)
+        if base.key != payload.base_key or source_key != payload.source_key:
+            raise ConflictError("正式方案或来源成稿已变化，请重新载入采用信息后生成预览。")
+        if any(
+            v.trigger == "studio_adopt:" + payload.request_id
+            for v in await store.list_versions(branch_id)
+        ):
+            raise ConflictError("本次采用请求已完成，请重新载入正式行程。")
+        existing = await store.workbench.adoption(branch_id, request_id=payload.request_id)
+        if existing:
+            if (existing.run_id, existing.node_id, existing.base_key, existing.source_key) != (
+                run_id,
+                node_id,
+                base.key,
+                source_key,
+            ):
+                raise ConflictError("同一次采用预览的来源或基线已变化，请重新创建预览。")
+            return existing
+        try:
+            async with asyncio.timeout(210):
+                preview = await create_preview(
+                    base,
+                    run,
+                    node_id,
+                    artifact,
+                    source_key,
+                    payload,
+                    create_llm_provider(settings),
+                    settings,
+                )
+        except TimeoutError as exc:
+            raise LLMTimeout("整理采用预览超时，原方案未修改，可稍后重试。") from exc
+        await store.workbench.save_adoption(preview)
+        return preview
+
+
+async def matched_adoption(
+    store: SessionStore, branch_id: str, run_id: str, node_id: str, request_id: str
+) -> AdoptionPreview:
+    preview = await store.workbench.adoption(branch_id, request_id=request_id)
+    if not preview or (preview.run_id, preview.node_id) != (run_id, node_id):
+        raise InvalidRequest("未找到此成稿的采用预览，请重新生成。")
+    return preview
+
+
+@router.delete(
+    "/branches/{branch_id}/studio/runs/{run_id}/nodes/{node_id}/adoption/{request_id}",
+    status_code=204,
+)
+async def discard_adoption(
+    branch_id: str,
+    run_id: str,
+    node_id: str,
+    request_id: str,
+    store: SessionStore = Depends(get_store),
+):
+    await branch_exists(store, branch_id)
+    async with branch_guard(branch_id):
+        existing = await store.workbench.adoption(branch_id, request_id=request_id)
+        if existing and (existing.run_id, existing.node_id) != (run_id, node_id):
+            raise ConflictError("采用预览不属于当前成稿。")
+        # 已采用预览保留为回执，回复丢失后仍可准确重试。
+        if not any(
+            v.trigger == "studio_adopt:" + request_id for v in await store.list_versions(branch_id)
+        ):
+            await store.workbench.discard_adoption(branch_id, request_id)
+
+
+@router.post(
+    "/branches/{branch_id}/studio/runs/{run_id}/nodes/{node_id}/adoption/{request_id}/apply",
+    response_model=VersionDetail,
+)
+async def apply_adoption(
+    branch_id: str,
+    run_id: str,
+    node_id: str,
+    request_id: str,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    from app.services.studio_adoption import commit_preview, source_artifact
+
+    await branch_exists(store, branch_id)
+    async with branch_guard(branch_id):
+        preview = await matched_adoption(store, branch_id, run_id, node_id, request_id)
+        applied = next(
+            (
+                v
+                for v in await store.list_versions(branch_id)
+                if v.trigger == "studio_adopt:" + request_id
+            ),
+            None,
+        )
+        if applied:
+            return await store.get_version_detail(applied.id)
+        _, _, source_key = await source_artifact(store, branch_id, run_id, node_id)
+        if source_key != preview.source_key:
+            raise ConflictError("来源成稿已变化，请重新生成采用预览。")
+        return await commit_preview(store, graph, preview)

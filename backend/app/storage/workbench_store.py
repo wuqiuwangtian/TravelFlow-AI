@@ -5,12 +5,53 @@ from datetime import UTC, datetime
 import aiosqlite
 
 from app.core.errors import ConflictError
+from app.domain.studio_adoption import AdoptionPreview
 from app.domain.workbench import StudioGraph, StudioProject, StudioRun
 
 
 class WorkbenchStore:
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self.conn = conn
+
+    async def adoption(
+        self,
+        branch_id: str,
+        *,
+        request_id: str | None = None,
+        run_id: str | None = None,
+        node_id: str | None = None,
+    ) -> AdoptionPreview | None:
+        sql, params = "SELECT preview FROM workflow_adoptions WHERE branch_id=?", [branch_id]
+        for name, value in (("request_id", request_id), ("run_id", run_id), ("node_id", node_id)):
+            if value is not None:
+                sql += f" AND {name}=?"
+                params.append(value)
+        cursor = await self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", params)
+        row = await cursor.fetchone()
+        return AdoptionPreview.model_validate_json(row["preview"]) if row else None
+
+    async def save_adoption(self, preview: AdoptionPreview) -> None:
+        await self.conn.execute(
+            "INSERT INTO workflow_adoptions"
+            "(branch_id,request_id,run_id,node_id,preview,created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                preview.branch_id,
+                preview.request_id,
+                preview.run_id,
+                preview.node_id,
+                preview.model_dump_json(),
+                preview.created_at.isoformat(),
+            ),
+        )
+        await self.conn.commit()
+
+    async def discard_adoption(self, branch_id: str, request_id: str) -> None:
+        await self.conn.execute(
+            "DELETE FROM workflow_adoptions WHERE branch_id=? AND request_id=?",
+            (branch_id, request_id),
+        )
+        await self.conn.commit()
 
     async def project(self, branch_id: str) -> StudioProject:
         cursor = await self.conn.execute(
