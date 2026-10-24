@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.domain.studio_data import StudioBudgetData, StudioPlanData
 
-NodeKind = Literal["input", "search", "generate", "output", "plan", "route", "budget"]
+NodeKind = Literal["input", "search", "generate", "output", "plan", "route", "budget", "select"]
 PortType = Literal["text", "sources", "itinerary", "budget"]
 
 
@@ -18,6 +18,11 @@ class NodeParameters(BaseModel):
     temperature: float = Field(default=0.5, ge=0, le=2, allow_inf_nan=False)
     max_results: int = Field(default=5, ge=1, le=8)
     travel_mode: Literal["auto", "walking", "transit", "driving"] = "auto"
+    max_attractions_per_day: int | None = Field(default=None, ge=1, le=20)
+    required_places: str = Field(default="", max_length=2000)
+    excluded_places: str = Field(default="", max_length=2000)
+    attraction_stay_minutes: int | None = Field(default=None, ge=15, le=480)
+    route_order: Literal["original", "nearby"] = "original"
 
 
 class StudioNode(BaseModel):
@@ -119,6 +124,7 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     "plan": {"context": "text", "sources": "sources"},
     "route": {"itinerary": "itinerary"},
     "budget": {"itinerary": "itinerary"},
+    "select": {"itinerary": "itinerary"},
     "output": {
         "content": "text",
         "sources": "sources",
@@ -134,5 +140,6 @@ OUTPUT_PORTS: dict[str, dict[str, PortType]] = {
     "plan": {"itinerary": "itinerary"},
     "route": {"itinerary": "itinerary"},
     "budget": {"budget": "budget"},
+    "select": {"itinerary": "itinerary"},
     "output": {},
 }

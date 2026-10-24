@@ -32,6 +32,7 @@ from app.services.studio_tools import (
     render_plan,
     validate_plan,
 )
+from app.services.studio_transform import keywords, select_places
 from app.storage.workbench_store import WorkbenchStore
 
 
@@ -62,7 +63,7 @@ def topology(graph: StudioGraph) -> list[str]:
     for node in graph.nodes:
         for port in ("itinerary", "budget"):
             if (
-                node.kind in {"route", "budget", "output"}
+                node.kind in {"route", "budget", "output", "select"}
                 and sum(edge.target == node.id and edge.target_port == port for edge in graph.edges)
                 > 1
             ):
@@ -106,8 +107,11 @@ def execution_order(graph: StudioGraph, target: str | None) -> list[str]:
             not incoming or not node.parameters.prompt.strip()
         ):
             raise InvalidRequest(f"「{node.title}」需要上游输入与生成指令。")
-        if node.kind in {"route", "budget"} and not incoming:
+        if node.kind in {"route", "budget", "select"} and not incoming:
             raise InvalidRequest(f"「{node.title}」需要连接一份行程数据。")
+        if node.kind == "select":
+            keywords(node.parameters.required_places)
+            keywords(node.parameters.excluded_places)
         if node.kind == "output" and not any(
             e.target_port in {"content", "itinerary"} for e in incoming
         ):
@@ -126,7 +130,7 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 2,
+            "engine": 3,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
@@ -192,10 +196,13 @@ async def execute_node(
         if any(item["port"] == "content" for item in inputs):
             plan = None
         return NodeArtifact(text=text, sources=sources, plan=plan, budget=budget)
-    if node.kind in {"route", "budget"}:
+    if node.kind in {"route", "budget", "select"}:
         plan = next((a.plan for a in artifacts if a.plan), None)
         if plan is None:
             raise InvalidRequest("缺少上游行程数据，请检查连线后重跑。")
+        if node.kind == "select":
+            selected = select_places(node, plan)
+            return NodeArtifact(text=render_plan(selected), plan=selected, sources=sources)
         if node.kind == "route":
             checked = await validate_plan(node, plan, settings)
             return NodeArtifact(text=render_plan(checked), plan=checked, sources=sources)

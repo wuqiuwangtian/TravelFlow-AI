@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import math
 import re
 from collections import defaultdict
 
@@ -11,13 +12,20 @@ from app.core.config import Settings
 from app.core.errors import InvalidRequest, LLMOutputInvalid
 from app.domain.itinerary import DayPlan, Itinerary
 from app.domain.studio_adoption import StudioPlanDraft
-from app.domain.studio_data import StudioBudgetData, StudioPlanData
+from app.domain.studio_data import RouteOrderReport, StudioBudgetData, StudioPlanData
 from app.domain.workbench import NodeArtifact, StudioNode, StudioSource
 from app.llm.base import ChatMessage, LLMProvider
 from app.maps.amap import AmapProvider
 from app.services.budget_service import budget_overview
 from app.services.itinerary_service import build_itinerary, check_day, summarise_day
 from app.services.replan_service import check_overnight_links
+from app.services.studio_transform import (
+    apply_logistics,
+    clear_changed_transport,
+    hard_ids,
+    optimize_day,
+    restore_fixed,
+)
 
 CATEGORIES = {
     "meal": "饮食",
@@ -95,6 +103,25 @@ def render_plan(plan: StudioPlanData) -> str:
                 f" · {duration} · {leg.status}"
             )
     warnings = list(dict.fromkeys([*plan.warnings, *(w for d in plan.days for w in d.warnings)]))
+    if plan.selection:
+        report = plan.selection
+        lines.extend(
+            [
+                "\n## 景点筛选记录",
+                f"{report.node_title}：{report.before_count} → {report.after_count}个活动。",
+            ]
+        )
+        lines.extend(f"- 第{item.day}天 · {item.title}：{item.reason}" for item in report.decisions)
+    if plan.optimization:
+        lines.append("\n## 路线顺序核对（直线距离不代表实际用时）")
+        for order in plan.optimization:
+            lines.extend(
+                [
+                    f"- 第{order.day}天：{order.reason}",
+                    "  - 原顺序：" + " → ".join(order.before),
+                    "  - 现顺序：" + " → ".join(order.after),
+                ]
+            )
     if warnings:
         lines.extend(["\n## 待核实事项", *(f"- {w}" for w in warnings)])
     return "\n".join(lines)
@@ -208,10 +235,13 @@ async def validate_plan(
     async with httpx.AsyncClient(timeout=min(settings.amap_timeout_seconds, 8)) as client:
         provider = AmapProvider(client, settings.amap_api_key) if settings.amap_api_key else None
 
-        async def checked(day: DayPlan) -> DayPlan:
+        async def checked(day: DayPlan) -> tuple[DayPlan, RouteOrderReport | None]:
             async with semaphore:
+                original = day.model_copy(deep=True)
                 day = day.model_copy(deep=True)
                 day.travel_mode = node.parameters.travel_mode
+                if node.parameters.route_order == "nearby":
+                    apply_logistics(day, original)
                 # 强制重跑重新查询地图，旧结果不冒充本次校验。
                 for activity in day.activities:
                     activity.place, activity.candidates = None, []
@@ -219,13 +249,75 @@ async def validate_plan(
                 day.legs = []
                 try:
                     async with asyncio.timeout(35):
-                        return await check_day(day, result.requirements, provider)
-                except TimeoutError:
-                    fallback = await check_day(day, result.requirements, None)
-                    fallback.warnings.append("地图校验超时，当前仍为建议安排，可重跑此节点。")
-                    return fallback
+                        checked_day = await check_day(day, result.requirements, provider)
+                        report = None
+                        if node.parameters.route_order == "nearby":
+                            restore_fixed(checked_day, original)
+                            ordered, report = optimize_day(checked_day)
+                            original_checked = checked_day.model_copy(deep=True)
 
-        result.days = list(await asyncio.gather(*(checked(day) for day in result.days)))
+                            def measured_minutes(value: DayPlan) -> int | None:
+                                if value.checked_at and all(
+                                    leg.status == "ok" and leg.duration_seconds is not None
+                                    for leg in value.legs
+                                ):
+                                    return math.ceil(
+                                        sum(leg.duration_seconds or 0 for leg in value.legs) / 60
+                                    )
+                                return None
+
+                            report.before_travel_minutes = measured_minutes(checked_day)
+                            if report.changed:
+                                clear_changed_transport(ordered, checked_day)
+                                fixed = hard_ids(original)
+                                for index, activity in enumerate(ordered.activities):
+                                    if (
+                                        index
+                                        and activity.id not in fixed
+                                        and activity.kind == "attraction"
+                                    ):
+                                        activity.start_time = None
+                                        activity.start_day_offset = 0
+                                checked_day = await check_day(
+                                    ordered, result.requirements, provider
+                                )
+                                restore_fixed(checked_day, original)
+                            report.after_travel_minutes = measured_minutes(checked_day)
+                            if (
+                                report.changed
+                                and report.before_travel_minutes is not None
+                                and report.after_travel_minutes is not None
+                                and report.after_travel_minutes > report.before_travel_minutes
+                            ):
+                                checked_day = original_checked
+                                report.changed = False
+                                report.after = report.before[:]
+                                report.after_meters = report.before_meters
+                                report.after_travel_minutes = report.before_travel_minutes
+                                report.reason = (
+                                    "候选顺序虽然直线更短，但完整地图结果显示交通耗时增加，"
+                                    "已保留上游顺序。"
+                                )
+                            summarise_day(checked_day, result.requirements)
+                            checked_day.warnings = list(dict.fromkeys(checked_day.warnings))
+                        return checked_day, report
+                except TimeoutError:
+                    fallback = await check_day(original, result.requirements, None)
+                    fallback.warnings.append("地图校验超时，当前仍为建议安排，可重跑此节点。")
+                    if node.parameters.route_order == "nearby":
+                        restore_fixed(fallback, original)
+                        report = RouteOrderReport(
+                            day=original.day,
+                            before=[a.place_name or a.title for a in original.activities],
+                            after=[a.place_name or a.title for a in fallback.activities],
+                            reason="校验超时，已退回上游顺序；没有采用部分优化结果。",
+                        )
+                        return fallback, report
+                    return fallback, None
+
+        results = await asyncio.gather(*(checked(day) for day in result.days))
+        result.days = [day for day, _ in results]
+        result.optimization = [report for _, report in results if report is not None]
     itinerary = Itinerary(days=result.days)
     check_overnight_links(itinerary)
     result.route_status = (

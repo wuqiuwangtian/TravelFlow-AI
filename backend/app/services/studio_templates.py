@@ -200,7 +200,7 @@ def templates() -> list[StudioTemplate]:
             ],
         ),
     ]
-    return [
+    result = [
         StudioTemplate(
             id=id,
             title=title,
@@ -211,3 +211,41 @@ def templates() -> list[StudioTemplate]:
         )
         for id, title, description, nodes, edges in definitions
     ]
+    curated = result[3].graph.model_copy(deep=True)
+    curated.title = "筛选与优化"
+    curated.nodes.insert(
+        3,
+        StudioNode(
+            id="selection",
+            kind="select",
+            title="景点筛选",
+            x=960,
+            y=230,
+            parameters={"max_attractions_per_day": 3},
+        ),
+    )
+    for item in curated.nodes:
+        if item.id in {"route", "budget", "document"}:
+            item.x += 300
+        if item.id == "route":
+            item.parameters.route_order = "nearby"
+    curated.edges = [e for e in curated.edges if not (e.source == "plan" and e.target == "route")]
+    curated.edges.extend(
+        [
+            StudioEdge(
+                source="plan", target="selection", source_port="itinerary", target_port="itinerary"
+            ),
+            StudioEdge(
+                source="selection", target="route", source_port="itinerary", target_port="itinerary"
+            ),
+        ]
+    )
+    result.append(
+        StudioTemplate(
+            id="curated",
+            title="筛选与优化",
+            description="候选日程 → 按必去／排除和数量筛选 → 减少直线折返并核验交通 → 成稿。",
+            graph=curated,
+        )
+    )
+    return result
