@@ -130,7 +130,7 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 3,
+            "engine": 4,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
@@ -206,7 +206,7 @@ async def execute_node(
         if node.kind == "route":
             checked = await validate_plan(node, plan, settings)
             return NodeArtifact(text=render_plan(checked), plan=checked, sources=sources)
-        budget = calculate_budget(plan)
+        budget = calculate_budget(plan, node.parameters.budget_rules)
         return NodeArtifact(text=render_budget(budget), budget=budget, sources=sources)
     if node.kind == "search":
         assert search is not None

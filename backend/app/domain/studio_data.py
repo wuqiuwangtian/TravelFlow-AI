@@ -2,9 +2,9 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.itinerary import BudgetOverview, DayPlan
+from app.domain.itinerary import BudgetItem, BudgetOverview, DayPlan
 from app.domain.models import Requirements, TodoItem
 
 
@@ -45,9 +45,25 @@ class StudioPlanData(BaseModel):
     optimization: list[RouteOrderReport] = Field(default_factory=list)
 
 
+class BudgetRules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    meal_per_person_day_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+    lodging_per_room_night_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+    lodging_rooms: int | None = Field(default=None, ge=1, le=1000)
+    round_trip_per_person_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+    contingency_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+
+
+class BudgetSupplement(BaseModel):
+    item: BudgetItem
+    explanation: str
+
+
 class StudioBudgetData(BaseModel):
     # 绑定精确输入，禁止把另一套路线的预算混到当前成稿。
     plan_key: str
     overview: BudgetOverview
     categories: dict[str, int]
     warnings: list[str] = Field(default_factory=list)
+    rules: BudgetRules = Field(default_factory=BudgetRules)
+    supplements: list[BudgetSupplement] = Field(default_factory=list)

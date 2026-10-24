@@ -30,6 +30,7 @@ from app.services.budget_service import budget_overview
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import build_itinerary, check_day, summarise_day, sync_markdown
 from app.services.replan_service import check_overnight_links, context_warnings
+from app.services.studio_budget import supplements
 from app.services.studio_engine import digest
 from app.services.travel_time import minutes
 from app.storage.session_store import SessionStore
@@ -582,6 +583,14 @@ async def create_preview(
     conflicts.extend(
         await validate_routes(candidate, previous, requirements, reasons, pairs, settings)
     )
+    budget_notes: list[str] = []
+    if artifact.plan and artifact.budget:
+        # 恢复保护站点、人工预算和消费后再判断缺项；不直接复制源预算总数。
+        additions, budget_notes = supplements(candidate, requirements, artifact.budget.rules)
+        if len(candidate.budget_items) + len(additions) > 2000:
+            raise InvalidRequest("预算项目已达上限，请先整理现有自定义项目再采用。")
+        candidate.budget_items.extend(entry.item for entry in additions)
+        budget_notes.extend(f"{entry.item.title}：{entry.explanation}" for entry in additions)
     todos = list(base.detail.todos) if base.detail else []
     todos.extend(todo for todo in draft.todos if todo not in todos)
     retained = []
@@ -642,6 +651,7 @@ async def create_preview(
             dict.fromkeys(
                 [
                     *(artifact.plan.warnings if artifact.plan else []),
+                    *budget_notes,
                     *(warning for d in candidate.days for warning in d.warnings),
                 ]
             )

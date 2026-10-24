@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from app.domain.studio_data import StudioBudgetData, StudioPlanData
+from app.domain.studio_data import BudgetRules, StudioBudgetData, StudioPlanData
 
 NodeKind = Literal["input", "search", "generate", "output", "plan", "route", "budget", "select"]
 PortType = Literal["text", "sources", "itinerary", "budget"]
@@ -23,6 +23,7 @@ class NodeParameters(BaseModel):
     excluded_places: str = Field(default="", max_length=2000)
     attraction_stay_minutes: int | None = Field(default=None, ge=15, le=480)
     route_order: Literal["original", "nearby"] = "original"
+    budget_rules: BudgetRules = Field(default_factory=BudgetRules)
 
 
 class StudioNode(BaseModel):

@@ -12,13 +12,14 @@ from app.core.config import Settings
 from app.core.errors import InvalidRequest, LLMOutputInvalid
 from app.domain.itinerary import DayPlan, Itinerary
 from app.domain.studio_adoption import StudioPlanDraft
-from app.domain.studio_data import RouteOrderReport, StudioBudgetData, StudioPlanData
+from app.domain.studio_data import BudgetRules, RouteOrderReport, StudioBudgetData, StudioPlanData
 from app.domain.workbench import NodeArtifact, StudioNode, StudioSource
 from app.llm.base import ChatMessage, LLMProvider
 from app.maps.amap import AmapProvider
 from app.services.budget_service import budget_overview
 from app.services.itinerary_service import build_itinerary, check_day, summarise_day
 from app.services.replan_service import check_overnight_links
+from app.services.studio_budget import supplements
 from app.services.studio_transform import (
     apply_logistics,
     clear_changed_transport,
@@ -145,6 +146,13 @@ def render_budget(data: StudioBudgetData) -> str:
     lines.extend(
         f"- {CATEGORIES[key]}：¥{value / 100:.2f}" for key, value in data.categories.items()
     )
+    for entry in data.supplements:
+        amount = (
+            f"¥{entry.item.planned_cents / 100:.2f}"
+            if entry.item.planned_cents is not None
+            else "待核实"
+        )
+        lines.append(f"- {entry.item.title}：{amount}；{entry.explanation}")
     lines.extend(f"- {warning}" for warning in data.warnings)
     return "\n".join(lines)
 
@@ -332,16 +340,25 @@ async def validate_plan(
     return result
 
 
-def calculate_budget(plan: StudioPlanData) -> StudioBudgetData:
-    overview = budget_overview(Itinerary(days=plan.days), plan.requirements)
+def calculate_budget(plan: StudioPlanData, rules: BudgetRules | None = None) -> StudioBudgetData:
+    rules = rules or BudgetRules()
+    itinerary = Itinerary(days=plan.days)
+    additions, notes = supplements(itinerary, plan.requirements, rules)
+    itinerary.budget_items = [entry.item for entry in additions]
+    overview = budget_overview(itinerary, plan.requirements)
     categories: dict[str, int] = defaultdict(int, {key: 0 for key in CATEGORIES})
     for row in overview.rows:
         categories[row.category] += row.planned_cents or 0
-    warnings = ["只汇总已列活动和路段；未列餐饮、住宿、往返大交通及备用金另计。"]
+    warnings = ["未设置或未覆盖的餐饮、住宿、往返交通等仍需另计；待核实分项不视为零。", *notes]
     if plan.route_status == "unchecked":
         warnings.append("路线尚未校验，地点间交通费用可能尚未列入。")
     return StudioBudgetData(
-        plan_key=plan_key(plan), overview=overview, categories=dict(categories), warnings=warnings
+        plan_key=plan_key(plan),
+        overview=overview,
+        categories=dict(categories),
+        warnings=warnings,
+        rules=rules,
+        supplements=additions,
     )
 
 
