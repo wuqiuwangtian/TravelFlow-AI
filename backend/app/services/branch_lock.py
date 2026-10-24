@@ -16,9 +16,9 @@ def branch_busy(branch_id: str) -> bool:
 
 
 @asynccontextmanager
-async def branch_guard(branch_id: str):
+async def branch_guard(branch_id: str, *, wait: bool = False):
     lock = _locks.setdefault(branch_id, asyncio.Lock())
-    if lock.locked():
+    if lock.locked() and not wait:
         raise BranchConflict("该方案正在生成或更新，请完成后再试")
     async with lock:
         yield

@@ -98,6 +98,29 @@ export interface StudioTemplate {
   graph: StudioGraph;
 }
 
+export interface UserTemplateSummary {
+  id: string;
+  title: string;
+  description: string;
+  revision: number;
+  node_count: number;
+  trip_input_count: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface UserTemplate extends UserTemplateSummary {
+  graph: StudioGraph;
+  trip_input_ids: string[];
+}
+export interface SaveUserTemplate {
+  request_id: string;
+  expected_revision: number;
+  title: string;
+  description: string;
+  graph: StudioGraph;
+  trip_input_ids: string[];
+}
+
 export interface AdoptionChange {
   day: number;
   activity_id: string;

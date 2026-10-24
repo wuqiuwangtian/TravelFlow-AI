@@ -20,10 +20,12 @@ import type {
   StudioProject,
   StudioRun,
   StudioTemplate,
+  UserTemplateSummary,
 } from "@/lib/studio-types";
 import StudioCanvas from "./studio-canvas";
 import StudioAdoption from "./studio-adoption";
 import StudioData from "./studio-data";
+import StudioLibrary from "./studio-library";
 
 const empty = (): StudioGraph => ({
   schema_version: 1,
@@ -210,7 +212,8 @@ export default function WorkflowStudio({
   }
   function change(next: StudioGraph, remember = true) {
     if (disabled) return;
-    if (remember) setUndo((items) => [...items.slice(-29), graphRef.current]);
+    const previous = graphRef.current;
+    if (remember) setUndo((items) => [...items.slice(-29), previous]);
     setGraph(next);
     graphRef.current = next;
     setNotice("");
@@ -246,6 +249,35 @@ export default function WorkflowStudio({
     setFitToken((v) => v + 1);
     setGallery(false);
     setError("");
+  }
+  async function loadNamedTemplate(template: UserTemplateSummary) {
+    setBusy("template");
+    setError("");
+    try {
+      const next = await api.loadUserTemplate(
+        branchId,
+        template.id,
+        template.revision,
+      );
+      if (!alive.current) return;
+      // 先加载草稿；保留撤销入口，不自动保存、执行或采用正式行程。
+      const previous = graphRef.current;
+      setUndo((items) => [...items.slice(-29), previous]);
+      setGraph(next);
+      graphRef.current = next;
+      setSelected(
+        next.nodes.find((n) => n.kind === "input")?.id ??
+          next.nodes[0]?.id ??
+          null,
+      );
+      setFitToken((v) => v + 1);
+      setGallery(false);
+      setNotice(
+        `已载入模板「${template.title}」修订${template.revision}，${template.trip_input_count ? "已填入本次旅行需求" : "固定输入与指令已保留"}。工程尚未保存，可撤销。`,
+      );
+    } finally {
+      if (alive.current) setBusy("");
+    }
   }
   function add(kind: StudioKind) {
     if (graph.nodes.length >= 20) {
@@ -340,7 +372,8 @@ export default function WorkflowStudio({
     try {
       const result = await api.validateStudio(JSON.parse(await file.text()));
       if (alive.current) {
-        setUndo((items) => [...items.slice(-29), graphRef.current]);
+        const previous = graphRef.current;
+        setUndo((items) => [...items.slice(-29), previous]);
         setGraph(result);
         setSelected(result.nodes[0]?.id ?? null);
         setFitToken((v) => v + 1);
@@ -393,6 +426,7 @@ export default function WorkflowStudio({
               const previous = undo.at(-1);
               if (previous) {
                 setGraph(previous);
+                graphRef.current = previous;
                 setUndo((items) => items.slice(0, -1));
                 setFitToken((v) => v + 1);
               }
@@ -461,6 +495,13 @@ export default function WorkflowStudio({
           {notice}
         </p>
       )}
+      <StudioLibrary
+        key={branchId}
+        graph={graph}
+        visible={gallery || !graph.nodes.length}
+        disabled={disabled}
+        onLoad={loadNamedTemplate}
+      />
       {(gallery || !graph.nodes.length) && (
         <div
           aria-label="默认工程模板"
@@ -570,7 +611,8 @@ export default function WorkflowStudio({
               };
               change(next, false);
               if (finished) {
-                setUndo((items) => [...items.slice(-29), dragOrigin.current!]);
+                const previous = dragOrigin.current;
+                setUndo((items) => [...items.slice(-29), previous]);
                 dragOrigin.current = null;
               }
             }}

@@ -50,6 +50,9 @@ import type {
   StudioProject,
   StudioRun,
   StudioTemplate,
+  UserTemplate,
+  UserTemplateSummary,
+  SaveUserTemplate,
 } from "./studio-types";
 import type { AdoptionContext, AdoptionPreview } from "./studio-types";
 
@@ -127,6 +130,28 @@ export const api = {
       { method: "DELETE" },
     ),
   studioTemplates: () => request<StudioTemplate[]>("/api/workflow/templates"),
+  userTemplates: () =>
+    request<UserTemplateSummary[]>("/api/workflow/user-templates"),
+  userTemplate: (id: string) =>
+    request<UserTemplate>(`/api/workflow/user-templates/${id}`),
+  saveUserTemplate: (payload: SaveUserTemplate, id?: string) =>
+    request<UserTemplate>(`/api/workflow/user-templates${id ? `/${id}` : ""}`, {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteUserTemplate: (
+    id: string,
+    payload: { request_id: string; expected_revision: number },
+  ) =>
+    request<void>(`/api/workflow/user-templates/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+    }),
+  loadUserTemplate: (branch: string, id: string, revision: number) =>
+    request<StudioGraph>(
+      `/api/branches/${branch}/studio/template-drafts/${id}`,
+      { method: "POST", body: JSON.stringify({ expected_revision: revision }) },
+    ),
   validateStudio: (graph: unknown) =>
     request<StudioGraph>("/api/workflow/validate", {
       method: "POST",

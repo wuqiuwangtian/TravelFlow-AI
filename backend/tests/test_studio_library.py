@@ -292,3 +292,17 @@ async def test_template_limit_and_schema_reopen_are_safe(environment, tmp_path):
         assert len(await SessionStore(reopened).studio_library.list()) == 100
     finally:
         await reopened.close()
+
+
+async def test_different_template_creates_can_queue_without_false_conflicts(environment):
+    client, store, _, _ = environment
+    responses = await asyncio.gather(
+        *(
+            client.post(
+                BASE, json=payload(request_id=f"independent-create-{i:04d}", title=f"独立模板{i}")
+            )
+            for i in range(3)
+        )
+    )
+    assert all(response.status_code == 200 for response in responses)
+    assert len(await store.studio_library.list()) == 3

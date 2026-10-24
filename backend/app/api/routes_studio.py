@@ -53,7 +53,7 @@ async def get_user_template(template_id: str, store: SessionStore = Depends(get_
 async def create_user_template(payload: SaveUserTemplate, store: SessionStore = Depends(get_store)):
     if payload.expected_revision:
         raise InvalidRequest("新建模板不能指定旧修订号。")
-    async with branch_guard("studio-template-library"):
+    async with branch_guard("studio-template-library", wait=True):
         return await store.studio_library.save(payload)
 
 
@@ -63,7 +63,7 @@ async def update_user_template(
 ):
     if not payload.expected_revision:
         raise InvalidRequest("更新模板需要当前修订号。")
-    async with branch_guard("studio-template-library"):
+    async with branch_guard("studio-template-library", wait=True):
         return await store.studio_library.save(payload, template_id)
 
 
@@ -71,7 +71,7 @@ async def update_user_template(
 async def delete_user_template(
     template_id: str, payload: DeleteUserTemplate, store: SessionStore = Depends(get_store)
 ):
-    async with branch_guard("studio-template-library"):
+    async with branch_guard("studio-template-library", wait=True):
         await store.studio_library.delete(template_id, payload)
 
 
