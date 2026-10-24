@@ -507,7 +507,7 @@ export default function StudioLibrary({
                     .filter(
                       (n) =>
                         n.parameters.prompt ||
-                        ["select", "route"].includes(n.kind),
+                        ["select", "route", "budget"].includes(n.kind),
                     )
                     .map((n) => (
                       <div key={n.id} className="mt-3 rounded bg-slate-50 p-3">
@@ -534,6 +534,36 @@ export default function StudioLibrary({
                               ? "减少直线折返"
                               : "沿用上游"}
                             ；默认交通：{n.parameters.travel_mode}
+                          </p>
+                        )}
+                        {n.kind === "budget" && (
+                          <p className="mt-2 whitespace-pre-wrap break-words">
+                            饮食：
+                            {n.parameters.budget_rules
+                              ?.meal_per_person_day_cents == null
+                              ? "不补齐"
+                              : `¥${(n.parameters.budget_rules.meal_per_person_day_cents / 100).toFixed(2)}/人/天`}
+                            <br />
+                            住宿：
+                            {n.parameters.budget_rules
+                              ?.lodging_per_room_night_cents == null
+                              ? "不补齐"
+                              : `¥${(n.parameters.budget_rules.lodging_per_room_night_cents / 100).toFixed(2)}/间/晚`}
+                            ；
+                            {n.parameters.budget_rules?.lodging_rooms ?? "待定"}
+                            间
+                            <br />
+                            往返大交通：
+                            {n.parameters.budget_rules
+                              ?.round_trip_per_person_cents == null
+                              ? "不补齐"
+                              : `¥${(n.parameters.budget_rules.round_trip_per_person_cents / 100).toFixed(2)}/人/往返`}
+                            <br />
+                            全团备用金：
+                            {n.parameters.budget_rules?.contingency_cents ==
+                            null
+                              ? "不补齐"
+                              : `¥${(n.parameters.budget_rules.contingency_cents / 100).toFixed(2)}`}
                           </p>
                         )}
                       </div>

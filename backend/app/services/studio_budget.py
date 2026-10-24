@@ -84,7 +84,7 @@ def supplements(
         )
     if rules.round_trip_per_person_cents is not None:
         has_intercity = any(
-            a.kind == "station" or a.transport_mode in {"rail", "flight", "transfer"}
+            a.kind in {"station", "transport"} or a.transport_mode in {"rail", "flight", "transfer"}
             for day in itinerary.days
             for a in day.activities
             if not a.is_context_anchor and a.progress != "skipped"
@@ -95,7 +95,7 @@ def supplements(
             r.category == "transport" and r.source == "custom" for r in view.rows
         ):
             warnings.append(
-                "已有车站、大交通安排或自定义交通预算，不另加整趟往返预留；缺少的单程请单独补充。"
+                "已有车站、交通活动、大交通安排或自定义交通预算，不另加整趟往返预留；缺少的单程请单独补充。"
             )
         else:
             add(

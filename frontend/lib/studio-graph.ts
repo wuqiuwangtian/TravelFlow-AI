@@ -193,6 +193,13 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
       excluded_places: "",
       attraction_stay_minutes: null,
       route_order: "original",
+      budget_rules: {
+        meal_per_person_day_cents: null,
+        lodging_per_room_night_cents: null,
+        lodging_rooms: null,
+        round_trip_per_person_cents: null,
+        contingency_cents: null,
+      },
     },
   };
 }

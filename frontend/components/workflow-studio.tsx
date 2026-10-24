@@ -1,5 +1,7 @@
 "use client";
 
+import StudioBudgetControls from "@/components/studio-budget-controls";
+
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { api, ApiError } from "@/lib/api";
@@ -960,9 +962,10 @@ export default function WorkflowStudio({
                   </label>
                 )}
                 {node.kind === "budget" && (
-                  <p className="leading-6 text-slate-500">
-                    按上游行程中的活动及路段计算全团预估，统一人数和费用口径；不调用模型，不产生实际消费。未知和未列项目另行提示。
-                  </p>
+                  <StudioBudgetControls
+                    value={node.parameters.budget_rules}
+                    onChange={(budget_rules) => parameters({ budget_rules })}
+                  />
                 )}
               </fieldset>
               {!snapshot && (

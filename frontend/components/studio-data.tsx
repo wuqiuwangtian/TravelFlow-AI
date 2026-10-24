@@ -235,6 +235,27 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
               ))}
             </ul>
           </details>
+          {!!budget.supplements?.length && (
+            <details
+              open
+              aria-label="分类预算补齐"
+              className="rounded-lg border border-orange-100 bg-white p-2"
+            >
+              <summary className="cursor-pointer font-medium">
+                按设置补齐 · {budget.supplements.length}项
+              </summary>
+              <ul className="mt-2 space-y-3">
+                {budget.supplements.map((entry) => (
+                  <li key={entry.item.id}>
+                    <p>
+                      {entry.item.title} · {money(entry.item.planned_cents)}
+                    </p>
+                    <p className="text-slate-500">{entry.explanation}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {budget.warnings.map((w, i) => (
             <p key={i} className="text-amber-800">
               {w}

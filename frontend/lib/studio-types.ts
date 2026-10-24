@@ -8,6 +8,13 @@ export type StudioKind =
   | "budget"
   | "select";
 export type StudioPort = "text" | "sources" | "itinerary" | "budget";
+export interface BudgetRules {
+  meal_per_person_day_cents: number | null;
+  lodging_per_room_night_cents: number | null;
+  lodging_rooms: number | null;
+  round_trip_per_person_cents: number | null;
+  contingency_cents: number | null;
+}
 export interface StudioNode {
   id: string;
   kind: StudioKind;
@@ -25,6 +32,7 @@ export interface StudioNode {
     excluded_places: string;
     attraction_stay_minutes: number | null;
     route_order: "original" | "nearby";
+    budget_rules: BudgetRules;
   };
 }
 export interface StudioEdge {
@@ -89,6 +97,14 @@ export interface NodeArtifact {
     overview: import("./types").BudgetOverview;
     categories: Record<string, number>;
     warnings: string[];
+    rules: BudgetRules;
+    supplements: {
+      item: Omit<
+        import("./types").BudgetRow,
+        "actual_cents" | "expense_ids" | "settled"
+      >;
+      explanation: string;
+    }[];
   } | null;
 }
 export interface NodeExecution {

@@ -128,12 +128,12 @@ def test_custom_undated_budget_blocks_category_guess_and_existing_allowance_is_r
     assert itinerary.budget_items[1].planned_cents == 1234
 
 
-@pytest.mark.parametrize("mode", ["rail", "flight", "transfer", "station", "custom"])
+@pytest.mark.parametrize("mode", ["rail", "flight", "transfer", "station", "transport", "custom"])
 def test_existing_intercity_or_custom_transport_is_never_guessed_as_round_trip(mode):
     source = plan()
     itinerary = Itinerary(days=source.days)
-    if mode == "station":
-        itinerary.days[0].activities[0].kind = "station"
+    if mode in {"station", "transport"}:
+        itinerary.days[0].activities[0].kind = mode
     elif mode == "custom":
         itinerary.budget_items = [
             BudgetItem(id="manual-transport", title="交通预留", category="transport")
