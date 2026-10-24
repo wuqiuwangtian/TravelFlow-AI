@@ -102,7 +102,7 @@ async def execute_project(
             raise ConflictError("工程版本已变化，请载入最新工程后运行。")
         order = execution_order(project.graph, payload.target_node)
         kinds = {n.kind for n in project.graph.nodes if n.id in order}
-        llm = create_llm_provider(settings) if "generate" in kinds else None
+        llm = create_llm_provider(settings) if kinds & {"generate", "plan"} else None
         search = create_search_provider(settings) if "search" in kinds else None
         # 外层限制整个工程；节点进度与已成功产物持久化，断流后可读取并重跑。
         task = asyncio.create_task(
@@ -217,7 +217,7 @@ async def preview_adoption(
                     artifact,
                     source_key,
                     payload,
-                    create_llm_provider(settings),
+                    create_llm_provider(settings) if artifact.plan is None else None,
                     settings,
                 )
         except TimeoutError as exc:

@@ -22,6 +22,16 @@ from app.domain.workbench import (
 )
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
+from app.services.studio_tools import (
+    calculate_budget,
+    generate_plan,
+    plan_key,
+    project_artifact,
+    remap_plan,
+    render_budget,
+    render_plan,
+    validate_plan,
+)
 from app.storage.workbench_store import WorkbenchStore
 
 
@@ -44,11 +54,21 @@ def topology(graph: StudioGraph) -> list[str]:
         output = OUTPUT_PORTS[nodes[edge.source].kind].get(edge.source_port)
         input = INPUT_PORTS[nodes[edge.target].kind].get(edge.target_port)
         if output is None or input != output:
-            raise InvalidRequest("端口类型不兼容：文本接文本，资料接资料。")
+            raise InvalidRequest("端口类型不兼容：请连接相同类型的文本、资料、行程或预算端口。")
         key = (edge.source, edge.target, edge.source_port, edge.target_port)
         if key in seen:
             raise InvalidRequest("同一组端口不能重复连线。")
         seen.add(key)
+    for node in graph.nodes:
+        for port in ("itinerary", "budget"):
+            if (
+                node.kind in {"route", "budget", "output"}
+                and sum(edge.target == node.id and edge.target_port == port for edge in graph.edges)
+                > 1
+            ):
+                raise InvalidRequest(
+                    f"「{node.title}」的{port}端口只接收一份数据，请先选择一套方案。"
+                )
     waiting = set(nodes)
     order: list[str] = []
     while waiting:
@@ -82,10 +102,16 @@ def execution_order(graph: StudioGraph, target: str | None) -> list[str]:
             raise InvalidRequest(f"「{node.title}」还没有输入内容。")
         if node.kind == "search" and not any(e.target_port == "query" for e in incoming):
             raise InvalidRequest(f"「{node.title}」需要连接文本查询输入。")
-        if node.kind == "generate" and (not incoming or not node.parameters.prompt.strip()):
+        if node.kind in {"generate", "plan"} and (
+            not incoming or not node.parameters.prompt.strip()
+        ):
             raise InvalidRequest(f"「{node.title}」需要上游输入与生成指令。")
-        if node.kind == "output" and not any(e.target_port == "content" for e in incoming):
-            raise InvalidRequest(f"「{node.title}」需要连接正文输入。")
+        if node.kind in {"route", "budget"} and not incoming:
+            raise InvalidRequest(f"「{node.title}」需要连接一份行程数据。")
+        if node.kind == "output" and not any(
+            e.target_port in {"content", "itinerary"} for e in incoming
+        ):
+            raise InvalidRequest(f"「{node.title}」需要连接正文或行程输入。")
     return [id for id in order if id in required]
 
 
@@ -100,12 +126,12 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 1,
+            "engine": 2,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
             "inputs": inputs,
-            "runtime": runtime_key if node.kind in {"generate", "search"} else "",
+            "runtime": runtime_key,
         }
     )
 
@@ -114,14 +140,20 @@ def provider_key(settings: Settings, kind: str) -> str:
     # 配置变化使缓存失效；密钥只参与哈希，从不出现在工程和响应中。
     fields = (
         ("llm_provider", "llm_model", "llm_api_key", "llm_base_url", "llm_temperature")
-        if kind == "generate"
+        if kind in {"generate", "plan"}
+        else ("amap_api_key", "amap_timeout_seconds")
+        if kind == "route"
         else ("search_provider", "search_api_key", "searxng_base_url")
     )
     return digest({key: getattr(settings, key) for key in fields})
 
 
 async def execute_node(
-    node: StudioNode, inputs: list[dict], llm: LLMProvider | None, search: SearchProvider | None
+    node: StudioNode,
+    inputs: list[dict],
+    llm: LLMProvider | None,
+    search: SearchProvider | None,
+    settings: Settings,
 ) -> NodeArtifact:
     artifacts = [NodeArtifact.model_validate(item["artifact"]) for item in inputs]
     sources = source_union(artifacts)
@@ -135,9 +167,40 @@ async def execute_node(
     if node.kind == "input":
         return NodeArtifact(text=node.parameters.text)
     if node.kind == "output":
+        plan = next((a.plan for a in artifacts if a.plan), None)
+        budget = next((a.budget for a in artifacts if a.budget), None)
+        if plan and budget and budget.plan_key != plan_key(plan):
+            raise InvalidRequest("预算对应另一份行程，请将同一路线连接到预算节点和成稿节点后重跑。")
+        if plan:
+            source = next(a for a in artifacts if a.plan)
+            plan = remap_plan(plan, source.sources, sources)
+            if budget:
+                budget = budget.model_copy(update={"plan_key": plan_key(plan)})
+            text = (
+                render_plan(plan)
+                + ("\n\n" + render_budget(budget) if budget else "")
+                + "\n\n"
+                + "\n\n".join(
+                    a.text
+                    for item, a in zip(inputs, artifacts, strict=True)
+                    if item["port"] == "content"
+                )
+            )
         if len(text) > 24000:
             raise InvalidRequest("成稿超过24000字，请先接一个整合生成节点，再输出成稿。")
-        return NodeArtifact(text=text, sources=sources)
+        # 纯结构化成稿直接沿用数据；混入自由正文后改走文字采用，避免数据与正文不一致。
+        if any(item["port"] == "content" for item in inputs):
+            plan = None
+        return NodeArtifact(text=text, sources=sources, plan=plan, budget=budget)
+    if node.kind in {"route", "budget"}:
+        plan = next((a.plan for a in artifacts if a.plan), None)
+        if plan is None:
+            raise InvalidRequest("缺少上游行程数据，请检查连线后重跑。")
+        if node.kind == "route":
+            checked = await validate_plan(node, plan, settings)
+            return NodeArtifact(text=render_plan(checked), plan=checked, sources=sources)
+        budget = calculate_budget(plan)
+        return NodeArtifact(text=render_budget(budget), budget=budget, sources=sources)
     if node.kind == "search":
         assert search is not None
         query = (
@@ -160,7 +223,28 @@ async def execute_node(
             raise InvalidRequest("检索未返回可用资料，请调整查询或更换检索服务后重跑。")
         return NodeArtifact(sources=items)
     assert llm is not None
+    if node.kind == "plan":
+        return await generate_plan(node, text, sources, llm)
     material = "\n".join(f"[资料:{digest(str(s.url))[:8]}] {s.title}：{s.snippet}" for s in sources)
+    # 结构化节点使用数字引用；自由生成节点沿用资料指纹，转换时只认已绑定的来源。
+    for artifact in artifacts:
+        if artifact.plan:
+            original = render_plan(artifact.plan)
+
+            def marker(match: re.Match[str], bound: list[StudioSource] = artifact.sources) -> str:
+                index = int(match[1])
+                return (
+                    f"[资料:{digest(str(bound[index - 1].url))[:8]}]"
+                    if 1 <= index <= len(bound)
+                    else "（来源待核实）"
+                )
+
+            converted = re.sub(
+                r"\[(\d+)\]",
+                marker,
+                original,
+            )
+            text = text.replace(original, converted)
     result = await llm.chat(
         [
             ChatMessage(
@@ -200,7 +284,9 @@ async def run_graph(
 ) -> StudioRun:
     order = execution_order(graph, payload.target_node)
     history = await store.runs(branch_id)
-    runtime_keys = {kind: provider_key(settings, kind) for kind in ("generate", "search")}
+    runtime_keys = {
+        kind: provider_key(settings, kind) for kind in ("generate", "search", "plan", "route")
+    }
     cache: dict[str, NodeExecution] = {}
     cutoff = datetime.now(UTC) - timedelta(hours=24)
     for previous in reversed(history):
@@ -246,7 +332,9 @@ async def run_graph(
                         "source": edge.source,
                         "title": nodes[edge.source].title,
                         "port": edge.target_port,
-                        "artifact": artifact.model_dump(mode="json"),
+                        "artifact": project_artifact(artifact, edge.source_port).model_dump(
+                            mode="json"
+                        ),
                     }
                 )
             entry.input_key = input_key(node, inputs, runtime_keys.get(node.kind, ""))
@@ -266,7 +354,7 @@ async def run_graph(
                 started = time.monotonic()
                 try:
                     async with asyncio.timeout(120):
-                        entry.artifact = await execute_node(node, inputs, llm, search)
+                        entry.artifact = await execute_node(node, inputs, llm, search, settings)
                     entry.status = "succeeded"
                     entry.produced_at = datetime.now(UTC)
                 except AppError as exc:

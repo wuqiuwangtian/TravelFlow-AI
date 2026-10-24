@@ -54,7 +54,12 @@ async def run(client, bid, revision=1, rid="studio-run-0001", **kwargs):
 async def test_templates_have_real_branch_merge_and_typed_executable_connections(environment):
     client, _, _, _ = environment
     response = await client.get("/api/workflow/templates")
-    assert {item["id"] for item in response.json()} == {"inspiration", "journey", "alternatives"}
+    assert {item["id"] for item in response.json()} == {
+        "inspiration",
+        "journey",
+        "alternatives",
+        "structured",
+    }
     for template in templates():
         template.graph.nodes[0].parameters.text = "上海出发，北京三天，总预算2000元"
         assert len(execution_order(template.graph, None)) == len(template.graph.nodes)

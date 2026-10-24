@@ -5,8 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-NodeKind = Literal["input", "search", "generate", "output"]
-PortType = Literal["text", "sources"]
+from app.domain.studio_data import StudioBudgetData, StudioPlanData
+
+NodeKind = Literal["input", "search", "generate", "output", "plan", "route", "budget"]
+PortType = Literal["text", "sources", "itinerary", "budget"]
 
 
 class NodeParameters(BaseModel):
@@ -15,6 +17,7 @@ class NodeParameters(BaseModel):
     prompt: str = Field(default="", max_length=6000)
     temperature: float = Field(default=0.5, ge=0, le=2, allow_inf_nan=False)
     max_results: int = Field(default=5, ge=1, le=8)
+    travel_mode: Literal["auto", "walking", "transit", "driving"] = "auto"
 
 
 class StudioNode(BaseModel):
@@ -31,8 +34,8 @@ class StudioEdge(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: str
     target: str
-    source_port: Literal["text", "sources"]
-    target_port: Literal["context", "query", "sources", "content"]
+    source_port: PortType
+    target_port: Literal["context", "query", "sources", "content", "itinerary", "budget"]
 
 
 class StudioGraph(BaseModel):
@@ -58,6 +61,8 @@ class StudioSource(BaseModel):
 class NodeArtifact(BaseModel):
     text: str = Field(default="", max_length=24000)
     sources: list[StudioSource] = Field(default_factory=list, max_length=80)
+    plan: StudioPlanData | None = None
+    budget: StudioBudgetData | None = None
 
 
 class NodeExecution(BaseModel):
@@ -111,11 +116,23 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     "input": {},
     "search": {"query": "text"},
     "generate": {"context": "text", "sources": "sources"},
-    "output": {"content": "text", "sources": "sources"},
+    "plan": {"context": "text", "sources": "sources"},
+    "route": {"itinerary": "itinerary"},
+    "budget": {"itinerary": "itinerary"},
+    "output": {
+        "content": "text",
+        "sources": "sources",
+        "itinerary": "itinerary",
+        "budget": "budget",
+    },
 }
+INPUT_PORTS["generate"].update({"itinerary": "itinerary", "budget": "budget"})
 OUTPUT_PORTS: dict[str, dict[str, PortType]] = {
     "input": {"text": "text"},
     "search": {"sources": "sources"},
     "generate": {"text": "text"},
+    "plan": {"itinerary": "itinerary"},
+    "route": {"itinerary": "itinerary"},
+    "budget": {"budget": "budget"},
     "output": {},
 }

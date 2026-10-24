@@ -156,6 +156,49 @@ def templates() -> list[StudioTemplate]:
                 edge("compare", "document", "content"),
             ],
         ),
+        (
+            "structured",
+            "结构化行程",
+            "模型生成景点与日程数据 → 地图校验 → 程序汇总预算 → 可直接核对采用的成稿。",
+            [
+                brief,
+                research,
+                node(
+                    "plan",
+                    "plan",
+                    "景点与日程",
+                    660,
+                    230,
+                    "按需求与资料安排每一天的具体景点、建议时间、停留和费用，优先少折返；未知票价和交通留空，不编造确认信息。",
+                ),
+                node("route", "route", "路线校验", 960, 230),
+                node("budget", "budget", "预算汇总", 1260, 430),
+                node("document", "output", "结构化成稿", 1560, 230),
+            ],
+            [
+                edge("brief", "research", "query"),
+                edge("brief", "plan"),
+                edge("research", "plan", "sources", True),
+                StudioEdge(
+                    source="plan", target="route", source_port="itinerary", target_port="itinerary"
+                ),
+                StudioEdge(
+                    source="route",
+                    target="budget",
+                    source_port="itinerary",
+                    target_port="itinerary",
+                ),
+                StudioEdge(
+                    source="route",
+                    target="document",
+                    source_port="itinerary",
+                    target_port="itinerary",
+                ),
+                StudioEdge(
+                    source="budget", target="document", source_port="budget", target_port="budget"
+                ),
+            ],
+        ),
     ]
     return [
         StudioTemplate(
