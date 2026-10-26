@@ -9,8 +9,12 @@
   ],
   "pageErrors": [],
   "defaultTheme": "paper",
+  "defaultDesktopLayout": "conversation",
+  "defaultMobileLayout": "today",
   "desktopDensity": "airy",
   "mobileDensity": "compact",
   "linkedSelectionChecks": 5,
-  "densityChecks": 13
+  "densityChecks": 13,
+  "defaultLayoutChecks": 5,
+  "independentDeviceLayoutChecks": 1
 }

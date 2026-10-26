@@ -216,7 +216,7 @@ document.addEventListener("click", (event) => {
   if (action === "navigate")
     feedback(button, "从上一站导航的入口已响应（样稿，不申请定位或跳转）。");
   if (action === "show-journey") {
-    root.dataset.layout = "journey";
+    root.dataset.layout = "conversation";
     previewDevice = "desktop";
     applyView();
   }

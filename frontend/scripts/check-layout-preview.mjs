@@ -39,10 +39,14 @@ const summary = {
   screenshots: [],
   pageErrors: [],
   defaultTheme: "paper",
+  defaultDesktopLayout: "conversation",
+  defaultMobileLayout: "today",
   desktopDensity: "airy",
   mobileDensity: "compact",
   linkedSelectionChecks: 0,
   densityChecks: 0,
+  defaultLayoutChecks: 0,
+  independentDeviceLayoutChecks: 0,
 };
 try {
   await mkdir(path.join(directory, "layouts"), { recursive: true });
@@ -56,6 +60,25 @@ try {
     const page = await context.newPage();
     page.on("pageerror", (error) => summary.pageErrors.push(error.message));
     await page.route(/^https?:\/\/(?!127\.0\.0\.1:)/, (route) => route.abort());
+    await page.goto(
+      `http://127.0.0.1:${server.address().port}/layout-options.html`,
+    );
+    await page.waitForFunction(
+      () => document.querySelectorAll(".route-list .route-stop").length === 6,
+    );
+    assert.equal(
+      await page.locator("html").getAttribute("data-layout"),
+      "conversation",
+    );
+    assert.equal(
+      await page.locator("html").getAttribute("data-mobile-layout"),
+      "today",
+    );
+    assert.equal(
+      await page.locator(mobile ? "#phone-app" : "#desktop-app").isVisible(),
+      true,
+    );
+    summary.defaultLayoutChecks++;
     const variants = mobile
       ? ["today", "map"]
       : ["journey", "map", "conversation"];
@@ -203,6 +226,26 @@ try {
           ),
         ),
       );
+    }
+    if (width === 1440) {
+      await page.goto(
+        `http://127.0.0.1:${server.address().port}/layout-options.html`,
+      );
+      await page.locator('.reviewbar [data-mobile-choice="today"]').click();
+      const originalHeight = (
+        await page.locator("#phone-app .map-view").boundingBox()
+      ).height;
+      await page.locator('[data-layout-choice="map"]').click();
+      await page.locator('.reviewbar [data-mobile-choice="today"]').click();
+      assert.equal(
+        (await page.locator("#phone-app .map-view").boundingBox()).height,
+        originalHeight,
+      );
+      assert.equal(
+        await page.locator("html").getAttribute("data-density"),
+        "compact",
+      );
+      summary.independentDeviceLayoutChecks++;
     }
     await context.close();
   }

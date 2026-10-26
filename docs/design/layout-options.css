@@ -557,7 +557,7 @@ html[data-layout="map"] .workbench {
   grid-template-columns: 320px minmax(0, 1fr);
   grid-template-areas: "journey map" "assistant map";
 }
-html[data-layout="map"] .map-view {
+html[data-layout="map"] .desktop-app .map-view {
   height: 620px;
 }
 html[data-layout="map"] .journey-panel .stop-select {
@@ -615,7 +615,7 @@ html[data-layout="conversation"] .journey-panel .stop-title {
 html[data-layout="conversation"] .stop-tools {
   padding-left: 12px;
 }
-html[data-layout="conversation"] .map-view {
+html[data-layout="conversation"] .desktop-app .map-view {
   height: 220px;
 }
 .phone-app {

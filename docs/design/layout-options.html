@@ -2,7 +2,7 @@
 <html
   lang="zh-CN"
   data-theme="paper"
-  data-layout="journey"
+  data-layout="conversation"
   data-mobile-layout="today"
   data-density="airy"
 >
@@ -21,11 +21,11 @@
       <div class="review-groups">
         <div class="choice-group desktop-choices" aria-label="电脑布局">
           <span>电脑</span
-          ><button data-layout-choice="journey" aria-pressed="true">
+          ><button data-layout-choice="journey" aria-pressed="false">
             D1 行程主导</button
           ><button data-layout-choice="map" aria-pressed="false">
             D2 地图主导</button
-          ><button data-layout-choice="conversation" aria-pressed="false">
+          ><button data-layout-choice="conversation" aria-pressed="true">
             D3 对话主导
           </button>
         </div>
@@ -38,9 +38,7 @@
           </button>
         </div>
       </div>
-      <p id="preview-description">
-        电脑 D1 · 先看完整路线，地图与调整放在旁边。
-      </p>
+      <p id="preview-description">电脑 D3 · 对话主导，行程和地图在旁边更新。</p>
     </header>
 
     <main class="desktop-app app" id="desktop-app" aria-label="电脑规划样稿">
