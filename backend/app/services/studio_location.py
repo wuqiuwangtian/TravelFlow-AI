@@ -40,6 +40,10 @@ async def locate_candidates(
     node: StudioNode, pool: CandidatePool, settings: Settings
 ) -> CandidatePool:
     result = pool.model_copy(deep=True)
+    choices: dict[str, str | None] = {
+        p.id: p.location.selected_id for p in pool.places if p.location and p.location.selected_id
+    }
+    choices.update(node.parameters.location_choices)
     for p in result.places:
         p.location = CandidateLocation(
             status="unavailable", reason="候选定位尚未完成，未使用旧坐标。"
@@ -49,7 +53,7 @@ async def locate_candidates(
             p.location = CandidateLocation(
                 status="unconfigured", reason="地图未配置，保留候选名称与原建议。"
             )
-            p.location.selected_id = node.parameters.location_choices.get(p.id)
+            p.location.selected_id = choices.get(p.id)
         result.location = PoolLocationReport(
             status="unconfigured", warnings=["地图未配置，地理分组将沿用时长方案。"]
         )
@@ -64,7 +68,7 @@ async def locate_candidates(
                 try:
                     async with asyncio.timeout(min(settings.amap_timeout_seconds, 12)):
                         found = (await provider.search_places(p.place_name, p.city))[:8]
-                    choice = node.parameters.location_choices.get(p.id)
+                    choice = choices.get(p.id)
                     if choice:
                         chosen = next((place for place in found if place.id == choice), None)
                         reason = (
@@ -115,7 +119,7 @@ async def locate_candidates(
                     p.location.reason = "批量定位超时，此项未完成，可重跑定位节点。"
     for p in result.places:
         if p.location:
-            p.location.selected_id = node.parameters.location_choices.get(p.id)
+            p.location.selected_id = choices.get(p.id)
     ready = all(p.location and p.location.status == "matched" for p in result.places)
     result.location = PoolLocationReport(
         status="ready" if ready else "partial",

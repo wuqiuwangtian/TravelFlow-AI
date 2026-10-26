@@ -48,11 +48,37 @@ class CandidatePlace(CandidateSuggestion):
     location: CandidateLocation | None = None
 
 
+class CandidateVariant(BaseModel):
+    source_id: str
+    source_title: str
+    candidate: CandidatePlace
+
+
+class MergeDecision(BaseModel):
+    candidate_id: str
+    place_name: str
+    action: Literal["kept", "combined", "separate", "omitted"]
+    reason: str
+    conflicts: list[str] = Field(default_factory=list)
+    variants: list[CandidateVariant] = Field(default_factory=list)
+
+
+class MergeReport(BaseModel):
+    input_pools: int
+    before_count: int
+    after_count: int
+    duplicate_count: int
+    omitted_count: int
+    source_order: list[str]
+    decisions: list[MergeDecision] = Field(default_factory=list)
+
+
 class CandidatePool(BaseModel):
     requirements: Requirements
     places: list[CandidatePlace] = Field(min_length=1, max_length=40)
     warnings: list[str] = Field(default_factory=list)
     location: PoolLocationReport | None = None
+    merge: MergeReport | None = None
 
 
 class AllocationDecision(BaseModel):

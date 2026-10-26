@@ -20,6 +20,7 @@ NodeKind = Literal[
     "candidates",
     "allocate",
     "locate",
+    "merge",
 ]
 PortType = Literal["text", "sources", "itinerary", "budget", "candidates"]
 
@@ -46,8 +47,12 @@ class NodeParameters(BaseModel):
     allocation_strategy: Literal["balanced", "nearby"] = "balanced"
     location_choices: dict[
         Annotated[str, Field(pattern=r"^poi-[a-f0-9]{16}$")],
-        Annotated[str, Field(min_length=1, max_length=100, pattern=r"\S")],
+        Annotated[str, Field(min_length=1, max_length=100, pattern=r"\S")] | None,
     ] = Field(default_factory=dict, max_length=40)
+    merge_order: list[Annotated[str, Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]] = Field(
+        default_factory=list, max_length=8
+    )
+    merge_cost_policy: Literal["unknown", "first"] = "unknown"
 
 
 class StudioNode(BaseModel):
@@ -153,6 +158,7 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     "candidates": {"context": "text", "sources": "sources"},
     "allocate": {"candidates": "candidates"},
     "locate": {"candidates": "candidates"},
+    "merge": {"candidates": "candidates"},
     "route": {"itinerary": "itinerary"},
     "budget": {"itinerary": "itinerary"},
     "select": {"itinerary": "itinerary"},
@@ -173,6 +179,7 @@ OUTPUT_PORTS: dict[str, dict[str, PortType]] = {
     "candidates": {"candidates": "candidates"},
     "allocate": {"itinerary": "itinerary"},
     "locate": {"candidates": "candidates"},
+    "merge": {"candidates": "candidates"},
     "route": {"itinerary": "itinerary"},
     "budget": {"budget": "budget"},
     "select": {"itinerary": "itinerary"},

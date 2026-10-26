@@ -115,7 +115,7 @@ async def test_user_choice_must_still_exist_and_match_city_and_can_be_cleared(ma
     assert "已不在" in stale.places[2].location.reason
     with pytest.raises(InvalidRequest, match="指定地图地点"):
         allocate_candidates(allocator(), stale)
-    cleared = await locate_candidates(locator(), stale, settings())
+    cleared = await locate_candidates(locator(location_choices={cid: None}), stale, settings())
     assert cleared.places[2].location.place.id == "north-new"
     maps.mode = "cross_city"
     node.parameters.location_choices[cid] = "geo-2"

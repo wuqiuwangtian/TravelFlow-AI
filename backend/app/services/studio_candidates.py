@@ -35,7 +35,7 @@ def render_candidates(pool: CandidatePool) -> str:
         refs = "".join(f"[{i}]" for i in p.source_indices)
         lines.append(
             f"- {p.place_name} · {p.city} · 停留{p.duration_minutes or '待定'}分钟 · "
-            f"{cost}；{p.reason[:160]} {refs}"
+            f"{cost}；{p.reason[:80] if pool.merge else p.reason[:160]} {refs}"
         )
         if p.location:
             label = p.location.place.name if p.location.place else p.location.reason
@@ -43,6 +43,21 @@ def render_candidates(pool: CandidatePool) -> str:
     if pool.location:
         lines.extend(f"- {w}" for w in pool.location.warnings)
     lines.extend(f"- {w}" for w in pool.warnings)
+    if pool.merge:
+        report = pool.merge
+        lines.extend(
+            [
+                "\n## 候选合并记录",
+                f"{report.input_pools}路候选：{report.before_count} → {report.after_count}处；"
+                f"去重{report.duplicate_count}项，因上限未入池{report.omitted_count}组。",
+            ]
+        )
+        for decision in report.decisions[:12]:
+            lines.append(
+                f"- {decision.place_name[:50]} · {decision.action} · "
+                f"{'、'.join(decision.conflicts) or '沿用优先来源'}；{decision.reason[:70]}"
+            )
+        lines.append("完整分支建议、引用与未入池候选见结构化数据和上游快照。")
     return "\n".join(lines)
 
 

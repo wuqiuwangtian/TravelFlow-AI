@@ -62,6 +62,7 @@ async def test_templates_have_real_branch_merge_and_typed_executable_connections
         "curated",
         "candidate_days",
         "geographic_days",
+        "combined_candidates",
     }
     for template in templates():
         template.graph.nodes[0].parameters.text = "上海出发，北京三天，总预算2000元"

@@ -75,7 +75,10 @@ class BrowserLLM(FakeLLM):
 
     async def structured(self, messages, schema, **kwargs):
         if schema is CandidateDraft:
-            return candidate_draft()
+            result = candidate_draft()
+            if "户外与公园" in messages[0].content:
+                result.places[2].cost = 30
+            return result
         if schema is StudioPlanDraft:
             if "测试无每日安排" in messages[-1].content:
                 result = adoption_draft()

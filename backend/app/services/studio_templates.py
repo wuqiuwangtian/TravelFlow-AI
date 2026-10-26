@@ -332,4 +332,60 @@ def templates() -> list[StudioTemplate]:
             graph=geographic,
         )
     )
+    combined = result[6].graph.model_copy(deep=True)
+    combined.title = "多主题汇合规划"
+    original = next(n for n in combined.nodes if n.id == "candidates")
+    culture, outdoors = original.model_copy(deep=True), original.model_copy(deep=True)
+    culture.id, culture.title, culture.y = "culture", "人文候选", 60
+    culture.parameters.prompt = (
+        "按共同需求与资料筛选人文与博物馆景点，说明理由、停留和费用口径，未知留空。"
+    )
+    outdoors.id, outdoors.title, outdoors.y = "outdoors", "户外候选", 430
+    outdoors.parameters.prompt = (
+        "按共同需求与资料筛选户外与公园景点，说明理由、停留和费用口径，未知留空。"
+    )
+    combined.nodes = [n for n in combined.nodes if n.id != "candidates"]
+    for n in combined.nodes:
+        if n.id in {"location", "allocation", "route", "budget", "document"}:
+            n.x += 300
+    combined.nodes[2:2] = [
+        culture,
+        outdoors,
+        StudioNode(
+            id="merge",
+            kind="merge",
+            title="候选合并",
+            x=960,
+            y=230,
+            parameters={"candidate_limit": 40, "merge_order": ["culture", "outdoors"]},
+        ),
+    ]
+    combined.edges = [
+        e for e in combined.edges if e.source != "candidates" and e.target != "candidates"
+    ]
+    for id in ("culture", "outdoors"):
+        combined.edges.extend(
+            [
+                StudioEdge(source="brief", target=id, source_port="text", target_port="context"),
+                StudioEdge(
+                    source="research", target=id, source_port="sources", target_port="sources"
+                ),
+                StudioEdge(
+                    source=id, target="merge", source_port="candidates", target_port="candidates"
+                ),
+            ]
+        )
+    combined.edges.append(
+        StudioEdge(
+            source="merge", target="location", source_port="candidates", target_port="candidates"
+        )
+    )
+    result.append(
+        StudioTemplate(
+            id="combined_candidates",
+            title="多主题汇合规划",
+            description="不同主题分别选点 → 程序合并去重与冲突记录 → 定位分日 → 路线预算与成稿。",
+            graph=combined,
+        )
+    )
     return result

@@ -28,6 +28,7 @@ from app.services.studio_candidates import (
     render_candidates,
 )
 from app.services.studio_location import locate_candidates
+from app.services.studio_merge import merge_candidates
 from app.services.studio_tools import (
     calculate_budget,
     generate_plan,
@@ -119,6 +120,11 @@ def execution_order(graph: StudioGraph, target: str | None) -> list[str]:
             raise InvalidRequest(f"「{node.title}」需要连接一份行程数据。")
         if node.kind in {"allocate", "locate"} and not incoming:
             raise InvalidRequest(f"「{node.title}」需要连接一份候选景点池。")
+        if node.kind == "merge":
+            if not 1 <= len(incoming) <= 8:
+                raise InvalidRequest(f"「{node.title}」需要1至8份候选池输入，请分层合并。")
+            if len(set(node.parameters.merge_order)) != len(node.parameters.merge_order):
+                raise InvalidRequest("合并来源优先级不能重复。")
         if node.kind in {"select", "allocate"}:
             keywords(node.parameters.required_places)
             keywords(node.parameters.excluded_places)
@@ -140,7 +146,7 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 6,
+            "engine": 7,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
@@ -176,10 +182,13 @@ async def execute_node(
         for item, artifact in zip(inputs, artifacts, strict=True)
         if artifact.text
     )
-    if len(text) > 90000:
+    if len(text) > 90000 and node.kind != "merge":
         raise InvalidRequest("上游正文超过当前节点的9万字输入上限，请减少连线或拆分生成。")
     if node.kind == "input":
         return NodeArtifact(text=node.parameters.text)
+    if node.kind == "merge":
+        merged = merge_candidates(node, inputs, sources)
+        return NodeArtifact(text=render_candidates(merged), candidates=merged, sources=sources)
     if node.kind in {"allocate", "locate"}:
         pool = next((a.candidates for a in artifacts if a.candidates), None)
         if pool is None:
