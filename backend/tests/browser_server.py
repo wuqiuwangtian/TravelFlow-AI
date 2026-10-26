@@ -16,7 +16,8 @@ from adoption_fixtures import adoption_draft  # noqa: E402
 from candidate_fixtures import candidate_draft  # noqa: E402
 from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
 from expense_fixtures import expense_itinerary  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from geo_fixtures import GeoMaps  # noqa: E402
 from linked_fixtures import linked_itinerary  # noqa: E402
 from move_fixtures import move_itinerary  # noqa: E402
 from place_fixtures import place_itinerary  # noqa: E402
@@ -49,6 +50,7 @@ from app.domain.models import Requirements  # noqa: E402
 from app.domain.studio_adoption import StudioPlanDraft  # noqa: E402
 from app.domain.studio_candidates import CandidateDraft  # noqa: E402
 from app.domain.workflow import DayOrder  # noqa: E402
+from app.services import studio_adoption, studio_location, studio_tools  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
 from app.services.itinerary_service import sync_markdown  # noqa: E402
 from app.services.recap_writing import RecapWriting  # noqa: E402
@@ -144,7 +146,23 @@ class BrowserLLM(FakeLLM):
 async def lifespan(app):
     # 每次启动独立临时目录；不加载 .env，不接触个人数据库，退出自动清理。
     settings = Settings(_env_file=None, llm_api_key=None, search_api_key=None, amap_api_key=None)
-    app.dependency_overrides[get_settings] = lambda: settings
+    app.state.geo_modes, app.state.geo_calls = {}, {}
+
+    def browser_settings(request: Request):
+        for bid, mode in app.state.geo_modes.items():
+            if request.url.path.startswith(f"/api/branches/{bid}/studio"):
+                return Settings(_env_file=None, amap_api_key=f"isolated-geo-{bid}:{mode}")
+        return settings
+
+    app.dependency_overrides[get_settings] = browser_settings
+
+    def geo_maps(client, key):
+        bid, mode = key.removeprefix("isolated-geo-").split(":", 1)
+        return GeoMaps(mode, app.state.geo_calls[bid])
+
+    studio_location.AmapProvider = studio_tools.AmapProvider = studio_adoption.AmapProvider = (
+        geo_maps
+    )
     # 整理旧路书走独立模型工厂，也必须使用替身，不能尝试读取真实模型配置。
     routes_itinerary.create_llm_provider = lambda settings: BrowserLLM()
     routes_studio.create_llm_provider = lambda settings: BrowserLLM()
@@ -168,6 +186,19 @@ register_exception_handlers(app)
 for router in (routes_session, routes_chat, routes_export, routes_itinerary, routes_system):
     app.include_router(router.router)
 app.include_router(routes_studio.router)
+
+
+@app.post("/test/geo/{bid}/{mode}")
+async def configure_geo(bid: str, mode: str):
+    assert mode in {"complete", "ambiguous", "stale", "unavailable", "missing"}
+    app.state.geo_modes[bid] = mode
+    app.state.geo_calls.setdefault(bid, {"search": [], "route": []})
+    return {"configured": True}
+
+
+@app.get("/test/geo/{bid}")
+async def geo_calls(bid: str):
+    return app.state.geo_calls[bid]
 
 
 @app.post("/test/legacy")

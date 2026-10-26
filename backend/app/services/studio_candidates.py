@@ -17,6 +17,8 @@ from app.domain.workbench import StudioNode, StudioSource
 from app.llm.base import ChatMessage, LLMProvider
 from app.maps.matching import normal_name
 from app.services.itinerary_service import summarise_day
+from app.services.studio_geography import group_nearby
+from app.services.studio_location import fresh_locations, same_city
 from app.services.studio_transform import keywords
 
 PACE = {"relaxed": (2, 240), "balanced": (3, 360), "full": (4, 480)}
@@ -33,8 +35,13 @@ def render_candidates(pool: CandidatePool) -> str:
         refs = "".join(f"[{i}]" for i in p.source_indices)
         lines.append(
             f"- {p.place_name} · {p.city} · 停留{p.duration_minutes or '待定'}分钟 · "
-            f"{cost}；{p.reason[:300]} {refs}"
+            f"{cost}；{p.reason[:160]} {refs}"
         )
+        if p.location:
+            label = p.location.place.name if p.location.place else p.location.reason
+            lines.append(f"  - 定位：{p.location.status} · {label[:60]}")
+    if pool.location:
+        lines.extend(f"- {w}" for w in pool.location.warnings)
     lines.extend(f"- {w}" for w in pool.warnings)
     return "\n".join(lines)
 
@@ -107,7 +114,7 @@ async def generate_candidates(
                 else "unknown",
             )
         )
-    warnings = ["候选景点尚未分日、定位或核实营业和票价；推荐理由是建议。"]
+    warnings = ["候选景点尚未分日，营业和票价需核实；推荐理由是建议。"]
     if omitted:
         warnings.append(f"已去重或按候选上限截取，省略{omitted}项；同名同城保留首次出现的资料。")
     return CandidatePool(requirements=draft.requirements, places=places, warnings=warnings)
@@ -131,6 +138,12 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
     eligible = [p for p in pool.places if not matches(p, excluded)]
     if not eligible:
         raise InvalidRequest("排除后没有可分配的候选景点，请修正规则或补充候选池。")
+    if any(
+        p.location and p.location.selected_id and p.location.status != "matched" for p in eligible
+    ):
+        raise InvalidRequest(
+            "有指定地图地点未能确认，请回到候选定位重新选择或清除指定后重跑；不会自动换到其他地点。"
+        )
     cities = {normal_name(p.city.removesuffix("市")) for p in eligible}
     if len(cities) != 1:
         raise InvalidRequest("分日分配首版需要同城候选景点，请按城市拆分候选池或调整排除名单。")
@@ -189,6 +202,28 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
         raise InvalidRequest(
             "当前节奏无法形成每天都有景点的安排，请减少天数、补充候选或调整停留与出发时间。"
         )
+    geography = None
+    if params.allocation_strategy == "nearby":
+        buckets, geography = group_nearby(
+            buckets,
+            pool,
+            minutes,
+            params.allocation_buffer_minutes,
+            params.allocation_default_stay_minutes,
+        )
+        if geography.applied:
+            day_for = {p.id: i for i, bucket in enumerate(buckets, 1) for p in bucket}
+            for decision in decisions:
+                if decision.day is not None:
+                    decision.day = day_for[decision.candidate_id]
+                    decision.reason = decision.reason.replace(
+                        "按当日已分配时长平衡", "按确认坐标分组并保持原入选集合和容量约束"
+                    )
+    locations_stamp = (
+        pool.location.checked_at
+        if pool.location and fresh_locations(pool.location.checked_at)
+        else None
+    )
     req = pool.requirements.model_copy(deep=True, update={"duration_days": count})
     days = []
     for i, bucket in enumerate(buckets, 1):
@@ -196,6 +231,15 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
         cursor = start
         for p in bucket:
             duration = p.duration_minutes or params.allocation_default_stay_minutes
+            point = (
+                p.location.place
+                if locations_stamp
+                and p.location
+                and p.location.status == "matched"
+                and p.location.place
+                and same_city(p.city, p.location.place.city)
+                else None
+            )
             notes = p.reason
             if p.duration_minutes is None:
                 notes += f"；停留按默认{duration}分钟估算"
@@ -213,6 +257,9 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
                     cost_source=p.cost_source,
                     source_indices=list(p.source_indices),
                     notes=notes[:2000],
+                    place=point.model_copy(deep=True) if point else None,
+                    place_status="matched" if point else "pending",
+                    match_reason=p.location.reason if locations_stamp and p.location else "",
                 )
             )
             cursor += duration + params.allocation_buffer_minutes
@@ -243,10 +290,13 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
             minutes_per_day=minutes,
             buffer_minutes=params.allocation_buffer_minutes,
             decisions=decisions,
+            geography=geography,
+            locations_checked_at=locations_stamp,
         ),
         warnings=[
             *pool.warnings,
-            "分日仅按景点停留与段间缓冲安排，不验证真实交通、营业和预约；餐饮、住宿与往返交通未自动加入时间轴。",
+            "分日使用停留与段间缓冲，可按明确坐标分组，不验证真实交通、营业和预约；餐饮、住宿与往返交通未自动加入时间轴。",
+            *([geography.reason] if geography else []),
             f"按{count}天分配，改变天数时还需核对往返日期和人工约束。",
         ],
     )

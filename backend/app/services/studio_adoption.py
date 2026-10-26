@@ -32,6 +32,7 @@ from app.services.itinerary_service import build_itinerary, check_day, summarise
 from app.services.replan_service import check_overnight_links, context_warnings
 from app.services.studio_budget import supplements
 from app.services.studio_engine import digest
+from app.services.studio_location import fresh_locations, same_city
 from app.services.travel_time import minutes
 from app.storage.session_store import SessionStore
 
@@ -545,6 +546,30 @@ async def create_preview(
                 else "unknown"
             )
     candidate = build_itinerary(draft.days, requirements)
+    if (
+        artifact.plan
+        and artifact.plan.allocation
+        and fresh_locations(artifact.plan.allocation.locations_checked_at)
+    ):
+        # 只恢复同一日同序站点的近期服务端定位，避免采用时丢掉用户指定的同名地点。
+        originals = {day.day: day for day in artifact.plan.days}
+        for scheduled_day in candidate.days:
+            source_day = originals.get(scheduled_day.day)
+            if source_day and len(scheduled_day.activities) == len(source_day.activities):
+                for scheduled_activity, source in zip(
+                    scheduled_day.activities, source_day.activities, strict=True
+                ):
+                    if (
+                        identity(scheduled_activity) == identity(source)
+                        and source.place_status == "matched"
+                        and source.place
+                        and same_city(scheduled_activity.city, source.place.city)
+                    ):
+                        scheduled_activity.place = source.place.model_copy(deep=True)
+                        scheduled_activity.place_status, scheduled_activity.match_reason = (
+                            "matched",
+                            source.match_reason,
+                        )
     previous = base.itinerary.model_copy(deep=True) if base.itinerary else None
     reasons, pairs = protected_records(previous) if previous else ({}, set())
     if previous:

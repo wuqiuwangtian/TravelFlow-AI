@@ -27,6 +27,7 @@ from app.services.studio_candidates import (
     generate_candidates,
     render_candidates,
 )
+from app.services.studio_location import locate_candidates
 from app.services.studio_tools import (
     calculate_budget,
     generate_plan,
@@ -70,7 +71,7 @@ def topology(graph: StudioGraph) -> list[str]:
     for node in graph.nodes:
         for port in ("itinerary", "budget", "candidates"):
             if (
-                node.kind in {"route", "budget", "output", "select", "allocate"}
+                node.kind in {"route", "budget", "output", "select", "allocate", "locate"}
                 and sum(edge.target == node.id and edge.target_port == port for edge in graph.edges)
                 > 1
             ):
@@ -116,7 +117,7 @@ def execution_order(graph: StudioGraph, target: str | None) -> list[str]:
             raise InvalidRequest(f"「{node.title}」需要上游输入与生成指令。")
         if node.kind in {"route", "budget", "select"} and not incoming:
             raise InvalidRequest(f"「{node.title}」需要连接一份行程数据。")
-        if node.kind == "allocate" and not incoming:
+        if node.kind in {"allocate", "locate"} and not incoming:
             raise InvalidRequest(f"「{node.title}」需要连接一份候选景点池。")
         if node.kind in {"select", "allocate"}:
             keywords(node.parameters.required_places)
@@ -139,7 +140,7 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 5,
+            "engine": 6,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
@@ -155,7 +156,7 @@ def provider_key(settings: Settings, kind: str) -> str:
         ("llm_provider", "llm_model", "llm_api_key", "llm_base_url", "llm_temperature")
         if kind in {"generate", "plan", "candidates"}
         else ("amap_api_key", "amap_timeout_seconds")
-        if kind == "route"
+        if kind in {"route", "locate"}
         else ("search_provider", "search_api_key", "searxng_base_url")
     )
     return digest({key: getattr(settings, key) for key in fields})
@@ -179,10 +180,15 @@ async def execute_node(
         raise InvalidRequest("上游正文超过当前节点的9万字输入上限，请减少连线或拆分生成。")
     if node.kind == "input":
         return NodeArtifact(text=node.parameters.text)
-    if node.kind == "allocate":
+    if node.kind in {"allocate", "locate"}:
         pool = next((a.candidates for a in artifacts if a.candidates), None)
         if pool is None:
             raise InvalidRequest("缺少上游候选景点数据，请检查连线后重跑。")
+        if node.kind == "locate":
+            located = await locate_candidates(node, pool, settings)
+            return NodeArtifact(
+                text=render_candidates(located), candidates=located, sources=sources
+            )
         allocated = allocate_candidates(node, pool)
         return NodeArtifact(text=render_plan(allocated), plan=allocated, sources=sources)
     if node.kind == "output":
@@ -320,12 +326,23 @@ async def run_graph(
     history = await store.runs(branch_id)
     runtime_keys = {
         kind: provider_key(settings, kind)
-        for kind in ("generate", "search", "plan", "route", "candidates")
+        for kind in ("generate", "search", "plan", "route", "candidates", "locate")
     }
     cache: dict[str, NodeExecution] = {}
     cutoff = datetime.now(UTC) - timedelta(hours=24)
     for previous in reversed(history):
         for entry in previous.nodes:
+            if (
+                entry.artifact
+                and entry.artifact.candidates
+                and any(
+                    p.location and p.location.status == "unavailable"
+                    for p in entry.artifact.candidates.places
+                )
+            ):
+                # 本次定位失败不能回用同输入更早的成功坐标；下次运行真实重试。
+                cache.pop(entry.input_key, None)
+                continue
             if (
                 entry.status in {"succeeded", "cached"}
                 and entry.artifact

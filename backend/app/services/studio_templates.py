@@ -295,4 +295,41 @@ def templates() -> list[StudioTemplate]:
             graph=candidate_graph,
         )
     )
+    geographic = result[5].graph.model_copy(deep=True)
+    geographic.title = "按区域分日规划"
+    for item in geographic.nodes:
+        if item.id in {"allocation", "route", "budget", "document"}:
+            item.x += 300
+        if item.kind == "allocate":
+            item.parameters.allocation_strategy = "nearby"
+    geographic.nodes.insert(
+        3, StudioNode(id="location", kind="locate", title="候选定位", x=960, y=230)
+    )
+    geographic.edges = [
+        e for e in geographic.edges if not (e.source == "candidates" and e.target == "allocation")
+    ]
+    geographic.edges.extend(
+        [
+            StudioEdge(
+                source="candidates",
+                target="location",
+                source_port="candidates",
+                target_port="candidates",
+            ),
+            StudioEdge(
+                source="location",
+                target="allocation",
+                source_port="candidates",
+                target_port="candidates",
+            ),
+        ]
+    )
+    result.append(
+        StudioTemplate(
+            id="geographic_days",
+            title="按区域分日规划",
+            description="候选定位 → 按坐标分组 → 交通与预算核验；未定位时沿用时长方案。",
+            graph=geographic,
+        )
+    )
     return result

@@ -1,7 +1,7 @@
 """用户可编辑的生成工程：有类型的端口、DAG 与可重现的运行快照。"""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
@@ -19,6 +19,7 @@ NodeKind = Literal[
     "select",
     "candidates",
     "allocate",
+    "locate",
 ]
 PortType = Literal["text", "sources", "itinerary", "budget", "candidates"]
 
@@ -42,6 +43,11 @@ class NodeParameters(BaseModel):
     allocation_start_time: str = Field(default="09:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     allocation_buffer_minutes: int = Field(default=30, ge=0, le=180)
     allocation_default_stay_minutes: int = Field(default=90, ge=15, le=480)
+    allocation_strategy: Literal["balanced", "nearby"] = "balanced"
+    location_choices: dict[
+        Annotated[str, Field(pattern=r"^poi-[a-f0-9]{16}$")],
+        Annotated[str, Field(min_length=1, max_length=100, pattern=r"\S")],
+    ] = Field(default_factory=dict, max_length=40)
 
 
 class StudioNode(BaseModel):
@@ -146,6 +152,7 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     "plan": {"context": "text", "sources": "sources"},
     "candidates": {"context": "text", "sources": "sources"},
     "allocate": {"candidates": "candidates"},
+    "locate": {"candidates": "candidates"},
     "route": {"itinerary": "itinerary"},
     "budget": {"itinerary": "itinerary"},
     "select": {"itinerary": "itinerary"},
@@ -165,6 +172,7 @@ OUTPUT_PORTS: dict[str, dict[str, PortType]] = {
     "plan": {"itinerary": "itinerary"},
     "candidates": {"candidates": "candidates"},
     "allocate": {"itinerary": "itinerary"},
+    "locate": {"candidates": "candidates"},
     "route": {"itinerary": "itinerary"},
     "budget": {"budget": "budget"},
     "select": {"itinerary": "itinerary"},

@@ -21,6 +21,7 @@ from app.services.itinerary_service import build_itinerary, check_day, summarise
 from app.services.replan_service import check_overnight_links
 from app.services.studio_budget import supplements
 from app.services.studio_candidates import render_candidates
+from app.services.studio_location import fresh_locations
 from app.services.studio_transform import (
     apply_logistics,
     clear_changed_transport,
@@ -113,6 +114,8 @@ def render_plan(plan: StudioPlanData) -> str:
                 f"候选{allocation.pool_count}处，本次安排{allocation.selected_count}处；未安排的仍保留在候选池。",
             ]
         )
+        if allocation.geography:
+            lines.append("- 地理分组：" + allocation.geography.reason)
         lines.extend(
             f"- {item.place_name} · {'第' + str(item.day) + '天' if item.day else '未安排'}："
             f"{item.reason}"
@@ -264,8 +267,15 @@ async def validate_plan(
                 day.travel_mode = node.parameters.travel_mode
                 if node.parameters.route_order == "nearby":
                     apply_logistics(day, original)
-                # 强制重跑重新查询地图，旧结果不冒充本次校验。
+                # 只复用候选定位24小时内的明确地点；交通每次重跑重新核验。
                 for activity in day.activities:
+                    if (
+                        result.allocation
+                        and fresh_locations(result.allocation.locations_checked_at)
+                        and activity.place_status == "matched"
+                        and activity.place
+                    ):
+                        continue
                     activity.place, activity.candidates = None, []
                     activity.place_status = "pending"
                 day.legs = []
