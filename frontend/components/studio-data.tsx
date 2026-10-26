@@ -2,6 +2,7 @@
 
 import type { NodeArtifact } from "@/lib/studio-types";
 import { download } from "@/lib/studio-graph";
+import StudioCandidateLocation from "./studio-candidate-location";
 
 const categories: Record<string, string> = {
   meal: "饮食",
@@ -20,7 +21,15 @@ const routeLabels = {
   ready: "地图校验完成",
 };
 
-export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
+export default function StudioData({
+  artifact,
+  locationChoices,
+  onLocationChoice,
+}: {
+  artifact: NodeArtifact;
+  locationChoices?: Record<string, string>;
+  onLocationChoice?: (candidateId: string, placeId: string | null) => void;
+}) {
   const { plan, budget, candidates } = artifact;
   if (!plan && !budget && !candidates) return null;
   return (
@@ -35,6 +44,22 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
             {candidates.requirements.destination} · {candidates.places.length}
             处候选 · 尚未分日
           </p>
+          {candidates.location && (
+            <p className="mt-2 font-medium" aria-label="候选定位汇总">
+              {candidates.location.status === "ready"
+                ? "候选定位完成"
+                : candidates.location.status === "unconfigured"
+                  ? "地图未配置"
+                  : "部分地点待明确"}{" "}
+              · 已定位
+              {
+                candidates.places.filter(
+                  (p) => p.location?.status === "matched",
+                ).length
+              }
+              /{candidates.places.length}处
+            </p>
+          )}
           <ol className="mt-3 space-y-3">
             {candidates.places.map((p) => (
               <li
@@ -55,11 +80,21 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
                     ? p.source_indices.map((i) => `[${i}]`).join(" ")
                     : "待核实"}
                 </p>
+                <StudioCandidateLocation
+                  candidate={p}
+                  choice={locationChoices?.[p.id]}
+                  onChoose={onLocationChoice}
+                />
               </li>
             ))}
           </ol>
           {candidates.warnings.map((w, i) => (
             <p key={i} className="mt-2 text-amber-800">
+              {w}
+            </p>
+          ))}
+          {candidates.location?.warnings.map((w, i) => (
+            <p key={`location-${i}`} className="mt-2 text-amber-800">
               {w}
             </p>
           ))}
@@ -100,6 +135,43 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
                       {d.day == null ? "未安排" : `第${d.day}天`}
                     </p>
                     <p>{d.reason}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {plan.allocation?.geography && (
+            <details
+              open
+              aria-label="地理分组记录"
+              className="rounded-lg border border-cyan-100 bg-white p-2"
+            >
+              <summary className="cursor-pointer font-medium">
+                {plan.allocation.geography.applied
+                  ? "已按位置调整"
+                  : "地理分组核对"}
+              </summary>
+              <p className="mt-2">{plan.allocation.geography.reason}</p>
+              {plan.allocation.geography.before_spread_meters != null &&
+                plan.allocation.geography.after_spread_meters != null && (
+                  <p className="mt-2 text-slate-500">
+                    同日分散度：
+                    {(
+                      plan.allocation.geography.before_spread_meters / 1000
+                    ).toFixed(1)}{" "}
+                    →{" "}
+                    {(
+                      plan.allocation.geography.after_spread_meters / 1000
+                    ).toFixed(1)}
+                    公里（同日景点两两直线距离合计，非实际路程）。
+                  </p>
+                )}
+              <ul className="mt-2 space-y-2">
+                {plan.allocation.geography.groups.map((group) => (
+                  <li key={group.day}>
+                    第{group.day}天 · {group.districts.join("、") || "区域待定"}
+                    <br />
+                    {group.places.join(" → ")}
                   </li>
                 ))}
               </ul>

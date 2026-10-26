@@ -513,6 +513,7 @@ export default function StudioLibrary({
                           "budget",
                           "candidates",
                           "allocate",
+                          "locate",
                         ].includes(n.kind),
                     )
                     .map((n) => (
@@ -528,6 +529,11 @@ export default function StudioLibrary({
                         )}
                         {n.kind === "allocate" && (
                           <p className="mt-2 whitespace-pre-wrap break-words">
+                            分日依据：
+                            {n.parameters.allocation_strategy === "nearby"
+                              ? "按确认位置分组"
+                              : "按停留时长平衡"}
+                            <br />
                             分日天数：
                             {n.parameters.allocation_days ?? "沿用需求"}；节奏：
                             {
@@ -553,6 +559,16 @@ export default function StudioLibrary({
                             必去：{n.parameters.required_places || "无"}
                             <br />
                             排除：{n.parameters.excluded_places || "无"}
+                          </p>
+                        )}
+                        {n.kind === "locate" && (
+                          <p className="mt-2">
+                            地点指定：
+                            {
+                              Object.keys(n.parameters.location_choices ?? {})
+                                .length
+                            }
+                            处；只在新地图结果仍包含同一编号时沿用，其他旅行的无关指定不应用。
                           </p>
                         )}
                         {n.kind === "select" && (

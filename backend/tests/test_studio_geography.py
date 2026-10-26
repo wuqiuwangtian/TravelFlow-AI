@@ -377,3 +377,45 @@ async def test_failed_forced_location_evicts_old_success_and_plain_rerun_retries
     assert location["status"] == "succeeded"
     assert location["artifact"]["candidates"]["location"]["status"] == "ready"
     assert len(maps.calls["search"]) == 30
+
+
+async def test_expired_explicit_locations_require_refresh_in_allocation_and_route(maps):
+    maps.mode = "ambiguous"
+    source = await pool()
+    located = await locate_candidates(
+        locator(location_choices={source.places[2].id: "north-west"}), source, settings()
+    )
+    plan = allocate_candidates(allocator(allocation_strategy="nearby"), located)
+    assert "north-west" in plan.allocation.explicit_locations.values()
+    plan.allocation.locations_checked_at = datetime.now(UTC) - timedelta(hours=25)
+    with pytest.raises(InvalidRequest, match="定位已过期"):
+        await studio_tools.validate_plan(
+            StudioNode(id="route", kind="route", title="路线"), plan, settings()
+        )
+    assert len(maps.calls["search"]) == 10 and not maps.calls["route"]
+    located.location.checked_at = plan.allocation.locations_checked_at
+    with pytest.raises(InvalidRequest, match="指定地图地点"):
+        allocate_candidates(allocator(), located)
+
+
+async def test_old_snapshot_with_expired_explicit_choice_cannot_silently_adopt_another_place(
+    environment, geo_provider
+):
+    client, store, _, _ = environment
+    _, maps = geo_provider
+    maps.mode = "ambiguous"
+    session = (await client.post("/api/sessions", json={})).json()
+    bid = session["branches"][0]["id"]
+    source = await pool()
+    graph = workflow()
+    graph.nodes[3].parameters.location_choices = {source.places[2].id: "north-west"}
+    await save(client, bid, graph)
+    run_data = (await run(client, bid)).json()
+    saved = await store.workbench.run(bid, run_data["id"])
+    document = next(n for n in saved.nodes if n.node_id == "document")
+    document.artifact.plan.allocation.locations_checked_at = datetime.now(UTC) - timedelta(hours=25)
+    await store.workbench.write_run(saved)
+    response = await preview(client, bid, rid=saved.id)
+    assert response.status_code == 400 and "定位已过期" in response.text
+    assert not await store.list_versions(bid)
+    assert len(maps.calls["search"]) == 10

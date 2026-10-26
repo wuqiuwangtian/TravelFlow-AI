@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from app.core.config import Settings
-from app.core.errors import ProviderError
+from app.core.errors import InvalidRequest, ProviderError
 from app.domain.itinerary import ScheduledActivity
 from app.domain.studio_candidates import CandidateLocation, CandidatePool, PoolLocationReport
 from app.domain.workbench import StudioNode
@@ -25,6 +25,15 @@ def fresh_locations(stamp: datetime | None) -> bool:
         return False
     stamp = stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
     return timedelta(0) <= datetime.now(UTC) - stamp <= timedelta(hours=24)
+
+
+def require_fresh_choices(
+    stamp: datetime | None, choices: dict[str, str], present: set[str]
+) -> None:
+    if choices.keys() & present and not fresh_locations(stamp):
+        raise InvalidRequest(
+            "指定地点的定位已过期，请重跑候选定位及成稿后再核验或采用；不会自动替换指定地点。"
+        )
 
 
 async def locate_candidates(

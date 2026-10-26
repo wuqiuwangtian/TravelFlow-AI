@@ -48,6 +48,22 @@ export default function StudioAllocationControls({
           <option value="full">丰富 · 每天最多4处／8小时</option>
         </select>
       </label>
+      <label className="block">
+        分日依据
+        <select
+          aria-label="分日分组策略"
+          value={p.allocation_strategy ?? "balanced"}
+          onChange={(e) =>
+            onChange({
+              allocation_strategy: e.target.value as "balanced" | "nearby",
+            })
+          }
+          className={inputClass}
+        >
+          <option value="balanced">按停留时长平衡</option>
+          <option value="nearby">按确认位置分组</option>
+        </select>
+      </label>
       <details className="space-y-4">
         <summary className="cursor-pointer">时间与筛选规则</summary>
         <label className="block">
@@ -137,7 +153,7 @@ export default function StudioAllocationControls({
         </label>
       </details>
       <p className="leading-6 text-slate-500">
-        只分配同城候选景点，按停留与缓冲平衡每天的负担。缓冲不是已核实的交通；未安排的景点仍保留在候选池。必去放不下或每天无法排入景点时提示修正，不补造景点或跨城交通。
+        只分配同城候选。按位置分组需先接入候选定位，入选地点不明确时沿用时长方案；保持原入选集合与数量、时长上限，不保证全局最优。缓冲和直线分组不是已核实交通，后续仍需路线核验。
       </p>
     </div>
   );

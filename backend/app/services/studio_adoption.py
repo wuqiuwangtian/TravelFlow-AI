@@ -32,7 +32,7 @@ from app.services.itinerary_service import build_itinerary, check_day, summarise
 from app.services.replan_service import check_overnight_links, context_warnings
 from app.services.studio_budget import supplements
 from app.services.studio_engine import digest
-from app.services.studio_location import fresh_locations, same_city
+from app.services.studio_location import fresh_locations, require_fresh_choices, same_city
 from app.services.travel_time import minutes
 from app.storage.session_store import SessionStore
 
@@ -464,6 +464,12 @@ async def create_preview(
         raise ConflictError(base.blocker)
     if base.key != payload.base_key or source_key != payload.source_key:
         raise ConflictError("正式方案或来源成稿已变化，请重新载入采用信息后生成预览。")
+    if artifact.plan and artifact.plan.allocation:
+        require_fresh_choices(
+            artifact.plan.allocation.locations_checked_at,
+            artifact.plan.allocation.explicit_locations,
+            {a.id for d in artifact.plan.days for a in d.activities},
+        )
     text = source_markers(
         artifact.text, artifact, {i: i for i in range(1, len(artifact.sources) + 1)}
     )

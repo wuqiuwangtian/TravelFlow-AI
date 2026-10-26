@@ -40,6 +40,11 @@ export const NODE_KINDS: Record<
     subtitle: "按天数与节奏分配同城候选，不重新调用模型",
     color: "#fb7185",
   },
+  locate: {
+    title: "候选定位",
+    subtitle: "查询地图地点，独立核对歧义，供多个分日分支复用",
+    color: "#22d3ee",
+  },
   select: {
     title: "景点筛选",
     subtitle: "按必去、排除和数量规则筛选日程",
@@ -83,6 +88,7 @@ export const INPUTS: Record<
     { id: "sources", type: "sources", title: "资料" },
   ],
   allocate: [{ id: "candidates", type: "candidates", title: "候选景点" }],
+  locate: [{ id: "candidates", type: "candidates", title: "候选景点" }],
   select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "itinerary", type: "itinerary", title: "行程" }],
@@ -103,6 +109,7 @@ export const OUTPUTS: Record<
   plan: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   candidates: [{ id: "candidates", type: "candidates", title: "候选景点" }],
   allocate: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  locate: [{ id: "candidates", type: "candidates", title: "候选景点" }],
   select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "budget", type: "budget", title: "预算" }],
@@ -137,7 +144,9 @@ export function connectError(graph: StudioGraph, edge: StudioEdge): string {
   )
     return "端口不兼容：文本、资料、候选景点、行程和预算分别连接同类型端口。";
   if (
-    ["route", "budget", "output", "select", "allocate"].includes(target.kind) &&
+    ["route", "budget", "output", "select", "allocate", "locate"].includes(
+      target.kind,
+    ) &&
     ["itinerary", "budget", "candidates"].includes(edge.target_port) &&
     graph.edges.some(
       (e) => e.target === edge.target && e.target_port === edge.target_port,
@@ -218,6 +227,8 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
       allocation_start_time: "09:00",
       allocation_buffer_minutes: 30,
       allocation_default_stay_minutes: 90,
+      allocation_strategy: "balanced",
+      location_choices: {},
       budget_rules: {
         meal_per_person_day_cents: null,
         lodging_per_room_night_cents: null,

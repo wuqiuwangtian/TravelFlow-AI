@@ -16,7 +16,7 @@ async function start(page: Page) {
     name: "默认工程模板",
     exact: true,
   });
-  await expect(presets.getByRole("button")).toHaveCount(6);
+  await expect(presets.getByRole("button")).toHaveCount(7);
   await presets.getByRole("button").filter({ hasText: "双方案比较" }).click();
   await expect(
     page.getByRole("region", { name: "自由节点画布", exact: true }),

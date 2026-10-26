@@ -139,7 +139,14 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
     if not eligible:
         raise InvalidRequest("排除后没有可分配的候选景点，请修正规则或补充候选池。")
     if any(
-        p.location and p.location.selected_id and p.location.status != "matched" for p in eligible
+        p.location
+        and p.location.selected_id
+        and (
+            p.location.status != "matched"
+            or not pool.location
+            or not fresh_locations(pool.location.checked_at)
+        )
+        for p in eligible
     ):
         raise InvalidRequest(
             "有指定地图地点未能确认，请回到候选定位重新选择或清除指定后重跑；不会自动换到其他地点。"
@@ -226,6 +233,7 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
     )
     req = pool.requirements.model_copy(deep=True, update={"duration_days": count})
     days = []
+    explicit_locations: dict[str, str] = {}
     for i, bucket in enumerate(buckets, 1):
         activities = []
         cursor = start
@@ -263,6 +271,8 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
                 )
             )
             cursor += duration + params.allocation_buffer_minutes
+            if point and p.location and p.location.selected_id:
+                explicit_locations[activities[-1].id] = point.id
         day = DayPlan(
             day=i,
             title=f"第{i}天 · 景点安排",
@@ -292,6 +302,7 @@ def allocate_candidates(node: StudioNode, pool: CandidatePool) -> StudioPlanData
             decisions=decisions,
             geography=geography,
             locations_checked_at=locations_stamp,
+            explicit_locations=explicit_locations,
         ),
         warnings=[
             *pool.warnings,

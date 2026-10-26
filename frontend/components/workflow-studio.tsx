@@ -859,6 +859,34 @@ export default function WorkflowStudio({
                     onChange={parameters}
                   />
                 )}
+                {node.kind === "locate" && (
+                  <div className="space-y-3 leading-6 text-slate-500">
+                    <p>
+                      自动按名称、城市和地点类型查询地图，未定位或同名歧义保留待核实；可在产物中指定地图候选，再运行本节点应用。
+                    </p>
+                    <p>
+                      24小时内的明确地点可供多个分日分支及路线节点复用；需要刷新地点时强制重跑本节点，路线节点仍重查实际交通。
+                    </p>
+                    <p>
+                      已指定地点：
+                      {
+                        Object.keys(node.parameters.location_choices ?? {})
+                          .length
+                      }
+                      处
+                    </p>
+                    {!!Object.keys(node.parameters.location_choices ?? {})
+                      .length && (
+                      <button
+                        type="button"
+                        onClick={() => parameters({ location_choices: {} })}
+                        className="text-teal-700 underline"
+                      >
+                        清除所有地点指定
+                      </button>
+                    )}
+                  </div>
+                )}
                 {node.kind === "select" && (
                   <div className="space-y-4">
                     <label className="block">
@@ -1074,7 +1102,26 @@ export default function WorkflowStudio({
                     )}
                     {execution.artifact && (
                       <>
-                        <StudioData artifact={execution.artifact} />
+                        <StudioData
+                          artifact={execution.artifact}
+                          locationChoices={
+                            node.kind === "locate"
+                              ? node.parameters.location_choices
+                              : undefined
+                          }
+                          onLocationChoice={
+                            node.kind === "locate" && !disabled
+                              ? (id, poi) => {
+                                  const choices = {
+                                    ...node.parameters.location_choices,
+                                  };
+                                  if (poi) choices[id] = poi;
+                                  else delete choices[id];
+                                  parameters({ location_choices: choices });
+                                }
+                              : undefined
+                          }
+                        />
                         <div
                           aria-label="节点生成内容"
                           className="prose-report mt-4 max-h-[440px] overflow-auto break-words text-xs"

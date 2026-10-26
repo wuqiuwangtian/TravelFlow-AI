@@ -8,7 +8,8 @@ export type StudioKind =
   | "budget"
   | "select"
   | "candidates"
-  | "allocate";
+  | "allocate"
+  | "locate";
 export type StudioPort =
   | "text"
   | "sources"
@@ -46,6 +47,8 @@ export interface StudioNode {
     allocation_start_time: string;
     allocation_buffer_minutes: number;
     allocation_default_stay_minutes: number;
+    allocation_strategy: "balanced" | "nearby";
+    location_choices: Record<string, string>;
   };
 }
 export interface StudioEdge {
@@ -88,8 +91,26 @@ export interface NodeArtifact {
       cost_basis: "total" | "per_person" | "unknown";
       cost_source: "reference" | "estimate" | "unknown";
       source_indices: number[];
+      location: {
+        status:
+          | "matched"
+          | "ambiguous"
+          | "not_found"
+          | "unavailable"
+          | "unconfigured";
+        place: import("./types").Place | null;
+        candidates: import("./types").Place[];
+        reason: string;
+        checked_at: string | null;
+        selected_id: string | null;
+      } | null;
     }[];
     warnings: string[];
+    location: {
+      status: "ready" | "partial" | "unconfigured";
+      checked_at: string | null;
+      warnings: string[];
+    } | null;
   } | null;
   plan: {
     requirements: import("./types").TravelRequirements;
@@ -127,6 +148,15 @@ export interface NodeArtifact {
       max_per_day: number;
       minutes_per_day: number;
       buffer_minutes: number;
+      locations_checked_at: string | null;
+      explicit_locations: Record<string, string>;
+      geography: {
+        applied: boolean;
+        reason: string;
+        before_spread_meters: number | null;
+        after_spread_meters: number | null;
+        groups: { day: number; places: string[]; districts: string[] }[];
+      } | null;
       decisions: {
         candidate_id: string;
         place_name: string;

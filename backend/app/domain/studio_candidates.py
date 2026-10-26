@@ -86,3 +86,4 @@ class AllocationReport(BaseModel):
     decisions: list[AllocationDecision] = Field(default_factory=list)
     geography: GeographyReport | None = None
     locations_checked_at: datetime | None = None
+    explicit_locations: dict[str, str] = Field(default_factory=dict)

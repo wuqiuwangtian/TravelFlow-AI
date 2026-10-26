@@ -21,7 +21,7 @@ from app.services.itinerary_service import build_itinerary, check_day, summarise
 from app.services.replan_service import check_overnight_links
 from app.services.studio_budget import supplements
 from app.services.studio_candidates import render_candidates
-from app.services.studio_location import fresh_locations
+from app.services.studio_location import fresh_locations, require_fresh_choices
 from app.services.studio_transform import (
     apply_logistics,
     clear_changed_transport,
@@ -255,6 +255,12 @@ async def generate_plan(
 async def validate_plan(
     node: StudioNode, plan: StudioPlanData, settings: Settings
 ) -> StudioPlanData:
+    if plan.allocation:
+        require_fresh_choices(
+            plan.allocation.locations_checked_at,
+            plan.allocation.explicit_locations,
+            {a.id for d in plan.days for a in d.activities},
+        )
     result = plan.model_copy(deep=True)
     semaphore = asyncio.Semaphore(2)
     async with httpx.AsyncClient(timeout=min(settings.amap_timeout_seconds, 8)) as client:
