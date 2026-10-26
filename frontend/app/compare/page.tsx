@@ -224,6 +224,7 @@ export default function ComparePage() {
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
           value={sessionId}
           onChange={(e) => {
+            if (e.target.value === sessionId) return;
             currentSession.current = e.target.value;
             branchRequest.current++;
             setSelected([]);
@@ -295,6 +296,8 @@ export default function ComparePage() {
               .map((column) => (
                 <Card
                   key={column.branch.id}
+                  role="region"
+                  aria-label={`对比方案：${column.branch.title}`}
                   className="flex flex-col overflow-hidden"
                 >
                   <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">

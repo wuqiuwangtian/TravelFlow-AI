@@ -67,16 +67,15 @@ export function Button({
 export function Card({
   className,
   children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
         "rounded-xl border border-slate-200 bg-white shadow-sm",
         className,
       )}
+      {...props}
     >
       {children}
     </div>

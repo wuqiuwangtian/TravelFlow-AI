@@ -30,6 +30,8 @@ import StudioCanvas from "./studio-canvas";
 import StudioAdoption from "./studio-adoption";
 import StudioData from "./studio-data";
 import StudioLibrary from "./studio-library";
+import DocumentActions from "./document-actions";
+import { ActionFeedback } from "./ui";
 
 const empty = (): StudioGraph => ({
   schema_version: 1,
@@ -76,6 +78,12 @@ export default function WorkflowStudio({
   const [busy, setBusy] = useState("load");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [transfer, setTransfer] = useState<{
+    pending?: string;
+    error?: string;
+    message?: string;
+  }>({});
+  const transferLock = useRef(false);
   const [fitToken, setFitToken] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [undo, setUndo] = useState<StudioGraph[]>([]);
@@ -367,10 +375,13 @@ export default function WorkflowStudio({
     }
   }
   async function importGraph(file: File) {
+    if (transferLock.current) return;
     if (file.size > 250 * 1024) {
-      setError("工程 JSON 超过250KB，请减少节点正文。");
+      setTransfer({ error: "工程 JSON 超过250KB，请减少节点正文。" });
       return;
     }
+    transferLock.current = true;
+    setTransfer({ pending: "正在校验并导入工程…" });
     setBusy("import");
     setError("");
     try {
@@ -382,20 +393,19 @@ export default function WorkflowStudio({
         setSelected(result.nodes[0]?.id ?? null);
         setFitToken((v) => v + 1);
         setGallery(false);
+        setTransfer({
+          message: `已导入「${result.title}」，工程尚未保存，可撤销。`,
+        });
       }
     } catch (err) {
-      if (alive.current) setError(showError(err));
+      if (alive.current)
+        setTransfer({
+          error: `${showError(err)} 原工程已保留，可重新选择文件。`,
+        });
     } finally {
+      transferLock.current = false;
       if (alive.current) setBusy("");
     }
-  }
-  function exportArtifact() {
-    if (!execution?.artifact) return;
-    const { text, sources } = execution.artifact;
-    download(
-      "旅行工程成稿.md",
-      `${text}\n\n## 资料来源\n${sources.map((s) => `- [${s.title}](${s.url})`).join("\n")}`,
-    );
   }
   return (
     <section aria-label="节点工程" className="mt-6 min-w-0">
@@ -564,13 +574,20 @@ export default function WorkflowStudio({
           </div>
           <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-100 pt-3 text-xs text-teal-700">
             <button
-              onClick={() =>
-                download(
-                  "旅行节点工程.json",
-                  JSON.stringify(graph, null, 2),
-                  "application/json",
-                )
-              }
+              onClick={() => {
+                try {
+                  download(
+                    "旅行节点工程.json",
+                    JSON.stringify(graph, null, 2),
+                    "application/json",
+                  );
+                  setTransfer({
+                    message: "已发起工程 JSON 下载，请在浏览器下载列表中核对。",
+                  });
+                } catch {
+                  setTransfer({ error: "工程下载未能发起，请重试。" });
+                }
+              }}
             >
               导出工程 JSON
             </button>
@@ -593,6 +610,11 @@ export default function WorkflowStudio({
               }}
             />
           </div>
+          <ActionFeedback
+            pending={transfer.pending}
+            error={transfer.error}
+            message={transfer.message}
+          />
           <p className="mt-4 text-[11px] leading-6 text-slate-400">
             把一项生成任务拆成几步。一个输出可连接多个节点，一个节点可接收多路上下文。模板加载后仍可改线和参数。
           </p>
@@ -1182,25 +1204,11 @@ export default function WorkflowStudio({
                             </ul>
                           </details>
                         )}
-                        <div className="mt-4 flex gap-3 text-xs text-teal-700">
-                          <button onClick={exportArtifact}>
-                            下载此节点 Markdown
-                          </button>
-                          <button
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(
-                                  execution.artifact!.text,
-                                );
-                                setNotice("节点正文已复制。");
-                              } catch {
-                                setError("剪贴板不可用，可下载 Markdown。");
-                              }
-                            }}
-                          >
-                            复制正文
-                          </button>
-                        </div>
+                        <DocumentActions
+                          key={`${activeRun?.id}:${node.id}`}
+                          text={execution.artifact.text}
+                          markdown={`${execution.artifact.text}\n\n## 资料来源\n${execution.artifact.sources.map((source) => `- [${source.title}](${source.url})`).join("\n")}`}
+                        />
                         {node.kind === "output" &&
                           activeRun &&
                           activeRun.status !== "running" &&
