@@ -1,0 +1,423 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-theme="paper"
+  data-layout="journey"
+  data-mobile-layout="today"
+  data-density="airy"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TravelFlow · 第二轮布局比较</title>
+    <link rel="stylesheet" href="./layout-options.css" />
+  </head>
+  <body>
+    <header class="reviewbar">
+      <div class="review-title">
+        <strong>第二轮：默认工作区怎么摆</strong
+        ><span>同一配色与行程 · 虚构数据 · 操作只在样稿内演示</span>
+      </div>
+      <div class="review-groups">
+        <div class="choice-group desktop-choices" aria-label="电脑布局">
+          <span>电脑</span
+          ><button data-layout-choice="journey" aria-pressed="true">
+            D1 行程主导</button
+          ><button data-layout-choice="map" aria-pressed="false">
+            D2 地图主导</button
+          ><button data-layout-choice="conversation" aria-pressed="false">
+            D3 对话主导
+          </button>
+        </div>
+        <div class="choice-group" aria-label="手机首页">
+          <span>手机</span
+          ><button data-mobile-choice="today" aria-pressed="true">
+            M1 今日路线</button
+          ><button data-mobile-choice="map" aria-pressed="false">
+            M2 地图导航
+          </button>
+        </div>
+      </div>
+      <p id="preview-description">
+        电脑 D1 · 先看完整路线，地图与调整放在旁边。
+      </p>
+    </header>
+
+    <main class="desktop-app app" id="desktop-app" aria-label="电脑规划样稿">
+      <header class="appbar">
+        <div class="brand"><span data-icon="route"></span>TravelFlow</div>
+        <div class="trip-name">杭州三日慢游<span>2 人同行</span></div>
+        <button
+          data-action="settings"
+          aria-label="打开样稿设置"
+          class="icon-button"
+        >
+          <span data-icon="settings"></span>
+        </button>
+      </header>
+      <div class="desktop-body">
+        <nav class="sidebar" aria-label="电脑旅行导航">
+          <button class="active" data-action="show-journey">
+            <span data-icon="map"></span>当前行程</button
+          ><button data-action="expense">
+            <span data-icon="wallet"></span>费用与记账</button
+          ><button data-action="book">
+            <span data-icon="book"></span>旅行回顾
+          </button>
+          <div class="nav-space"></div>
+          <button data-action="advanced">
+            <span data-icon="workflow"></span>高级工程
+          </button>
+        </nav>
+        <div class="scene">
+          <div class="daybar">
+            <div>
+              <p class="eyebrow">当前方案</p>
+              <h1>第 2 天，西湖与街巷</h1>
+            </div>
+            <div class="days" aria-label="示例日期">
+              <button data-action="day" data-day="1" aria-pressed="false">
+                第 1 天</button
+              ><button data-action="day" data-day="2" aria-pressed="true">
+                第 2 天</button
+              ><button data-action="day" data-day="3" aria-pressed="false">
+                第 3 天
+              </button>
+            </div>
+            <button data-action="book">
+              <span data-icon="file"></span>完整路书
+            </button>
+          </div>
+          <div class="workbench">
+            <section class="journey-panel panel" aria-label="电脑连续行程">
+              <div class="panel-heading">
+                <h2>沿着这条线走</h2>
+                <span>建议时刻</span>
+              </div>
+              <ol class="route-list" data-route-list></ol>
+              <div class="route-summary">
+                <span>预计总支出 ¥1,280</span
+                ><button data-action="expense">
+                  <span data-icon="plus"></span>记一笔
+                </button>
+              </div>
+              <p
+                class="inline-result"
+                data-feedback
+                role="status"
+                aria-live="polite"
+              ></p>
+            </section>
+            <section class="map-panel panel" aria-label="电脑路线地图">
+              <div class="panel-heading">
+                <h2>路线与位置</h2>
+                <span>地图示意</span>
+              </div>
+              <div class="map-view" data-map></div>
+              <div class="map-current">
+                <div>
+                  <span class="muted">当前查看</span
+                  ><strong class="current-title">午餐与休息</strong>
+                </div>
+                <button data-action="navigate">
+                  <span data-icon="navigation"></span>从上一站导航
+                </button>
+              </div>
+              <p
+                class="inline-result"
+                data-feedback
+                role="status"
+                aria-live="polite"
+              ></p>
+            </section>
+            <section class="assistant-panel panel" aria-label="电脑行程对话">
+              <div class="panel-heading">
+                <h2>和 AI 调整行程</h2>
+                <span data-icon="message"></span>
+              </div>
+              <p class="context-label">
+                正在查看：<span class="current-title">午餐与休息</span>
+              </p>
+              <div class="dialogue">
+                <p class="assistant-message">
+                  这份路线已经可以直接使用。想换个地方、少走一点，或调整花费，继续告诉我就好。
+                </p>
+                <p class="user-message">下午想少走一点，留出喝茶时间。</p>
+                <p class="assistant-message">
+                  可以，把下午改成湖边喝茶，保留午餐和返程安排。
+                </p>
+                <button data-action="preview-change" class="preview-link">
+                  看看这次调整<span data-icon="chevron"></span>
+                </button>
+              </div>
+              <form class="chat-form">
+                <label class="sr-only" for="desktop-chat">调整这份行程</label
+                ><textarea
+                  id="desktop-chat"
+                  rows="2"
+                  placeholder="例如：下午改成喝茶，别走太远"
+                ></textarea
+                ><button class="primary" type="submit">
+                  <span data-icon="send"></span>发送
+                </button>
+                <p
+                  class="chat-status inline-result"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+              </form>
+            </section>
+          </div>
+          <footer class="scene-footer">
+            <span>当前行程、已记消费和回忆属于同一份旅行。</span
+            ><span class="saved-state">示例行程 · 草稿已保留</span>
+          </footer>
+        </div>
+      </div>
+    </main>
+
+    <main class="phone-app app" id="phone-app" aria-label="手机旅中样稿" hidden>
+      <header class="phone-header">
+        <div>
+          <span class="eyebrow">杭州三日慢游</span>
+          <h1>今天，第 2 天</h1>
+        </div>
+        <button
+          data-action="settings"
+          aria-label="打开样稿设置"
+          class="icon-button"
+        >
+          <span data-icon="settings"></span>
+        </button>
+      </header>
+      <div class="phone-content">
+        <section class="phone-next panel" aria-label="手机下一站">
+          <div class="panel-heading">
+            <span class="eyebrow">接下来</span
+            ><span class="current-time">12:00</span>
+          </div>
+          <h2 class="current-title">午餐与休息</h2>
+          <p class="muted">从上一站接着走，后面仍有休息时间。</p>
+          <div class="next-actions">
+            <button class="primary" data-action="navigate">
+              <span data-icon="navigation"></span>开始导航</button
+            ><button data-action="done">
+              <span data-icon="check"></span>我已完成</button
+            ><button
+              data-action="expense"
+              aria-label="给当前站记一笔"
+              class="icon-button"
+            >
+              <span data-icon="wallet"></span>
+            </button>
+          </div>
+          <p
+            class="inline-result"
+            data-feedback
+            role="status"
+            aria-live="polite"
+          ></p>
+        </section>
+        <section class="phone-map panel" aria-label="手机地图">
+          <div class="panel-heading">
+            <h2>今天怎么走</h2>
+            <button data-action="toggle-mobile-layout" class="text-button">
+              切到路线
+            </button>
+          </div>
+          <div class="map-view" data-map></div>
+          <p class="map-caption">路线示意，未读取定位或真实地图。</p>
+        </section>
+        <section class="phone-route panel" aria-label="手机连续行程">
+          <div class="panel-heading">
+            <h2>今天的路线</h2>
+            <button data-action="toggle-mobile-layout" class="text-button">
+              查看地图
+            </button>
+          </div>
+          <ol class="route-list" data-route-list></ol>
+          <div class="phone-budget">
+            <span>已记消费 <strong data-recorded>¥0.00</strong></span
+            ><button data-action="expense">记一笔</button>
+          </div>
+          <p
+            class="inline-result"
+            data-feedback
+            role="status"
+            aria-live="polite"
+          ></p>
+        </section>
+      </div>
+      <nav class="bottom-nav" aria-label="手机主要操作">
+        <button data-mobile-choice="today" aria-pressed="true">
+          <span data-icon="route"></span>今日</button
+        ><button data-mobile-choice="map" aria-pressed="false">
+          <span data-icon="map"></span>地图</button
+        ><button data-action="expense">
+          <span data-icon="wallet"></span>账本</button
+        ><button data-action="phone-chat">
+          <span data-icon="message"></span>对话
+        </button>
+      </nav>
+    </main>
+
+    <dialog id="settings-dialog" aria-labelledby="settings-heading">
+      <div class="dialog-heading">
+        <h2 id="settings-heading">外观与阅读</h2>
+        <button
+          class="icon-button"
+          data-close="settings-dialog"
+          aria-label="关闭设置"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <p class="muted">已确认保留三主题，默认暖纸墨绿。</p>
+      <div class="theme-picker" aria-label="主题设置">
+        <button data-theme-choice="paper" aria-pressed="true">A 暖纸墨绿</button
+        ><button data-theme-choice="guide" aria-pressed="false">
+          B 冷白深蓝</button
+        ><button data-theme-choice="night" aria-pressed="false">
+          C 深灰绿
+        </button>
+      </div>
+      <label for="desktop-density"
+        >电脑内容密度<select id="desktop-density">
+          <option value="airy" selected>松弛</option>
+          <option value="balanced">均衡</option>
+          <option value="compact">紧凑</option>
+        </select></label
+      ><label for="mobile-density"
+        >手机内容密度<select id="mobile-density">
+          <option value="airy">松弛</option>
+          <option value="balanced">均衡</option>
+          <option value="compact" selected>紧凑</option>
+        </select></label
+      >
+      <p class="muted small">
+        设置仅用于预览，最终设计选择以对话中的回复为准。
+      </p>
+      <button class="primary" data-close="settings-dialog">完成</button>
+    </dialog>
+    <dialog id="change-dialog" aria-labelledby="change-heading">
+      <div class="dialog-heading">
+        <h2 id="change-heading">核对这次调整</h2>
+        <button
+          class="icon-button"
+          data-close="change-dialog"
+          aria-label="关闭调整预览"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <p class="muted">只调整下午，午餐和已有记录保留。</p>
+      <div class="change-line">
+        <span>原安排</span><strong>14:00 湖边步道与街巷</strong>
+      </div>
+      <div class="change-line">
+        <span>新安排</span><strong>14:00 湖边喝茶与休息</strong>
+      </div>
+      <div class="dialog-actions">
+        <button class="primary" data-action="apply-change">应用到行程</button
+        ><button data-close="change-dialog">先不改</button>
+      </div>
+    </dialog>
+    <dialog id="expense-dialog" aria-labelledby="expense-heading">
+      <div class="dialog-heading">
+        <h2 id="expense-heading">记一笔消费</h2>
+        <button
+          class="icon-button"
+          data-close="expense-dialog"
+          aria-label="关闭记账"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <form id="expense-form">
+        <p class="muted">
+          关联到：<span class="current-title">午餐与休息</span>
+        </p>
+        <label for="expense-title"
+          >消费内容<input id="expense-title" value="午餐" required /></label
+        ><label for="expense-amount"
+          >实际金额（元）<input
+            id="expense-amount"
+            inputmode="decimal"
+            placeholder="0.00"
+            required
+        /></label>
+        <p id="expense-error" class="error" role="alert"></p>
+        <button class="primary" type="submit">保存这笔消费</button>
+      </form>
+    </dialog>
+    <dialog id="phone-chat-dialog" aria-labelledby="phone-chat-heading">
+      <div class="dialog-heading">
+        <h2 id="phone-chat-heading">调整当前行程</h2>
+        <button
+          class="icon-button"
+          data-close="phone-chat-dialog"
+          aria-label="关闭对话"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <p class="context-label">
+        当前查看：<span class="current-title">午餐与休息</span>
+      </p>
+      <div class="dialogue">
+        <p class="assistant-message">
+          想改哪一段，直接告诉我。当前行程和已记消费会一起保留。
+        </p>
+        <button data-action="preview-change">预览下午改成喝茶</button>
+      </div>
+      <form class="chat-form">
+        <label class="sr-only" for="phone-chat">调整这份行程</label
+        ><textarea
+          id="phone-chat"
+          rows="3"
+          placeholder="例如：下午改成喝茶"
+        ></textarea
+        ><button class="primary" type="submit">
+          <span data-icon="send"></span>发送
+        </button>
+        <p
+          class="chat-status inline-result"
+          role="status"
+          aria-live="polite"
+        ></p>
+      </form>
+    </dialog>
+    <dialog id="book-dialog" aria-labelledby="book-heading">
+      <div class="dialog-heading">
+        <h2 id="book-heading">同一份旅行</h2>
+        <button
+          class="icon-button"
+          data-close="book-dialog"
+          aria-label="关闭路书"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <p>行程、地图、记账和回顾都使用这份旅行。切换布局只改变工作重心。</p>
+      <p>第 1 天：抵达与老街。第 2 天：西湖与街巷。第 3 天：自由安排与返程。</p>
+      <p>已记消费：<strong data-recorded>¥0.00</strong></p>
+    </dialog>
+    <dialog id="advanced-dialog" aria-labelledby="advanced-heading">
+      <div class="dialog-heading">
+        <h2 id="advanced-heading">高级工程保留独立工作空间</h2>
+        <button
+          class="icon-button"
+          data-close="advanced-dialog"
+          aria-label="关闭高级工程说明"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <p>
+        本轮比较普通旅行工作区。节点画布的自由度保留，采用同一主题、排版和动效规范，后续单独核对画布布局。
+      </p>
+    </dialog>
+    <script src="./icons.js"></script>
+    <script src="./layout-options.js"></script>
+  </body>
+</html>
