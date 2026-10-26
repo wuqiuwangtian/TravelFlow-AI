@@ -15,6 +15,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { ItineraryPanel } from "@/components/itinerary-panel";
 import { LinkedReplanPreview } from "@/components/linked-replan-preview";
+import { RenameForm } from "@/components/rename-form";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, ApiError, chatStream } from "@/lib/api";
@@ -65,6 +66,8 @@ export default function ChatPage() {
   );
   // 会话标题行内编辑
   const [editingTitle, setEditingTitle] = useState(false);
+  const [titleNotice, setTitleNotice] = useState("");
+  const renameTrigger = useRef<HTMLButtonElement>(null);
   // 流式：当前阶段提示 / 正在逐字生成的路书 / 过程中的提示
   const [progress, setProgress] = useState<string | null>(null);
   const [streamingPlan, setStreamingPlan] = useState("");
@@ -111,15 +114,14 @@ export default function ChatPage() {
 
   /** 提交会话改名；空标题视为取消。 */
   async function commitTitle(rawTitle: string) {
-    setEditingTitle(false);
     const title = rawTitle.trim();
-    if (!title || title === detail?.session.title) return;
-    try {
-      await api.updateSession(sessionId, { title });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "重命名失败");
+    if (title === detail?.session.title) {
+      setTitleNotice("名称未更改。");
+      return;
     }
+    const result = await api.updateSession(sessionId, { title });
+    setDetail((old) => (old ? { ...old, session: result.session } : old));
+    setTitleNotice("旅行名称已保存。");
   }
 
   useEffect(() => {
@@ -342,27 +344,35 @@ export default function ChatPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           {editingTitle ? (
-            <input
-              autoFocus
-              defaultValue={detail.session.title}
-              className="rounded-md border border-brand-300 px-2 py-1 text-lg font-bold outline-none focus:ring-2 focus:ring-brand-100"
-              onBlur={(e) => void commitTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") setEditingTitle(false);
+            <RenameForm
+              title={detail.session.title}
+              onSave={commitTitle}
+              onClose={() => {
+                setEditingTitle(false);
+                requestAnimationFrame(() => renameTrigger.current?.focus());
               }}
             />
           ) : (
             <h1 className="flex items-center gap-2 text-lg font-bold">
               {detail.session.title}
               <button
-                className="text-slate-300 transition hover:text-brand-500"
+                ref={renameTrigger}
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-slate-500 transition hover:text-brand-500 focus-visible:outline-2 focus-visible:outline-brand-500"
                 title="重命名这个旅行"
-                onClick={() => setEditingTitle(true)}
+                aria-label="重命名这个旅行"
+                onClick={() => {
+                  setTitleNotice("");
+                  setEditingTitle(true);
+                }}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             </h1>
+          )}
+          {titleNotice && (
+            <p role="status" className="mt-2 text-sm text-teal-700">
+              {titleNotice}
+            </p>
           )}
           <p className="text-xs text-slate-400">
             {detail.branches.length} 个分支 · 版本历史可随时回退

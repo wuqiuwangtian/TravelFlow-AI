@@ -13,6 +13,7 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "default" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
+  loadingLabel?: string;
 };
 
 export function Button({
@@ -20,6 +21,7 @@ export function Button({
   variant = "default",
   size = "md",
   loading = false,
+  loadingLabel,
   disabled,
   children,
   ...props
@@ -42,16 +44,22 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center border transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0",
         variants[variant],
         sizes[size],
         className,
       )}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
-      {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-      {children}
+      {loading && (
+        <Loader2
+          aria-hidden="true"
+          className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+        />
+      )}
+      {loading && loadingLabel ? loadingLabel : children}
     </button>
   );
 }
@@ -77,11 +85,64 @@ export function Card({
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-brand-600">
-      <Loader2 className="h-4 w-4 animate-spin" />
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-2 text-sm text-brand-600"
+    >
+      <Loader2
+        aria-hidden="true"
+        className="h-4 w-4 animate-spin motion-reduce:animate-none"
+      />
       {label ?? "加载中…"}
     </div>
   );
+}
+
+/** Keep results next to their action. Error and success are mutually exclusive. */
+export function ActionFeedback({
+  pending,
+  error,
+  message,
+  onRetry,
+}: {
+  pending?: string;
+  error?: string | null;
+  message?: string | null;
+  onRetry?: () => void;
+}) {
+  if (pending)
+    return (
+      <p
+        role="status"
+        aria-atomic="true"
+        className="mt-2 text-sm text-slate-600"
+      >
+        {pending}
+      </p>
+    );
+  if (error)
+    return (
+      <div role="alert" className="mt-2 text-sm text-red-700">
+        {error}
+        {onRetry && (
+          <Button className="ml-2" size="sm" onClick={onRetry}>
+            重试
+          </Button>
+        )}
+      </div>
+    );
+  if (message)
+    return (
+      <p
+        role="status"
+        aria-atomic="true"
+        className="mt-2 text-sm text-teal-700"
+      >
+        {message}
+      </p>
+    );
+  return null;
 }
 
 export function ErrorBanner({
