@@ -1,6 +1,7 @@
 "use client";
 
 import StudioBudgetControls from "@/components/studio-budget-controls";
+import StudioAllocationControls from "@/components/studio-allocation-controls";
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -779,7 +780,9 @@ export default function WorkflowStudio({
                     />
                   </label>
                 )}
-                {["generate", "plan", "search"].includes(node.kind) && (
+                {["generate", "plan", "search", "candidates"].includes(
+                  node.kind,
+                ) && (
                   <label className="block">
                     {node.kind === "search" ? "补充检索词" : "本节点生成指令"}
                     <textarea
@@ -791,7 +794,7 @@ export default function WorkflowStudio({
                     />
                   </label>
                 )}
-                {(node.kind === "generate" || node.kind === "plan") && (
+                {["generate", "plan", "candidates"].includes(node.kind) && (
                   <label className="block">
                     生成温度 {node.parameters.temperature}
                     <input
@@ -828,6 +831,33 @@ export default function WorkflowStudio({
                       className="mt-2 w-full rounded-lg border border-slate-200 p-2"
                     />
                   </label>
+                )}
+                {node.kind === "candidates" && (
+                  <label className="block">
+                    候选数量上限
+                    <input
+                      type="number"
+                      min="1"
+                      max="40"
+                      aria-label="候选数量上限"
+                      value={node.parameters.candidate_limit ?? 12}
+                      onChange={(e) =>
+                        parameters({
+                          candidate_limit: Math.max(
+                            1,
+                            Math.min(40, Number(e.target.value) || 1),
+                          ),
+                        })
+                      }
+                      className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                    />
+                  </label>
+                )}
+                {node.kind === "allocate" && (
+                  <StudioAllocationControls
+                    value={node.parameters}
+                    onChange={parameters}
+                  />
                 )}
                 {node.kind === "select" && (
                   <div className="space-y-4">

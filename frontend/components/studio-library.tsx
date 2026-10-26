@@ -507,7 +507,13 @@ export default function StudioLibrary({
                     .filter(
                       (n) =>
                         n.parameters.prompt ||
-                        ["select", "route", "budget"].includes(n.kind),
+                        [
+                          "select",
+                          "route",
+                          "budget",
+                          "candidates",
+                          "allocate",
+                        ].includes(n.kind),
                     )
                     .map((n) => (
                       <div key={n.id} className="mt-3 rounded bg-slate-50 p-3">
@@ -515,6 +521,40 @@ export default function StudioLibrary({
                         <p className="max-h-40 overflow-auto whitespace-pre-wrap break-words">
                           {n.parameters.prompt}
                         </p>
+                        {n.kind === "candidates" && (
+                          <p className="mt-2">
+                            候选数量上限：{n.parameters.candidate_limit ?? 12}
+                          </p>
+                        )}
+                        {n.kind === "allocate" && (
+                          <p className="mt-2 whitespace-pre-wrap break-words">
+                            分日天数：
+                            {n.parameters.allocation_days ?? "沿用需求"}；节奏：
+                            {
+                              (
+                                {
+                                  relaxed: "松弛",
+                                  balanced: "均衡",
+                                  full: "丰富",
+                                } as const
+                              )[n.parameters.allocation_pace ?? "balanced"]
+                            }
+                            <br />
+                            首站：
+                            {n.parameters.allocation_start_time ?? "09:00"}
+                            ；每日上限：
+                            {n.parameters.max_attractions_per_day ?? "沿用节奏"}
+                            <br />
+                            默认停留：
+                            {n.parameters.allocation_default_stay_minutes ?? 90}
+                            分钟；缓冲：
+                            {n.parameters.allocation_buffer_minutes ?? 30}分钟
+                            <br />
+                            必去：{n.parameters.required_places || "无"}
+                            <br />
+                            排除：{n.parameters.excluded_places || "无"}
+                          </p>
+                        )}
                         {n.kind === "select" && (
                           <p className="mt-2 whitespace-pre-wrap break-words">
                             每日上限：

@@ -30,6 +30,16 @@ export const NODE_KINDS: Record<
     subtitle: "模型生成可校验的每日行程数据",
     color: "#60a5fa",
   },
+  candidates: {
+    title: "候选景点池",
+    subtitle: "先选具体景点，保留理由与来源，供多套分日方案复用",
+    color: "#c084fc",
+  },
+  allocate: {
+    title: "分日分配",
+    subtitle: "按天数与节奏分配同城候选，不重新调用模型",
+    color: "#fb7185",
+  },
   select: {
     title: "景点筛选",
     subtitle: "按必去、排除和数量规则筛选日程",
@@ -62,11 +72,17 @@ export const INPUTS: Record<
     { id: "sources", type: "sources", title: "资料" },
     { id: "itinerary", type: "itinerary", title: "行程" },
     { id: "budget", type: "budget", title: "预算" },
+    { id: "candidates", type: "candidates", title: "候选景点" },
   ],
   plan: [
     { id: "context", type: "text", title: "需求" },
     { id: "sources", type: "sources", title: "资料" },
   ],
+  candidates: [
+    { id: "context", type: "text", title: "需求" },
+    { id: "sources", type: "sources", title: "资料" },
+  ],
+  allocate: [{ id: "candidates", type: "candidates", title: "候选景点" }],
   select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "itinerary", type: "itinerary", title: "行程" }],
@@ -85,6 +101,8 @@ export const OUTPUTS: Record<
   search: [{ id: "sources", type: "sources", title: "资料" }],
   generate: [{ id: "text", type: "text", title: "文本" }],
   plan: [{ id: "itinerary", type: "itinerary", title: "行程" }],
+  candidates: [{ id: "candidates", type: "candidates", title: "候选景点" }],
+  allocate: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   select: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   route: [{ id: "itinerary", type: "itinerary", title: "行程" }],
   budget: [{ id: "budget", type: "budget", title: "预算" }],
@@ -96,12 +114,14 @@ export const PORT_COLORS: Record<StudioPort, string> = {
   sources: "#fbbf24",
   itinerary: "#60a5fa",
   budget: "#fb923c",
+  candidates: "#c084fc",
 };
 export const PORT_LABELS: Record<StudioPort, string> = {
   text: "文本",
   sources: "资料",
   itinerary: "行程",
   budget: "预算",
+  candidates: "候选景点",
 };
 export const nodeHeight = (kind: StudioKind) =>
   Math.max(174, 115 + INPUTS[kind].length * 28);
@@ -115,10 +135,10 @@ export function connectError(graph: StudioGraph, edge: StudioEdge): string {
     OUTPUTS[source.kind].find((p) => p.id === edge.source_port)?.type !==
     INPUTS[target.kind].find((p) => p.id === edge.target_port)?.type
   )
-    return "端口不兼容：文本、资料、行程和预算分别连接同类型端口。";
+    return "端口不兼容：文本、资料、候选景点、行程和预算分别连接同类型端口。";
   if (
-    ["route", "budget", "output", "select"].includes(target.kind) &&
-    ["itinerary", "budget"].includes(edge.target_port) &&
+    ["route", "budget", "output", "select", "allocate"].includes(target.kind) &&
+    ["itinerary", "budget", "candidates"].includes(edge.target_port) &&
     graph.edges.some(
       (e) => e.target === edge.target && e.target_port === edge.target_port,
     )
@@ -181,10 +201,9 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
     y,
     parameters: {
       text: "",
-      prompt:
-        kind === "generate" || kind === "plan"
-          ? "根据上游输入完成这一小步任务，明确估算与待核实事项。"
-          : "",
+      prompt: ["generate", "plan", "candidates"].includes(kind)
+        ? "根据上游输入完成这一小步任务，明确估算与待核实事项。"
+        : "",
       temperature: 0.5,
       max_results: 5,
       travel_mode: "auto",
@@ -193,6 +212,12 @@ export function nodeNew(kind: StudioKind, x: number, y: number): StudioNode {
       excluded_places: "",
       attraction_stay_minutes: null,
       route_order: "original",
+      candidate_limit: 12,
+      allocation_days: null,
+      allocation_pace: "balanced",
+      allocation_start_time: "09:00",
+      allocation_buffer_minutes: 30,
+      allocation_default_stay_minutes: 90,
       budget_rules: {
         meal_per_person_day_cents: null,
         lodging_per_room_night_cents: null,

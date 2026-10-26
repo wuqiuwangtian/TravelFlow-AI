@@ -21,14 +21,50 @@ const routeLabels = {
 };
 
 export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
-  const { plan, budget } = artifact;
-  if (!plan && !budget) return null;
+  const { plan, budget, candidates } = artifact;
+  if (!plan && !budget && !candidates) return null;
   return (
     <section
       aria-label="结构化节点数据"
       className="mt-3 space-y-3 rounded-xl bg-slate-50 p-3 text-xs leading-6"
     >
       <h4 className="font-semibold text-slate-800">结构化数据</h4>
+      {candidates && (
+        <div aria-label="候选景点池数据">
+          <p className="font-medium">
+            {candidates.requirements.destination} · {candidates.places.length}
+            处候选 · 尚未分日
+          </p>
+          <ol className="mt-3 space-y-3">
+            {candidates.places.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-lg border border-purple-100 bg-white p-3"
+              >
+                <p className="font-medium">
+                  {p.place_name} · {p.city}
+                </p>
+                <p>{p.reason}</p>
+                <p className="text-slate-500">
+                  停留{p.duration_minutes ?? "待定"}分钟 ·{" "}
+                  {p.cost === null
+                    ? "费用待核实"
+                    : `¥${p.cost.toFixed(2)}/${p.cost_basis === "total" ? "全团" : p.cost_basis === "per_person" ? "人均" : "口径未知"}`}{" "}
+                  · 来源
+                  {p.source_indices.length
+                    ? p.source_indices.map((i) => `[${i}]`).join(" ")
+                    : "待核实"}
+                </p>
+              </li>
+            ))}
+          </ol>
+          {candidates.warnings.map((w, i) => (
+            <p key={i} className="mt-2 text-amber-800">
+              {w}
+            </p>
+          ))}
+        </div>
+      )}
       {plan && (
         <>
           <p>
@@ -36,6 +72,39 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
             {plan.days.reduce((sum, day) => sum + day.activities.length, 0)}
             个活动 · {routeLabels[plan.route_status]}
           </p>
+          {plan.allocation && (
+            <details
+              open
+              aria-label="候选分日记录"
+              className="rounded-lg border border-rose-100 bg-white p-2"
+            >
+              <summary className="cursor-pointer font-medium">
+                候选{plan.allocation.pool_count}处 · 本次安排
+                {plan.allocation.selected_count}处
+              </summary>
+              <p className="mt-2 text-slate-500">
+                每天最多{plan.allocation.max_per_day}处／
+                {plan.allocation.minutes_per_day}分钟；段间缓冲
+                {plan.allocation.buffer_minutes}分钟，非核实交通。
+              </p>
+              <ul className="mt-2 space-y-3">
+                {plan.allocation.decisions.map((d) => (
+                  <li
+                    key={d.candidate_id}
+                    className={
+                      d.day == null ? "text-amber-800" : "text-slate-700"
+                    }
+                  >
+                    <p>
+                      {d.place_name} ·{" "}
+                      {d.day == null ? "未安排" : `第${d.day}天`}
+                    </p>
+                    <p>{d.reason}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {plan.selection && (
             <details
               aria-label="景点筛选记录"
@@ -269,7 +338,7 @@ export default function StudioData({ artifact }: { artifact: NodeArtifact }) {
           download(
             "节点结构化数据.json",
             JSON.stringify(
-              { plan, budget, sources: artifact.sources },
+              { plan, budget, candidates, sources: artifact.sources },
               null,
               2,
             ),

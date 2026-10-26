@@ -357,7 +357,7 @@ test("模板库及载入失败可恢复，默认模板仍可用，失败或删�
     page
       .getByRole("region", { name: "默认工程模板", exact: true })
       .getByRole("button"),
-  ).toHaveCount(5);
+  ).toHaveCount(6);
   failList = false;
   await library(page)
     .getByRole("button", { name: "刷新我的模板", exact: true })

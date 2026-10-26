@@ -6,8 +6,15 @@ export type StudioKind =
   | "plan"
   | "route"
   | "budget"
-  | "select";
-export type StudioPort = "text" | "sources" | "itinerary" | "budget";
+  | "select"
+  | "candidates"
+  | "allocate";
+export type StudioPort =
+  | "text"
+  | "sources"
+  | "itinerary"
+  | "budget"
+  | "candidates";
 export interface BudgetRules {
   meal_per_person_day_cents: number | null;
   lodging_per_room_night_cents: number | null;
@@ -33,6 +40,12 @@ export interface StudioNode {
     attraction_stay_minutes: number | null;
     route_order: "original" | "nearby";
     budget_rules: BudgetRules;
+    candidate_limit: number;
+    allocation_days: number | null;
+    allocation_pace: "relaxed" | "balanced" | "full";
+    allocation_start_time: string;
+    allocation_buffer_minutes: number;
+    allocation_default_stay_minutes: number;
   };
 }
 export interface StudioEdge {
@@ -45,7 +58,8 @@ export interface StudioEdge {
     | "sources"
     | "content"
     | "itinerary"
-    | "budget";
+    | "budget"
+    | "candidates";
 }
 export interface StudioGraph {
   schema_version: 1;
@@ -62,6 +76,21 @@ export interface StudioSource {
 export interface NodeArtifact {
   text: string;
   sources: StudioSource[];
+  candidates: {
+    requirements: import("./types").TravelRequirements;
+    places: {
+      id: string;
+      place_name: string;
+      city: string;
+      reason: string;
+      duration_minutes: number | null;
+      cost: number | null;
+      cost_basis: "total" | "per_person" | "unknown";
+      cost_source: "reference" | "estimate" | "unknown";
+      source_indices: number[];
+    }[];
+    warnings: string[];
+  } | null;
   plan: {
     requirements: import("./types").TravelRequirements;
     days: import("./types").DayPlan[];
@@ -91,6 +120,20 @@ export interface NodeArtifact {
       changed: boolean;
       reason: string;
     }[];
+    allocation: {
+      pool_count: number;
+      selected_count: number;
+      pace: "relaxed" | "balanced" | "full";
+      max_per_day: number;
+      minutes_per_day: number;
+      buffer_minutes: number;
+      decisions: {
+        candidate_id: string;
+        place_name: string;
+        day: number | null;
+        reason: string;
+      }[];
+    } | null;
   } | null;
   budget: {
     plan_key: string;
