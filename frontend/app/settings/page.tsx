@@ -201,7 +201,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <fieldset disabled={saving} className="min-w-0">
+      <fieldset
+        disabled={saving || !!testing || loadingModels}
+        className="min-w-0"
+      >
         {/* ---------------- 大模型 ---------------- */}
         <Card className="mb-5 p-5">
           <div className="mb-4 flex items-center justify-between">

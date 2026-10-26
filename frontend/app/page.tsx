@@ -25,25 +25,45 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const creatingRef = useRef(false);
+  const loadRequest = useRef(0);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedPreferences, setSelectedPreferences] =
     useState<SavedPreferences | null>(null);
   const [preferenceRefresh, setPreferenceRefresh] = useState(0);
 
   const load = useCallback(async () => {
+    const token = ++loadRequest.current;
+    setLoading(true);
     setLoadError(null);
     setConfigError(null);
-    const [list, cfg] = await Promise.allSettled([
-      api.listSessions(),
-      api.config(),
+    await Promise.all([
+      api
+        .listSessions()
+        .then(
+          (list) => {
+            if (token === loadRequest.current) setSessions(list.items);
+          },
+          (err) => {
+            if (token === loadRequest.current)
+              setLoadError(
+                err instanceof Error ? err.message : "旅行列表加载失败",
+              );
+          },
+        )
+        .finally(() => {
+          if (token === loadRequest.current) setLoading(false);
+        }),
+      api.config().then(
+        (cfg) => {
+          if (token === loadRequest.current) setConfig(cfg);
+        },
+        () => {
+          if (token === loadRequest.current)
+            setConfigError("服务配置暂时未能载入，仍可查看旅行和选用偏好。");
+        },
+      ),
     ]);
-    if (list.status === "fulfilled") setSessions(list.value.items);
-    else
-      setLoadError(
-        list.reason instanceof Error ? list.reason.message : "旅行列表加载失败",
-      );
-    if (cfg.status === "fulfilled") setConfig(cfg.value);
-    else setConfigError("服务配置暂时未能载入，仍可查看旅行和选用偏好。");
   }, []);
 
   useEffect(() => {
@@ -134,6 +154,7 @@ export default function HomePage() {
       )}
 
       <h2 className="mb-3 text-sm font-bold text-slate-700">最近的旅行</h2>
+      {loading && sessions !== null && <Spinner label="正在刷新旅行…" />}
 
       {loadError ? (
         <ErrorBanner message={loadError} onRetry={load} />

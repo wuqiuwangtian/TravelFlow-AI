@@ -5,7 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontend = fileURLToPath(new URL("../", import.meta.url));
-const output = path.resolve(frontend, "../docs/frontend-audit");
+// Re-scanning current code must not overwrite the committed FE-0 baseline.
+const output = path.resolve(
+  process.argv[2] ?? path.join(frontend, "test-results/frontend-inventory"),
+);
 const walk = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const name = path.join(dir, entry.name);

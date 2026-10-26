@@ -2,6 +2,8 @@
 
 盘点日期：2026-10-26。应用基线：`640f15032fc83ea11ed355c9c0debcd3d10f6aed`。
 
+后续进度：[FE-1 修复与验证](../frontend-feedback.md)已交付反馈基础及优先缺陷修复。下文及本目录截图／CSV 保留 FE-0 时的观察，不代表这些缺陷仍存在；重新扫描与探测默认写入忽略的 `frontend/test-results/`，已修复项有正向断言。
+
 **盘点完成，尚未实施 FE-1 或视觉改版。** 当前主要问题是操作状态、失败恢复和结果位置不一致，以及桌面布局直接压入手机。已有的原位记账、工程运行状态、预览采用和部分失败恢复应当保留。建议先修复下面的 P1，再讨论整体视觉与工作台布局。
 
 ## 范围与证据
@@ -131,4 +133,4 @@ pnpm build
 pnpm exec playwright test --config=playwright.audit.config.ts
 ```
 
-本次实际使用 `PLAYWRIGHT_BROWSERS_PATH=/tmp/travelflow-browser`，20 项通过；新增脚本与探测的 ESLint、全前端 TypeScript 检查通过。应用代码未修改，因此复用应用基线生产构建，未以重新跑全业务测试制造“改版已经完成”的印象。探测固定截图并写入同名 JSON，重新运行会覆盖本目录的观测；FE-1 修复后将相关缺陷转为修复断言，不维持错误行为。
+FE-0 当次使用 `PLAYWRIGHT_BROWSERS_PATH=/tmp/travelflow-browser`，20 项通过；新增脚本与探测的 ESLint、全前端 TypeScript 检查通过。当次应用代码未修改，因此复用应用基线生产构建。FE-1 后，以上命令的源码扫描默认写入 `frontend/test-results/frontend-inventory/`，状态截图和同名 JSON 写入 `frontend/test-results/fe1-audit/`；不再覆盖本目录的历史观测，相关缺陷已转为修复断言。

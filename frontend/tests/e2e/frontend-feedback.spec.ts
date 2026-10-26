@@ -51,6 +51,37 @@ test("正常配置和配置读取失败均保留偏好入口，最近旅行支�
   ).toBeVisible();
 });
 
+test("配置请求仍在等待时，已有旅行和常用偏好先显示", async ({ page }) => {
+  const trip = await seed(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  await page.route("**/api/backend/api/system/config", async (route) => {
+    held = true;
+    await gate;
+    await route.fulfill({ status: 503, json: failure });
+  });
+  await page.goto("/");
+  await expect.poll(() => held).toBe(true);
+  await expect(
+    page.getByRole("link").filter({
+      has: page.getByRole("heading", { name: trip.title, exact: true }),
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "新旅行偏好", exact: true }),
+  ).toBeVisible();
+  release();
+  await expect(page.locator("main").getByRole("alert")).toContainText(
+    "服务配置暂时未能载入",
+  );
+  await expect(
+    page.getByRole("heading", { name: trip.title, exact: true }),
+  ).toBeVisible();
+});
+
 for (const view of ["sessions", "chat"] as const) {
   test(`${view} 改名等待阻止重复请求，失败保留输入，原位重试成功`, async ({
     page,

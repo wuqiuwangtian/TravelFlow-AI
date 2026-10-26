@@ -89,13 +89,18 @@ async function proxy(
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch {
     const timedOut = timeout.aborted;
+    const writing = !["GET", "HEAD"].includes(request.method);
     return Response.json(
       {
         error: {
           code: timedOut ? "BACKEND_TIMEOUT" : "BACKEND_UNREACHABLE",
           message: timedOut
-            ? "服务处理超时，已保存的行程不受影响，请稍后重试。"
-            : "暂时连接不上旅行服务，请确认后端正在运行；当前页面的行程仍可查看。",
+            ? writing
+              ? "等待响应超时，操作结果尚未确认。请先核对当前内容，再重试原操作。"
+              : "读取服务超时，已保存的行程仍可查看，请稍后重试。"
+            : writing
+              ? "与旅行服务的连接中断，操作结果尚未确认。请先核对当前内容，再重试原操作。"
+              : "暂时连接不上旅行服务，请确认后端正在运行；当前页面的行程仍可查看。",
         },
       },
       { status: timedOut ? 504 : 502 },

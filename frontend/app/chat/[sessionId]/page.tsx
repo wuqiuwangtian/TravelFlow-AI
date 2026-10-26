@@ -33,7 +33,7 @@ import type {
   VersionInfo,
 } from "@/lib/types";
 import { DETAIL_LEVEL_LABELS } from "@/lib/types";
-import { cn, relativeTime } from "@/lib/utils";
+import { cn, relativeTime, scrollToElement } from "@/lib/utils";
 
 interface Message {
   role: "user" | "assistant";
@@ -196,7 +196,7 @@ export default function ChatPage() {
   }, [detail, activeBranchId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToElement(bottomRef.current);
   }, [messages, sending]);
 
   async function send(override?: string, retry?: ChatAttempt) {

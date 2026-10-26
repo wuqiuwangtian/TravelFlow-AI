@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -112,13 +113,16 @@ export function ActionFeedback({
 }) {
   if (pending)
     return (
-      <p
-        role="status"
-        aria-atomic="true"
-        className="mt-2 text-sm text-slate-600"
-      >
-        {pending}
-      </p>
+      <>
+        <p
+          role="status"
+          aria-atomic="true"
+          className="mt-2 text-sm text-slate-600"
+        >
+          {pending}
+        </p>
+        <PendingHint />
+      </>
     );
   if (error)
     return (
@@ -142,6 +146,24 @@ export function ActionFeedback({
       </p>
     );
   return null;
+}
+
+/** Mount for one operation; completion clears its timer. */
+export function PendingHint({
+  message = "仍在等待服务响应，请勿重复提交。",
+}: {
+  message?: string;
+}) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return slow ? (
+    <p role="status" className="mt-2 text-xs text-amber-800">
+      {message}
+    </p>
+  ) : null;
 }
 
 export function ErrorBanner({

@@ -149,7 +149,7 @@ export default function StudioCanvas({
         <button
           aria-label="缩小画布"
           onClick={() => zoomBy(0.8)}
-          className="px-2"
+          className="min-h-10 min-w-10 px-2"
         >
           −
         </button>
@@ -159,16 +159,19 @@ export default function StudioCanvas({
         <button
           aria-label="放大画布"
           onClick={() => zoomBy(1.25)}
-          className="px-2"
+          className="min-h-10 min-w-10 px-2"
         >
           ＋
         </button>
-        <button onClick={fit} className="border-l border-slate-700 px-2">
+        <button
+          onClick={fit}
+          className="min-h-10 border-l border-slate-700 px-2"
+        >
           适应画布
         </button>
         {selected && (
           <button
-            className="border-l border-slate-700 px-2"
+            className="min-h-10 border-l border-slate-700 px-2"
             onClick={() => {
               const node = graph.nodes.find((n) => n.id === selected),
                 box = container.current?.getBoundingClientRect();
@@ -190,7 +193,7 @@ export default function StudioCanvas({
               pendingRef.current = null;
               setPending(null);
             }}
-            className="text-amber-300"
+            className="min-h-10 px-2 text-amber-300"
           >
             取消连线
           </button>

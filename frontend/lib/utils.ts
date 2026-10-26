@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function scrollToElement(
+  element: Element | null,
+  options: ScrollIntoViewOptions = {},
+) {
+  element?.scrollIntoView({
+    ...options,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth",
+  });
+}
+
 /** 把 ISO 时间转成「刚刚 / 3 小时前 / 2 天前」这类人话。 */
 export function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();

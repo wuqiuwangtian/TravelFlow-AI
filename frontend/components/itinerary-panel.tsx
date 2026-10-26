@@ -30,6 +30,7 @@ import { TravelRecap } from "@/components/travel-recap";
 import { OnTripControls } from "@/components/ontrip-controls";
 import { timeLabel, dayLabel } from "@/lib/travel-time";
 import { api, ApiError } from "@/lib/api";
+import { scrollToElement } from "@/lib/utils";
 import type {
   Activity,
   ActivityProgress,
@@ -153,9 +154,9 @@ export function ItineraryPanel({
         err instanceof ApiError && err.code === "LLM_AUTH_FAILED",
       );
       requestAnimationFrame(() =>
-        document
-          .querySelector('[role="alert"]')
-          ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        scrollToElement(document.querySelector('[role="alert"]'), {
+          block: "center",
+        }),
       );
       return false;
     } finally {

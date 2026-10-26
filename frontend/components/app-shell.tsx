@@ -39,17 +39,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1 overflow-x-auto">
+          <nav
+            aria-label="主导航"
+            className="flex items-center gap-1 overflow-x-auto"
+          >
             {NAV.map((item) => {
               const active =
                 item.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(item.href);
+                  ? pathname === "/" || pathname === "/preferences"
+                  : pathname.startsWith(item.href) ||
+                    (item.href === "/sessions" &&
+                      /^\/(chat|workflow)\//.test(pathname));
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={
+                    active
+                      ? pathname === item.href
+                        ? "page"
+                        : "location"
+                      : undefined
+                  }
                   className={cn(
                     "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition",
                     active

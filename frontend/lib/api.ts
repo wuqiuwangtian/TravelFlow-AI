@@ -80,7 +80,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(
       "BACKEND_UNREACHABLE",
-      "网络连接暂时中断，已保存的行程不受影响，请稍后重试。",
+      init?.method && !["GET", "HEAD"].includes(init.method.toUpperCase())
+        ? "网络连接暂时中断，操作结果尚未确认。请先核对当前内容，再重试原操作。"
+        : "网络连接暂时中断，已保存的行程不受影响，请稍后重试。",
       0,
     );
   }

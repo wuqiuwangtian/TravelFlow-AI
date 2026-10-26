@@ -2,7 +2,8 @@ import { test, expect, type Page, type TestInfo } from "playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const root = path.resolve(__dirname, "../../../docs/frontend-audit");
+// Keep the committed FE-0 baseline immutable; post-fix captures are ignored outputs.
+const root = path.resolve(__dirname, "../../test-results/fe1-audit");
 const proxy = "/api/backend";
 const error = {
   error: {
@@ -105,7 +106,7 @@ async function metrics(page: Page) {
         ? {
             clientWidth: nav.clientWidth,
             scrollWidth: nav.scrollWidth,
-            currentLinks: nav.querySelectorAll('[aria-current="page"]').length,
+            currentLinks: nav.querySelectorAll("[aria-current]").length,
           }
         : null,
       headings: Array.from(document.querySelectorAll("h1,h2,h3")).map(
@@ -186,11 +187,12 @@ test("session rename: pending and failed draft recovery", async ({
 }, info) => {
   const trip = await seed(page, "盘点改名原文");
   await page.goto("/sessions");
-  const row = page.getByRole("row").filter({ hasText: "盘点改名原文" });
+  const row = page.getByRole("listitem", {
+    name: "旅行：盘点改名原文",
+    exact: true,
+  });
   await row.getByRole("button", { name: "重命名", exact: true }).click();
-  // Entering edit mode replaces the title text, so the old text-filtered row
-  // no longer matches. Keep the editable field independent of that title.
-  const input = page.locator("tbody input");
+  const input = row.getByRole("textbox", { name: "旅行名称", exact: true });
   const draft = "失败后应保留的新标题";
   await input.fill(draft);
   let release!: () => void;
@@ -218,10 +220,12 @@ test("session rename: pending and failed draft recovery", async ({
   await expect(page.locator("main").getByRole("alert")).toContainText(
     error.error.message,
   );
-  await row.getByRole("button", { name: "重命名", exact: true }).click();
+  await expect(input).toHaveValue(draft);
   await evidence(page, info, "rename-failed", {
     entered: draft,
-    recovered: await page.locator("tbody input").inputValue(),
+    recovered: await row
+      .getByRole("textbox", { name: "旅行名称", exact: true })
+      .inputValue(),
   });
 });
 
@@ -230,7 +234,10 @@ test("session archive: pending duplicate submission", async ({
 }, info) => {
   const trip = await seed(page, "盘点归档反馈");
   await page.goto("/sessions");
-  const row = page.getByRole("row").filter({ hasText: "盘点归档反馈" });
+  const row = page.getByRole("listitem", {
+    name: "旅行：盘点归档反馈",
+    exact: true,
+  });
   const button = row.getByRole("button", { name: "归档", exact: true });
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -248,15 +255,14 @@ test("session archive: pending duplicate submission", async ({
   );
   await button.click();
   await expect.poll(() => requests).toBe(1);
-  const disabledAfterClick = await button.isDisabled();
-  if (!disabledAfterClick) {
-    await button.click();
-    await expect.poll(() => requests).toBe(2);
-  }
+  const waiting = row.getByRole("button", { name: "归档中…", exact: true });
+  await expect(waiting).toBeDisabled();
+  const disabledAfterClick = await waiting.isDisabled();
+  expect(requests).toBe(1);
   await evidence(page, info, "archive-pending", {
     requests,
     disabledAfterClick,
-    buttonText: await button.innerText(),
+    buttonText: await waiting.innerText(),
     metrics: await metrics(page),
   });
   release();
@@ -266,11 +272,17 @@ test("session archive: pending duplicate submission", async ({
 });
 
 test("compare: initial failure versus empty state", async ({ page }, info) => {
-  await page.route("**/api/backend/api/sessions?*", (route) =>
+  await page.route(/\/api\/backend\/api\/sessions(?:\?.*)?$/, (route) =>
     route.fulfill({ status: 503, json: error }),
   );
   await page.goto("/compare");
   await ready(page);
+  await expect(page.locator("main").getByRole("alert")).toContainText(
+    error.error.message,
+  );
+  await expect(
+    page.getByText("还没有可对比的旅行", { exact: true }),
+  ).toHaveCount(0);
   await evidence(page, info, "compare-failed", await metrics(page));
 });
 
@@ -291,8 +303,9 @@ test("home: keyboard entry and empty/error distinction", async ({
       hasKeyHandler: !!target.getAttribute("onkeydown"),
     };
   });
+  expect(semantics.nativeInteractiveAncestor).toBe(true);
   await evidence(page, info, "home-keyboard", semantics);
-  await page.route("**/api/backend/api/sessions?*", (route) =>
+  await page.route(/\/api\/backend\/api\/sessions(?:\?.*)?$/, (route) =>
     route.fulfill({ status: 503, json: error }),
   );
   await page.reload();
@@ -369,6 +382,7 @@ test("advanced studio: copy result location and working run feedback", async ({
         scrollY,
       };
     });
+  expect(position.inViewport).toBe(true);
   await evidence(page, info, "studio-copy", position);
 });
 
@@ -507,6 +521,9 @@ test("home preference entry under ready and unconfigured services", async ({
   );
   await page.goto("/");
   await ready(page);
+  await expect(
+    page.getByRole("region", { name: "新旅行偏好", exact: true }),
+  ).toBeVisible();
   await evidence(page, info, "home-configured", {
     preferenceEntryCount: await page
       .getByRole("region", { name: "新旅行偏好", exact: true })
@@ -516,6 +533,9 @@ test("home preference entry under ready and unconfigured services", async ({
   configured = false;
   await page.reload();
   await ready(page);
+  await expect(
+    page.getByRole("region", { name: "新旅行偏好", exact: true }),
+  ).toBeVisible();
   await evidence(page, info, "home-unconfigured", {
     preferenceEntryCount: await page
       .getByRole("region", { name: "新旅行偏好", exact: true })

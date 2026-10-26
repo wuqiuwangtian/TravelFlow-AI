@@ -31,7 +31,7 @@ import StudioAdoption from "./studio-adoption";
 import StudioData from "./studio-data";
 import StudioLibrary from "./studio-library";
 import DocumentActions from "./document-actions";
-import { ActionFeedback } from "./ui";
+import { ActionFeedback, PendingHint } from "./ui";
 
 const empty = (): StudioGraph => ({
   schema_version: 1,
@@ -84,6 +84,13 @@ export default function WorkflowStudio({
     message?: string;
   }>({});
   const transferLock = useRef(false);
+  const stopLock = useRef(false);
+  const [stopState, setStopState] = useState<{
+    pending?: string;
+    error?: string;
+    message?: string;
+  }>({});
+  const executionGeneration = useRef(0);
   const [fitToken, setFitToken] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [undo, setUndo] = useState<StudioGraph[]>([]);
@@ -332,6 +339,8 @@ export default function WorkflowStudio({
     }
   }
   async function execute(target: string | null, force = false) {
+    executionGeneration.current++;
+    setStopState({});
     setBusy("run");
     setError("");
     setSnapshot(false);
@@ -372,6 +381,29 @@ export default function WorkflowStudio({
       }
     } finally {
       if (alive.current) setBusy("");
+    }
+  }
+  async function stop() {
+    if (stopLock.current) return;
+    const id =
+      runs.find((run) => run.status === "running")?.id ??
+      requestRef.current?.id;
+    if (!id) {
+      setStopState({ message: "正在保存工程，运行开始后可停止。" });
+      return;
+    }
+    stopLock.current = true;
+    const generation = executionGeneration.current;
+    setStopState({ pending: "正在请求停止运行…" });
+    try {
+      const result = await api.stopStudio(branchId, id);
+      if (alive.current && generation === executionGeneration.current)
+        setStopState({ message: result.message });
+    } catch (err) {
+      if (alive.current && generation === executionGeneration.current)
+        setStopState({ error: showError(err) });
+    } finally {
+      stopLock.current = false;
     }
   }
   async function importGraph(file: File) {
@@ -454,7 +486,7 @@ export default function WorkflowStudio({
             onClick={saveClick}
             className="rounded-lg border border-teal-600 px-3 py-2 text-teal-700 disabled:opacity-40"
           >
-            保存工程
+            {busy === "save" ? "正在保存…" : "保存工程"}
           </button>
           <button
             disabled={disabled || !graph.nodes.length}
@@ -465,25 +497,25 @@ export default function WorkflowStudio({
           </button>
           {(running || busy === "run") && (
             <button
+              disabled={!!stopState.pending}
+              aria-busy={!!stopState.pending}
               className="rounded-lg border border-red-200 px-3 py-2 text-red-700"
-              onClick={async () => {
-                const id =
-                  runs.find((r) => r.status === "running")?.id ??
-                  requestRef.current?.id;
-                if (!id) return;
-                try {
-                  const result = await api.stopStudio(branchId, id);
-                  setNotice(result.message);
-                } catch (err) {
-                  setError(showError(err));
-                }
-              }}
+              onClick={() => void stop()}
             >
-              停止运行
+              {stopState.pending ? "正在请求停止…" : "停止运行"}
             </button>
           )}
         </div>
       </div>
+      <ActionFeedback
+        pending={stopState.pending}
+        error={stopState.error}
+        message={stopState.message}
+        onRetry={stopState.error ? () => void stop() : undefined}
+      />
+      {(busy === "run" || running) && (
+        <PendingHint message="仍在等待运行结果，可查看已有内容；需要中断时使用“停止运行”。" />
+      )}
       {error && (
         <div
           role="alert"
