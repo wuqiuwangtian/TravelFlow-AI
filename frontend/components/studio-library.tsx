@@ -514,6 +514,7 @@ export default function StudioLibrary({
                           "candidates",
                           "allocate",
                           "locate",
+                          "merge",
                         ].includes(n.kind),
                     )
                     .map((n) => (
@@ -525,6 +526,24 @@ export default function StudioLibrary({
                         {n.kind === "candidates" && (
                           <p className="mt-2">
                             候选数量上限：{n.parameters.candidate_limit ?? 12}
+                          </p>
+                        )}
+                        {n.kind === "merge" && (
+                          <p className="mt-2">
+                            合并上限：{n.parameters.candidate_limit}；费用冲突：
+                            {n.parameters.merge_cost_policy === "first"
+                              ? "沿用优先来源"
+                              : "保留未知"}
+                            <br />
+                            来源顺序：
+                            {n.parameters.merge_order
+                              ?.map(
+                                (id) =>
+                                  editor.graph.nodes.find(
+                                    (item) => item.id === id,
+                                  )?.title ?? id,
+                              )
+                              .join(" → ") || "按连接来源编号"}
                           </p>
                         )}
                         {n.kind === "allocate" && (
@@ -565,8 +584,9 @@ export default function StudioLibrary({
                           <p className="mt-2">
                             地点指定：
                             {
-                              Object.keys(n.parameters.location_choices ?? {})
-                                .length
+                              Object.values(
+                                n.parameters.location_choices ?? {},
+                              ).filter(Boolean).length
                             }
                             处；只在新地图结果仍包含同一编号时沿用，其他旅行的无关指定不应用。
                           </p>

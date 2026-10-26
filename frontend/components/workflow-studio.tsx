@@ -2,6 +2,7 @@
 
 import StudioBudgetControls from "@/components/studio-budget-controls";
 import StudioAllocationControls from "@/components/studio-allocation-controls";
+import StudioMergeControls from "@/components/studio-merge-controls";
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -859,6 +860,13 @@ export default function WorkflowStudio({
                     onChange={parameters}
                   />
                 )}
+                {node.kind === "merge" && (
+                  <StudioMergeControls
+                    node={node}
+                    graph={displayGraph}
+                    onChange={parameters}
+                  />
+                )}
                 {node.kind === "locate" && (
                   <div className="space-y-3 leading-6 text-slate-500">
                     <p>
@@ -870,16 +878,40 @@ export default function WorkflowStudio({
                     <p>
                       已指定地点：
                       {
-                        Object.keys(node.parameters.location_choices ?? {})
-                          .length
+                        Object.values(
+                          node.parameters.location_choices ?? {},
+                        ).filter(Boolean).length
                       }
-                      处
+                      处；已设置清除
+                      {
+                        Object.values(
+                          node.parameters.location_choices ?? {},
+                        ).filter((v) => v === null).length
+                      }
+                      项。上游指定会继承，可在下方清除。
                     </p>
-                    {!!Object.keys(node.parameters.location_choices ?? {})
-                      .length && (
+                    {(!!Object.keys(node.parameters.location_choices ?? {})
+                      .length ||
+                      !!execution?.artifact?.candidates?.places.some(
+                        (p) => p.location?.selected_id,
+                      )) && (
                       <button
                         type="button"
-                        onClick={() => parameters({ location_choices: {} })}
+                        onClick={() => {
+                          const ids = new Set([
+                            ...Object.keys(
+                              node.parameters.location_choices ?? {},
+                            ),
+                            ...(execution?.artifact?.candidates?.places
+                              .filter((p) => p.location?.selected_id)
+                              .map((p) => p.id) ?? []),
+                          ]);
+                          parameters({
+                            location_choices: Object.fromEntries(
+                              [...ids].map((id) => [id, null]),
+                            ),
+                          });
+                        }}
                         className="text-teal-700 underline"
                       >
                         清除所有地点指定
@@ -1115,8 +1147,7 @@ export default function WorkflowStudio({
                                   const choices = {
                                     ...node.parameters.location_choices,
                                   };
-                                  if (poi) choices[id] = poi;
-                                  else delete choices[id];
+                                  choices[id] = poi;
                                   parameters({ location_choices: choices });
                                 }
                               : undefined

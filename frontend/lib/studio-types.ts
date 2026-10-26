@@ -9,7 +9,8 @@ export type StudioKind =
   | "select"
   | "candidates"
   | "allocate"
-  | "locate";
+  | "locate"
+  | "merge";
 export type StudioPort =
   | "text"
   | "sources"
@@ -48,7 +49,9 @@ export interface StudioNode {
     allocation_buffer_minutes: number;
     allocation_default_stay_minutes: number;
     allocation_strategy: "balanced" | "nearby";
-    location_choices: Record<string, string>;
+    location_choices: Record<string, string | null>;
+    merge_order: string[];
+    merge_cost_policy: "unknown" | "first";
   };
 }
 export interface StudioEdge {
@@ -110,6 +113,26 @@ export interface NodeArtifact {
       status: "ready" | "partial" | "unconfigured";
       checked_at: string | null;
       warnings: string[];
+    } | null;
+    merge: {
+      input_pools: number;
+      before_count: number;
+      after_count: number;
+      duplicate_count: number;
+      omitted_count: number;
+      source_order: string[];
+      decisions: {
+        candidate_id: string;
+        place_name: string;
+        action: "kept" | "combined" | "separate" | "omitted";
+        reason: string;
+        conflicts: string[];
+        variants: {
+          source_id: string;
+          source_title: string;
+          candidate: NonNullable<NodeArtifact["candidates"]>["places"][number];
+        }[];
+      }[];
     } | null;
   } | null;
   plan: {

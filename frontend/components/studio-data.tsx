@@ -3,6 +3,7 @@
 import type { NodeArtifact } from "@/lib/studio-types";
 import { download } from "@/lib/studio-graph";
 import StudioCandidateLocation from "./studio-candidate-location";
+import StudioMergeData from "./studio-merge-data";
 
 const categories: Record<string, string> = {
   meal: "饮食",
@@ -27,7 +28,7 @@ export default function StudioData({
   onLocationChoice,
 }: {
   artifact: NodeArtifact;
-  locationChoices?: Record<string, string>;
+  locationChoices?: Record<string, string | null>;
   onLocationChoice?: (candidateId: string, placeId: string | null) => void;
 }) {
   const { plan, budget, candidates } = artifact;
@@ -82,7 +83,11 @@ export default function StudioData({
                 </p>
                 <StudioCandidateLocation
                   candidate={p}
-                  choice={locationChoices?.[p.id]}
+                  choice={
+                    locationChoices && Object.hasOwn(locationChoices, p.id)
+                      ? (locationChoices[p.id] ?? undefined)
+                      : (p.location?.selected_id ?? undefined)
+                  }
                   onChoose={onLocationChoice}
                 />
               </li>
@@ -98,6 +103,7 @@ export default function StudioData({
               {w}
             </p>
           ))}
+          {candidates.merge && <StudioMergeData report={candidates.merge} />}
         </div>
       )}
       {plan && (

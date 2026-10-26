@@ -16,7 +16,7 @@ async function start(page: Page) {
     name: "默认工程模板",
     exact: true,
   });
-  await expect(presets.getByRole("button")).toHaveCount(7);
+  await expect(presets.getByRole("button")).toHaveCount(8);
   await presets.getByRole("button").filter({ hasText: "双方案比较" }).click();
   await expect(
     page.getByRole("region", { name: "自由节点画布", exact: true }),
@@ -62,6 +62,7 @@ test("模板分支与汇合真实执行，节点可拖动，成稿和完整运�
       name: "选择节点 旅行需求",
       exact: true,
     });
+    await node.hover();
     const box = await node.boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
