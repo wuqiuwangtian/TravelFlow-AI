@@ -1,0 +1,1395 @@
+<!doctype html>
+<html lang="zh-CN" data-direction="paper" data-density="balanced">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TravelFlow · 第一轮视觉方向</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --backdrop: #e8e5de;
+        --paper: #f8f5ee;
+        --surface: #fffdf8;
+        --ink: #292e29;
+        --muted: #697064;
+        --line: #d9dbcf;
+        --accent: #355744;
+        --accent-ink: #fffdf7;
+        --tint: #e5ebdf;
+        --map: #ebeede;
+        --water: #cadbd1;
+        --land: #f7f6e9;
+        --route: #51725b;
+        --danger: #a23f32;
+        --radius: 10px;
+        --heading:
+          "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun",
+          serif;
+        --block: 26px;
+        --event: 24px;
+      }
+      html[data-direction="guide"] {
+        --backdrop: #e7ebef;
+        --paper: #f7f9fb;
+        --surface: #fff;
+        --ink: #202d40;
+        --muted: #647087;
+        --line: #d9e0e8;
+        --accent: #315eae;
+        --accent-ink: #fff;
+        --tint: #e8eef8;
+        --map: #edf0f3;
+        --water: #bed6e8;
+        --land: #fcfcfa;
+        --route: #3469b8;
+        --danger: #a33a37;
+        --radius: 7px;
+        --heading:
+          "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      }
+      html[data-direction="night"] {
+        color-scheme: dark;
+        --backdrop: #161a19;
+        --paper: #202625;
+        --surface: #262e2c;
+        --ink: #edf0e8;
+        --muted: #a4b0a8;
+        --line: #3f4b45;
+        --accent: #c4d89c;
+        --accent-ink: #222c20;
+        --tint: #354332;
+        --map: #303c35;
+        --water: #466562;
+        --land: #3c4841;
+        --route: #c4d89c;
+        --danger: #efb5a7;
+        --radius: 7px;
+        --heading:
+          "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      }
+      html[data-density="airy"] {
+        --block: 34px;
+        --event: 34px;
+      }
+      html[data-density="compact"] {
+        --block: 19px;
+        --event: 16px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--backdrop);
+        font-family:
+          "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button,
+      .link-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        color: var(--ink);
+        background: var(--surface);
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+        transition:
+          background-color 160ms ease,
+          border-color 160ms ease,
+          color 160ms ease,
+          translate 160ms ease,
+          scale 100ms ease,
+          box-shadow 160ms ease;
+      }
+      @media (hover: hover) {
+        button:not(:disabled):hover,
+        .link-button:hover {
+          background: var(--tint);
+          border-color: var(--accent);
+          translate: 0 -1px;
+        }
+        button.primary:not(:disabled):hover {
+          background: var(--accent);
+          box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+        }
+      }
+      button:not(:disabled):active,
+      .link-button:active {
+        scale: 0.975;
+        translate: 0 0;
+        box-shadow: inset 0 1px 3px #0002;
+      }
+      button.clicked {
+        animation: tap 160ms ease-out;
+      }
+      @keyframes tap {
+        0% {
+          scale: 0.975;
+        }
+        100% {
+          scale: 1;
+        }
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 4px;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-ink);
+      }
+      button.quiet {
+        background: transparent;
+        border-color: transparent;
+      }
+      button[aria-pressed="true"],
+      button[aria-selected="true"] {
+        background: var(--tint);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      svg.icon {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        vertical-align: middle;
+      }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .reviewbar {
+        max-width: 1340px;
+        padding: 22px 28px 18px;
+        margin: auto;
+      }
+      .review-heading {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .review-heading strong {
+        font-size: 16px;
+      }
+      .review-heading span,
+      .review-description,
+      .review-note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .choices button {
+        min-height: 44px;
+      }
+      .choices b {
+        font-weight: 600;
+        margin-right: 2px;
+      }
+      .review-description {
+        margin: 10px 0 15px;
+      }
+      .review-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .group > span {
+        margin-right: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .group button {
+        min-height: 34px;
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+      .app {
+        max-width: 1284px;
+        margin: 0 auto 32px;
+        background: var(--paper);
+        min-width: 0;
+        border: 1px solid var(--line);
+      }
+      .app-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 76px;
+        padding: 16px 28px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: -0.5px;
+      }
+      .brand [data-icon] {
+        color: var(--accent);
+      }
+      .brand svg {
+        width: 26px;
+        height: 26px;
+      }
+      .top-context {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+      .crumb {
+        color: var(--muted);
+      }
+      .save-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .save-state svg {
+        width: 14px;
+        height: 14px;
+      }
+      .app-body {
+        display: grid;
+        grid-template-columns: 166px minmax(0, 1fr);
+      }
+      .sidebar {
+        padding: 28px 14px;
+        border-right: 1px solid var(--line);
+      }
+      .sidebar-label {
+        color: var(--muted);
+        font-size: 12px;
+        padding: 0 14px 12px;
+      }
+      .sidebar a {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        color: var(--muted);
+        text-decoration: none;
+        transition:
+          background-color 160ms,
+          color 160ms,
+          translate 160ms;
+      }
+      @media (hover: hover) {
+        .sidebar a:hover {
+          color: var(--ink);
+          background: var(--tint);
+          translate: 2px 0;
+        }
+      }
+      .sidebar a:active {
+        translate: 1px 0;
+        background: var(--line);
+      }
+      .sidebar a.current {
+        color: var(--accent);
+        background: var(--tint);
+      }
+      .sidebar-divider {
+        height: 1px;
+        background: var(--line);
+        margin: 24px 12px;
+      }
+      .content {
+        min-width: 0;
+        padding: var(--block) 30px 24px;
+      }
+      .trip-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .trip-head h1 {
+        font-size: 20px;
+        line-height: 1.4;
+        margin: 0 0 6px;
+        font-weight: 600;
+      }
+      .trip-head p {
+        color: var(--muted);
+        margin: 0;
+        font-size: 12px;
+      }
+      .trip-head button {
+        font-size: 12px;
+      }
+      .day-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 22px 0 var(--block);
+        gap: 6px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .day-tabs button {
+        background: transparent;
+        border-color: transparent;
+        padding: 7px 12px;
+      }
+      .day-tabs button[aria-pressed="true"] {
+        color: var(--accent);
+        background: var(--tint);
+      }
+      .day-tabs small {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+      .day-intro {
+        margin: 0 0 var(--block);
+      }
+      .day-intro .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .day-intro h2 {
+        margin: 0 0 10px;
+        font-family: var(--heading);
+        font-size: 34px;
+        line-height: 1.35;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .day-intro p {
+        color: var(--muted);
+        margin: 0;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 274px;
+        gap: 32px;
+        align-items: start;
+      }
+      .timeline {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .event {
+        position: relative;
+        display: grid;
+        grid-template-columns: 47px minmax(0, 1fr);
+        gap: 15px;
+        padding-bottom: var(--event);
+      }
+      .event:not(:last-child)::after {
+        content: "";
+        width: 1px;
+        background: var(--line);
+        position: absolute;
+        left: 54px;
+        top: 20px;
+        bottom: 0;
+      }
+      .time {
+        padding-top: 1px;
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .event-content {
+        padding-left: 18px;
+        position: relative;
+        min-width: 0;
+      }
+      .event-content::before {
+        content: "";
+        position: absolute;
+        left: -11px;
+        top: 8px;
+        width: 9px;
+        height: 9px;
+        border: 2px solid var(--accent);
+        border-radius: 50%;
+        background: var(--paper);
+        z-index: 1;
+      }
+      .event h3 {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 6px;
+      }
+      .event-meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+      }
+      .event-description {
+        margin: 10px 0 0;
+        color: var(--muted);
+      }
+      .transfer {
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        margin-top: 14px;
+      }
+      .transfer svg {
+        width: 14px;
+        height: 14px;
+      }
+      .event-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .event-actions button {
+        padding: 5px 9px;
+        font-size: 12px;
+        min-height: 34px;
+      }
+      .map-heading,
+      .budget-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .map-heading h3,
+      .budget-heading h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .map-heading span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .map {
+        width: 100%;
+        display: block;
+        background: var(--map);
+        border-radius: var(--radius);
+      }
+      .map .water {
+        fill: var(--water);
+      }
+      .map .land {
+        fill: var(--land);
+      }
+      .map .street {
+        fill: none;
+        stroke: var(--paper);
+        stroke-width: 7;
+      }
+      .map .path {
+        fill: none;
+        stroke: var(--route);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .map .point {
+        fill: var(--accent);
+        stroke: var(--paper);
+        stroke-width: 3;
+      }
+      .map text {
+        fill: var(--ink);
+        font:
+          12px system-ui,
+          sans-serif;
+      }
+      .map text.count {
+        fill: var(--accent-ink);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .map-caption {
+        margin: 8px 0 23px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .budget {
+        border-top: 1px solid var(--line);
+        padding-top: 18px;
+      }
+      .budget-heading button {
+        border: 0;
+        background: transparent;
+        padding: 4px 8px;
+        color: var(--accent);
+        min-height: 32px;
+        font-size: 12px;
+      }
+      .budget-total {
+        font-size: 25px;
+        font-variant-numeric: tabular-nums;
+        margin: 12px 0 2px;
+      }
+      .budget-total small {
+        color: var(--muted);
+        font-size: 12px;
+        margin-left: 8px;
+      }
+      .budget p {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 5px 0;
+      }
+      .budget dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 7px;
+        font-size: 12px;
+        margin: 16px 0 0;
+      }
+      .budget dt {
+        color: var(--muted);
+      }
+      .budget dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .adjust {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12px;
+        padding: 15px 0;
+        border-top: 1px solid var(--line);
+      }
+      .adjust-label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .adjust button {
+        min-height: 38px;
+        font-size: 12px;
+      }
+      .page-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .page-actions > span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .demo-result {
+        min-height: 24px;
+        color: var(--accent);
+        font-size: 12px;
+        margin: 10px 0 0;
+      }
+      #event-result:empty {
+        display: none;
+      }
+      .review-note {
+        margin-top: 16px;
+      }
+      .editor {
+        border-top: 1px solid var(--line);
+        margin-top: 16px;
+        padding-top: 18px;
+      }
+      .editor label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .editor textarea,
+      .editor input {
+        font-size: 16px;
+        display: block;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--ink);
+        padding: 10px 12px;
+        resize: vertical;
+        margin-top: 5px;
+      }
+      .editor-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .editor-error {
+        color: var(--danger);
+      }
+      .mobile-view .app {
+        max-width: 416px;
+      }
+      .mobile-view .app-top {
+        padding: 16px 20px;
+      }
+      .mobile-view .crumb {
+        display: none;
+      }
+      .mobile-view .app-body {
+        display: block;
+      }
+      .mobile-view .sidebar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 10px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .mobile-view .sidebar-label,
+      .mobile-view .sidebar-divider,
+      .mobile-view .sidebar .advanced {
+        display: none;
+      }
+      .mobile-view .sidebar a {
+        font-size: 12px;
+        margin: 0;
+        padding: 8px;
+        gap: 6px;
+      }
+      .mobile-view .content {
+        padding: 24px 20px;
+      }
+      .mobile-view .workspace {
+        display: block;
+      }
+      .mobile-view .route-side {
+        margin-top: 10px;
+        border-top: 1px solid var(--line);
+        padding-top: 22px;
+      }
+      .mobile-view .day-intro h2 {
+        font-size: 28px;
+      }
+      .mobile-view .day-tabs {
+        margin-top: 20px;
+        gap: 0;
+      }
+      .mobile-view .day-tabs button {
+        padding: 8px;
+      }
+      .mobile-view .day-tabs small {
+        display: none;
+      }
+      @media (max-width: 940px) {
+        .workspace {
+          grid-template-columns: minmax(0, 1fr) 240px;
+          gap: 22px;
+        }
+        .app-body {
+          grid-template-columns: 138px minmax(0, 1fr);
+        }
+        .content {
+          padding: var(--block) 22px;
+        }
+        .sidebar {
+          padding-left: 8px;
+          padding-right: 8px;
+        }
+      }
+      @media (max-width: 720px) {
+        .reviewbar {
+          padding: 18px 16px;
+        }
+        .review-heading {
+          gap: 4px;
+        }
+        .review-heading span {
+          width: 100%;
+        }
+        .choices {
+          gap: 6px;
+        }
+        .choices button {
+          padding: 8px 10px;
+          font-size: 12px;
+        }
+        .review-tools {
+          gap: 8px;
+        }
+        .group button {
+          min-height: 40px;
+        }
+        .app {
+          margin: 0 0 16px;
+          border-left: 0;
+          border-right: 0;
+        }
+        .app-top {
+          padding: 16px 20px;
+        }
+        .crumb {
+          display: none;
+        }
+        .app-body {
+          display: block;
+        }
+        .sidebar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          padding: 10px 12px;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .sidebar-label,
+        .sidebar-divider,
+        .sidebar .advanced {
+          display: none;
+        }
+        .sidebar a {
+          font-size: 12px;
+          margin: 0;
+          padding: 8px;
+          gap: 6px;
+        }
+        .content {
+          padding: var(--block) 20px;
+        }
+        .workspace {
+          display: block;
+        }
+        .route-side {
+          margin-top: 10px;
+          border-top: 1px solid var(--line);
+          padding-top: 22px;
+        }
+        .day-intro h2 {
+          font-size: 28px;
+        }
+        .day-tabs {
+          margin-top: 20px;
+          gap: 0;
+        }
+        .day-tabs button {
+          padding: 8px;
+        }
+        .day-tabs small {
+          display: none;
+        }
+        .top-context {
+          gap: 0;
+        }
+        .trip-head {
+          gap: 12px;
+        }
+      }
+      @media (pointer: coarse) {
+        button,
+        .link-button,
+        .event-actions button,
+        .group button,
+        .budget-heading button,
+        .adjust button {
+          min-height: 44px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+        button:hover,
+        button:active,
+        .sidebar a:hover,
+        .sidebar a:active {
+          translate: none !important;
+          scale: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="reviewbar">
+      <div class="review-heading">
+        <strong>第一轮：整体气质与内容密度</strong
+        ><span>界面样稿 · 切换与试按均不会修改真实旅行</span>
+      </div>
+      <div class="choices" role="tablist" aria-label="视觉方向">
+        <button
+          id="paper-tab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="sample"
+          data-direction-choice="paper"
+        >
+          <b>A</b> 纸感旅行册
+        </button>
+        <button
+          id="guide-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="sample"
+          data-direction-choice="guide"
+        >
+          <b>B</b> 清爽城市导览
+        </button>
+        <button
+          id="night-tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="sample"
+          data-direction-choice="night"
+        >
+          <b>C</b> 深色路线工具
+        </button>
+      </div>
+      <p id="direction-description" class="review-description">
+        暖纸色、墨绿、偏书籍的标题排版。安静、有旅行手册的气质。
+      </p>
+      <div class="review-tools">
+        <div class="group" aria-label="内容密度">
+          <span>密度</span
+          ><button data-density-choice="airy" aria-pressed="false">
+            1 松弛</button
+          ><button data-density-choice="balanced" aria-pressed="true">
+            2 均衡</button
+          ><button data-density-choice="compact" aria-pressed="false">
+            3 紧凑
+          </button>
+        </div>
+        <div class="group" aria-label="预览尺寸">
+          <span>预览</span
+          ><button data-view="desktop" aria-pressed="true">电脑</button
+          ><button data-view="mobile" aria-pressed="false">手机</button>
+        </div>
+      </div>
+    </header>
+    <main id="sample" class="app" role="tabpanel" aria-labelledby="paper-tab">
+      <header class="app-top">
+        <div class="brand"><span data-icon="route"></span>TravelFlow</div>
+        <div class="top-context">
+          <span class="crumb">我的旅行 / 杭州三日慢游</span
+          ><span class="save-state"
+            ><span data-icon="check"></span
+            ><span id="save-state">草稿已保留</span></span
+          >
+        </div>
+      </header>
+      <div class="app-body">
+        <nav class="sidebar" aria-label="样稿导航">
+          <div class="sidebar-label">这次旅行</div>
+          <a class="current" href="#trip" aria-current="page"
+            ><span data-icon="map"></span>每日行程</a
+          >
+          <a href="#budget"><span data-icon="wallet"></span>费用与记账</a>
+          <a href="#journey-note"><span data-icon="book"></span>旅行回顾</a>
+          <div class="sidebar-divider"></div>
+          <a class="advanced" href="#advanced-note"
+            ><span data-icon="workflow"></span>高级工程</a
+          >
+        </nav>
+        <div class="content" id="trip">
+          <div class="trip-head">
+            <div>
+              <h1>杭州三日慢游</h1>
+              <p>2 人同行 · 以散步与街巷为主</p>
+            </div>
+            <button data-action="open-book">
+              <span data-icon="file"></span>完整路书
+            </button>
+          </div>
+          <section
+            class="editor"
+            id="book-preview"
+            hidden
+            aria-label="路书演示"
+          >
+            <h3>杭州三日慢游 · 完整路书</h3>
+            <p>
+              第 1 天：抵达与老街。第 2 天：西湖与街巷。第 3
+              天：自由安排与返程。
+            </p>
+            <button data-action="close-book">收起路书</button>
+          </section>
+          <div class="day-tabs" aria-label="行程日期">
+            <button data-day="1" aria-pressed="false">
+              第 1 天<small>抵达与老街</small></button
+            ><button data-day="2" aria-pressed="true">
+              第 2 天<small>西湖与街巷</small></button
+            ><button data-day="3" aria-pressed="false">
+              第 3 天<small>自由安排与返程</small>
+            </button>
+          </div>
+          <section class="day-intro">
+            <p class="eyebrow">
+              <span data-icon="sun"></span
+              ><span id="day-kicker">今天的路线 · 第 2 天</span>
+            </p>
+            <h2 id="day-title">西湖与老街，慢慢走</h2>
+            <p id="day-summary">
+              上午留给湖边，午后走进街巷。行程可以边走边调整。
+            </p>
+          </section>
+          <div class="workspace">
+            <div>
+              <ol class="timeline" aria-label="示例每日路线">
+                <li class="event">
+                  <time class="time">09:30</time>
+                  <div class="event-content">
+                    <h3 id="first-stop">柳浪闻莺</h3>
+                    <p class="event-meta">
+                      <span>湖边散步</span><span>建议停留 1 小时</span>
+                    </p>
+                    <p class="event-description">
+                      不用赶路，先沿着湖边走一段。
+                    </p>
+                    <div class="event-actions">
+                      <button data-action="navigate">
+                        <span data-icon="navigation"></span>从上一站导航</button
+                      ><button data-action="done">
+                        <span data-icon="check"></span>标记完成
+                      </button>
+                    </div>
+                    <p
+                      id="event-result"
+                      class="demo-result"
+                      role="status"
+                      aria-live="polite"
+                    ></p>
+                    <div class="transfer">
+                      <span data-icon="footprints"></span>步行前往午餐地点
+                    </div>
+                  </div>
+                </li>
+                <li class="event">
+                  <time class="time">12:00</time>
+                  <div class="event-content">
+                    <h3>午餐与休息</h3>
+                    <p class="event-meta">
+                      <span>湖边小馆</span><span>预留 1.5 小时</span>
+                    </p>
+                    <div class="transfer">
+                      <span data-icon="footprints"></span>饭后继续沿湖散步
+                    </div>
+                  </div>
+                </li>
+                <li class="event">
+                  <time class="time">14:00</time>
+                  <div class="event-content">
+                    <h3>湖边步道与街巷</h3>
+                    <p class="event-meta">
+                      <span>自由探索</span><span>不安排固定结束时间</span>
+                    </p>
+                    <p class="event-description">
+                      累了就找个地方坐下，后面的安排留有余地。
+                    </p>
+                  </div>
+                </li>
+              </ol>
+              <div class="adjust">
+                <span class="adjust-label">想少走一点，或临时换个地方？</span
+                ><button data-action="adjust">
+                  <span data-icon="sliders"></span>调整今天
+                </button>
+              </div>
+              <section
+                class="editor"
+                id="adjust-editor"
+                hidden
+                aria-label="行程调整演示"
+              >
+                <form id="adjust-form">
+                  <label for="adjust-text"
+                    >告诉我想怎么改<textarea
+                      id="adjust-text"
+                      rows="2"
+                      placeholder="例如：下午少走一点，留出喝茶的时间"
+                    ></textarea>
+                  </label>
+                  <div class="editor-buttons">
+                    <button class="primary" type="submit">更新行程</button
+                    ><button type="button" data-action="cancel-adjust">
+                      取消
+                    </button>
+                  </div>
+                </form>
+              </section>
+              <div class="page-actions">
+                <button class="primary" data-action="save-plan">
+                  <span data-icon="check"></span><span>保存修改</span></button
+                ><span>地点、时刻与金额仅用于界面演示</span>
+              </div>
+              <p
+                class="demo-result"
+                id="action-result"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></p>
+            </div>
+            <aside class="route-side" aria-label="路线与费用">
+              <div class="map-heading">
+                <h3>今天怎么走</h3>
+                <span>3 个停留点</span>
+              </div>
+              <svg
+                class="map"
+                viewBox="0 0 274 228"
+                role="img"
+                aria-label="仅演示路线视觉，不代表真实地图与地理位置"
+              >
+                <rect width="274" height="228" fill="var(--map)" />
+                <path
+                  class="water"
+                  d="M0 0H147C130 32 163 43 141 71C126 95 154 109 124 139C99 165 133 185 105 228H0Z"
+                />
+                <path
+                  class="land"
+                  d="M176 0H274V228H138L152 190L146 154L170 117L160 68Z"
+                />
+                <path
+                  class="street"
+                  d="M157 18L274 34M154 64L274 85M160 125L274 140M145 187L274 206M210 0L191 228"
+                />
+                <path
+                  class="path"
+                  d="M153 48C134 78 165 83 160 111S147 149 187 178"
+                />
+                <circle class="point" cx="153" cy="48" r="10" />
+                <circle class="point" cx="160" cy="111" r="10" />
+                <circle class="point" cx="187" cy="178" r="10" />
+                <text class="count" x="150" y="52">1</text>
+                <text class="count" x="157" y="115">2</text>
+                <text class="count" x="184" y="182">3</text>
+                <text x="36" y="110">湖面</text>
+                <text x="172" y="48">湖边</text>
+                <text x="180" y="112">午餐</text>
+                <text x="205" y="183">街巷</text>
+              </svg>
+              <p class="map-caption">路线示意，供版式比较</p>
+              <section class="budget" id="budget">
+                <div class="budget-heading">
+                  <h3>这趟旅行的费用</h3>
+                  <button data-action="expense">
+                    <span data-icon="plus"></span>记一笔
+                  </button>
+                </div>
+                <div class="budget-total">
+                  ¥1,280<small>当前预计总支出</small>
+                </div>
+                <p>预算 ¥1,600 · 预计余量 ¥320</p>
+                <dl>
+                  <dt>住宿</dt>
+                  <dd>¥680</dd>
+                  <dt>饮食</dt>
+                  <dd>¥360</dd>
+                  <dt>交通与其他</dt>
+                  <dd>¥240</dd>
+                </dl>
+              </section>
+              <section
+                class="editor"
+                id="expense-editor"
+                hidden
+                aria-label="记账演示"
+              >
+                <form id="expense-form">
+                  <label for="expense-title"
+                    >消费内容<input
+                      id="expense-title"
+                      placeholder="例如：午餐"
+                      required /></label
+                  ><label for="expense-amount"
+                    >实际金额（元）<input
+                      id="expense-amount"
+                      inputmode="decimal"
+                      placeholder="0.00"
+                      required
+                  /></label>
+                  <div class="editor-buttons">
+                    <button class="primary" type="submit">保存这笔消费</button
+                    ><button type="button" data-action="cancel-expense">
+                      取消
+                    </button>
+                  </div>
+                  <p id="expense-result" role="status"></p>
+                </form>
+              </section>
+            </aside>
+          </div>
+          <p class="review-note" id="journey-note">
+            旅途中的改动、已记消费和回忆，始终属于同一份旅行。
+          </p>
+          <p class="review-note" id="advanced-note" hidden>
+            高级工程将使用同一套颜色、排版和交互规范，节点结构保留独立工作空间。
+          </p>
+        </div>
+      </div>
+    </main>
+    <script src="./icons.js"></script>
+    <script>
+      const root = document.documentElement;
+      const descriptions = {
+        paper: "暖纸色、墨绿、偏书籍的标题排版。安静、有旅行手册的气质。",
+        guide: "冷白、深蓝、清晰的无衬线排版。更接近城市导览与成熟出行工具。",
+        night:
+          "深灰绿、浅文字、低饱和强调色。更像专注的路线工具，长期阅读感受需要进一步核对。",
+      };
+      document.querySelectorAll("[data-icon]").forEach((element) => {
+        element.innerHTML = window.TravelFlowIcons[element.dataset.icon] || "";
+      });
+      function direction(value) {
+        root.dataset.direction = value;
+        document
+          .querySelectorAll("[data-direction-choice]")
+          .forEach((button) =>
+            button.setAttribute(
+              "aria-selected",
+              String(button.dataset.directionChoice === value),
+            ),
+          );
+        document
+          .getElementById("sample")
+          .setAttribute("aria-labelledby", value + "-tab");
+        document.getElementById("direction-description").textContent =
+          descriptions[value];
+      }
+      document
+        .querySelectorAll("[data-direction-choice]")
+        .forEach((button) =>
+          button.addEventListener("click", () =>
+            direction(button.dataset.directionChoice),
+          ),
+        );
+      document
+        .querySelector('[role="tablist"]')
+        .addEventListener("keydown", (event) => {
+          const tabs = [
+            ...document.querySelectorAll("[data-direction-choice]"),
+          ];
+          const index = tabs.indexOf(document.activeElement);
+          if (
+            index < 0 ||
+            !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+          )
+            return;
+          event.preventDefault();
+          const next =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? tabs.length - 1
+                : (index + (event.key === "ArrowLeft" ? -1 : 1) + tabs.length) %
+                  tabs.length;
+          tabs[next].focus();
+          direction(tabs[next].dataset.directionChoice);
+        });
+      document.querySelectorAll("[data-density-choice]").forEach((button) =>
+        button.addEventListener("click", () => {
+          root.dataset.density = button.dataset.densityChoice;
+          document
+            .querySelectorAll("[data-density-choice]")
+            .forEach((item) =>
+              item.setAttribute("aria-pressed", String(item === button)),
+            );
+        }),
+      );
+      document.querySelectorAll("[data-view]").forEach((button) =>
+        button.addEventListener("click", () => {
+          document.body.classList.toggle(
+            "mobile-view",
+            button.dataset.view === "mobile",
+          );
+          document
+            .querySelectorAll("[data-view]")
+            .forEach((item) =>
+              item.setAttribute("aria-pressed", String(item === button)),
+            );
+        }),
+      );
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        button.classList.remove("clicked");
+        void button.offsetWidth;
+        button.classList.add("clicked");
+      });
+      const result = document.getElementById("action-result");
+      function reveal(id, visible) {
+        document.getElementById(id).hidden = !visible;
+      }
+      document.querySelectorAll("[data-day]").forEach((button) =>
+        button.addEventListener("click", () => {
+          document
+            .querySelectorAll("[data-day]")
+            .forEach((item) =>
+              item.setAttribute("aria-pressed", String(item === button)),
+            );
+          const day = button.dataset.day;
+          const titles = {
+            1: "抵达之后，逛一逛老街",
+            2: "西湖与老街，慢慢走",
+            3: "留些空白，再从容返程",
+          };
+          document.getElementById("day-kicker").textContent =
+            "今天的路线 · 第 " + day + " 天";
+          document.getElementById("day-title").textContent = titles[day];
+          document.getElementById("first-stop").textContent = {
+            1: "抵达与入住",
+            2: "柳浪闻莺",
+            3: "自由安排",
+          }[day];
+          result.textContent = "已切换到第 " + day + " 天（演示）。";
+        }),
+      );
+      document.querySelectorAll("[data-action]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const action = button.dataset.action;
+          if (action === "save-plan") {
+            button.disabled = true;
+            button.setAttribute("aria-busy", "true");
+            const label = button.querySelector("span:last-child");
+            label.textContent = "正在保存…";
+            result.textContent = "正在保存修改（演示）…";
+            window.setTimeout(() => {
+              button.disabled = false;
+              button.removeAttribute("aria-busy");
+              label.textContent = "保存修改";
+              document.getElementById("save-state").textContent = "已保存";
+              result.textContent = "这次修改已保存（演示）。";
+            }, 650);
+          }
+          if (action === "adjust") {
+            reveal("adjust-editor", true);
+            document.getElementById("adjust-text").focus();
+          }
+          if (action === "cancel-adjust") reveal("adjust-editor", false);
+          if (action === "expense") {
+            reveal("expense-editor", true);
+            document.getElementById("expense-title").focus();
+          }
+          if (action === "cancel-expense") reveal("expense-editor", false);
+          if (action === "done") {
+            const text = button.lastChild;
+            text.textContent = text.textContent.includes("已完成")
+              ? "标记完成"
+              : "已完成";
+            document.getElementById("event-result").textContent =
+              "当前站点状态已更新（演示）。";
+          }
+          if (action === "navigate")
+            document.getElementById("event-result").textContent =
+              "从上一站出发的导航入口已响应（演示，不会跳转）。";
+          if (action === "open-book") reveal("book-preview", true);
+          if (action === "close-book") reveal("book-preview", false);
+        }),
+      );
+      document
+        .getElementById("adjust-form")
+        .addEventListener("submit", (event) => {
+          event.preventDefault();
+          const text = document.getElementById("adjust-text").value.trim();
+          if (!text) {
+            document.getElementById("adjust-text").focus();
+            return;
+          }
+          document.getElementById("day-summary").textContent =
+            "调整说明：" + text;
+          reveal("adjust-editor", false);
+          result.textContent = "调整已写入当前样稿（演示）。";
+        });
+      document
+        .getElementById("expense-form")
+        .addEventListener("submit", (event) => {
+          event.preventDefault();
+          const title = document.getElementById("expense-title").value.trim();
+          const amount = document.getElementById("expense-amount").value.trim();
+          const message = document.getElementById("expense-result");
+          if (
+            !title ||
+            !/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(amount) ||
+            Number(amount) <= 0
+          ) {
+            message.textContent = "请输入消费内容和大于 0 的金额。";
+            message.className = "editor-error";
+            return;
+          }
+          message.className = "";
+          message.textContent =
+            "已记录「" +
+            title +
+            "」¥" +
+            Number(amount).toFixed(2) +
+            "（演示）。";
+        });
+      document
+        .querySelector('a[href="#advanced-note"]')
+        .addEventListener("click", () => reveal("advanced-note", true));
+      const initial = new URLSearchParams(location.search);
+      if (Object.hasOwn(descriptions, initial.get("direction")))
+        direction(initial.get("direction"));
+      if (initial.get("view") === "mobile")
+        document.querySelector('[data-view="mobile"]').click();
+    </script>
+  </body>
+</html>
