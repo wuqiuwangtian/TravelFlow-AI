@@ -1,0 +1,116 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 390,
+  "nav": {
+    "clientWidth": 212,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "会话管理"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "新建旅行",
+      "width": 108,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "搜索旅行名称…",
+      "width": 220,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "活跃",
+      "width": 52,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "已归档",
+      "width": 64,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

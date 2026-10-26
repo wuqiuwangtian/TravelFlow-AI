@@ -1,0 +1,431 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 1440,
+  "nav": {
+    "clientWidth": 640,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "把生成过程，搭成自己的工程",
+    "我的模板",
+    "节点工具箱",
+    "节点参数"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "回到当前方案",
+      "width": 84,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "刷新流程",
+      "width": 56,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "节点工程",
+      "width": 88,
+      "height": 36,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "对话流程与单日优化",
+      "width": 158,
+      "height": 36,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "选择方案",
+      "width": 320,
+      "height": 45,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "工程名称",
+      "width": 288,
+      "height": 30,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "模板库",
+      "width": 62,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "撤销",
+      "width": 50,
+      "height": 34,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "保存工程",
+      "width": 74,
+      "height": 34,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "运行全部",
+      "width": 72,
+      "height": 34,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "保存为我的模板",
+      "width": 110,
+      "height": 34,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "刷新我的模板",
+      "width": 72,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "搜索我的模板",
+      "width": 152,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 4 个节点城市灵感还没想好去哪：资料检索 → 城市推荐与取舍 → 提案。",
+      "width": 459,
+      "height": 130,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 7 个节点完整行程筛选景点后，路线与预算分别生成，再汇合成完整路书。",
+      "width": 459,
+      "height": 130,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 6 个节点双方案比较同一份需求与资料，分支生成松弛版／丰富版，再汇合比较。",
+      "width": 459,
+      "height": 130,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 6 个节点结构化行程模型生成景点与日程数据 → 地图校验 → 程序汇总预算 → 可直接核对采用的成稿。",
+      "width": 459,
+      "height": 154,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 7 个节点筛选与优化候选日程 → 按必去／排除和数量筛选 → 减少直线折返并核验交通 → 成稿。",
+      "width": 459,
+      "height": 154,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 7 个节点候选池分日规划先选候选景点，再按天数与节奏分日；改分配复用候选池，路线与预算接入成稿。",
+      "width": 459,
+      "height": 154,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 8 个节点按区域分日规划候选定位 → 按坐标分组 → 交通与预算核验；未定位时沿用时长方案。",
+      "width": 459,
+      "height": 154,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "可编辑模板 · 10 个节点多主题汇合规划不同主题分别选点 → 程序合并去重与冲突记录 → 定位分日 → 路线预算与成稿。",
+      "width": 459,
+      "height": 154,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 文本输入旅行需求、约束或自备资料",
+      "width": 150,
+      "height": 66,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 资料检索真实搜索，输出带来源的资料",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ AI 生成为这一小步编写独立指令",
+      "width": 150,
+      "height": 66,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 景点与日程模型生成可校验的每日行程数据",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 候选景点池先选具体景点，保留理由与来源，供多套分日方案复用",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 分日分配按天数与节奏分配同城候选，不重新调用模型",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 候选定位查询地图地点，独立核对歧义，供多个分日分支复用",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 候选合并合并多路选点，保留来源、差异和明确地点",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 景点筛选按必去、排除和数量规则筛选日程",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 路线校验地图定位、交通与跨日衔接检查",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 预算汇总程序计算分类预估与预算差额",
+      "width": 150,
+      "height": 86,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "＋ 成稿输出汇总上游内容，保留来源",
+      "width": 150,
+      "height": 66,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "导出工程 JSON",
+      "width": 82,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "导入工程 JSON",
+      "width": 82,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "缩小画布",
+      "width": 23,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "放大画布",
+      "width": 28,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "适应画布",
+      "width": 65,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "连线列表与键盘连接 · 0 条",
+      "width": 848,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "连线输出",
+      "width": 111,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "连线输入",
+      "width": 111,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "连接端口",
+      "width": 72,
+      "height": 34,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "当前节点",
+      "width": 276,
+      "height": 34,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

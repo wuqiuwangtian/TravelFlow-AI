@@ -1,0 +1,130 @@
+{
+  "retained": "少走路\n喜欢博物馆",
+  "metrics": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "scrollY": 0,
+    "focusedElement": "BODY",
+    "documentWidth": 1440,
+    "nav": {
+      "clientWidth": 640,
+      "scrollWidth": 640,
+      "currentLinks": 0
+    },
+    "headings": [
+      "常用旅行偏好",
+      "当前已保存"
+    ],
+    "alerts": [
+      "盘点用服务暂时不可用，请重试载入最新偏好，保留我的输入"
+    ],
+    "controls": [
+      {
+        "tag": "A",
+        "name": "TravelFlow",
+        "width": 114,
+        "height": 24,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "工作台",
+        "width": 88,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "会话",
+        "width": 74,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "旅行回顾",
+        "width": 102,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "旅行生涯",
+        "width": 102,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "分支对比",
+        "width": 102,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "设置",
+        "width": 74,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "帮助",
+        "width": 74,
+        "height": 32,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "A",
+        "name": "回到工作台",
+        "width": 70,
+        "height": 20,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "BUTTON",
+        "name": "载入最新偏好，保留我的输入",
+        "width": 182,
+        "height": 28,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "TEXTAREA",
+        "name": "少走路 喜欢博物馆",
+        "width": 728,
+        "height": 230,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "BUTTON",
+        "name": "保存常用偏好",
+        "width": 114,
+        "height": 34,
+        "disabled": false,
+        "ariaBusy": null
+      },
+      {
+        "tag": "BUTTON",
+        "name": "删除常用偏好",
+        "width": 114,
+        "height": 34,
+        "disabled": true,
+        "ariaBusy": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 390,
+  "nav": {
+    "clientWidth": 212,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [],
+  "alerts": [
+    "盘点用服务暂时不可用，请重试重试"
+  ],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "重试",
+      "width": 46,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

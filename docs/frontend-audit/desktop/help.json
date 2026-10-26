@@ -1,0 +1,175 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 1440,
+  "nav": {
+    "clientWidth": 640,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "使用指南",
+    "1 · 启动服务",
+    "2 · 配置模型",
+    "3 · 开始规划"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "旅途中几件事可以一起告诉 AI 吗？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "API Key 是什么？去哪里申请？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "检索服务要花钱吗？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "DuckDuckGo（无需 Key）",
+      "width": 186,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "百度千帆",
+      "width": 86,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "Tavily",
+      "width": 73,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "博查 Bocha",
+      "width": 102,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "路书里的信息可靠吗？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "为什么要等十几秒才能生成？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "「分支」是干什么用的？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "数据会上传到云端吗？▾▴",
+      "width": 686,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

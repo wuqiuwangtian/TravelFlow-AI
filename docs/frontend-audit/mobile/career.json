@@ -1,0 +1,177 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 390,
+  "nav": {
+    "clientWidth": 212,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "旅行生涯",
+    "走过的城市",
+    "城市足迹",
+    "照片里的旅程",
+    "每一次出发",
+    "北京 · 旅行回顾"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "全部方案回顾",
+      "width": 104,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "管理常用旅行偏好 →",
+      "width": 129,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "全部旅行 1次",
+      "width": 117,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "北京 1次",
+      "width": 89,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "刷新足迹记录",
+      "width": 72,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SUMMARY",
+      "name": "查看全部到访记录（1项）",
+      "width": 316,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "阅读来源回顾",
+      "width": 72,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "回原方案补记",
+      "width": 72,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "刷新照片回忆",
+      "width": 72,
+      "height": 16,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "阅读回顾",
+      "width": 56,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "返回原方案补记",
+      "width": 98,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

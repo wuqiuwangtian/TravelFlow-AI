@@ -1,0 +1,209 @@
+{
+  "scope": "JSX source sites, including dynamic/map definitions and shared implementations; not rendered counts or missing-feedback verdicts",
+  "files_scanned": 41,
+  "source_sites": 367,
+  "routes": [
+    {
+      "route": "/career",
+      "source_sites": 26
+    },
+    {
+      "route": "/chat/[sessionId]",
+      "source_sites": 156
+    },
+    {
+      "route": "/compare",
+      "source_sites": 9
+    },
+    {
+      "route": "/help",
+      "source_sites": 9
+    },
+    {
+      "route": "/",
+      "source_sites": 10
+    },
+    {
+      "route": "/preferences",
+      "source_sites": 10
+    },
+    {
+      "route": "/recaps/[versionId]",
+      "source_sites": 7
+    },
+    {
+      "route": "/recaps",
+      "source_sites": 9
+    },
+    {
+      "route": "/sessions",
+      "source_sites": 13
+    },
+    {
+      "route": "/settings",
+      "source_sites": 20
+    },
+    {
+      "route": "/workflow/[sessionId]",
+      "source_sites": 130
+    }
+  ],
+  "files": [
+    {
+      "file": "frontend/app/career/page.tsx",
+      "source_sites": 9
+    },
+    {
+      "file": "frontend/app/chat/[sessionId]/page.tsx",
+      "source_sites": 22
+    },
+    {
+      "file": "frontend/app/compare/page.tsx",
+      "source_sites": 5
+    },
+    {
+      "file": "frontend/app/help/page.tsx",
+      "source_sites": 5
+    },
+    {
+      "file": "frontend/app/page.tsx",
+      "source_sites": 3
+    },
+    {
+      "file": "frontend/app/preferences/page.tsx",
+      "source_sites": 6
+    },
+    {
+      "file": "frontend/app/recaps/[versionId]/page.tsx",
+      "source_sites": 5
+    },
+    {
+      "file": "frontend/app/recaps/page.tsx",
+      "source_sites": 7
+    },
+    {
+      "file": "frontend/app/sessions/page.tsx",
+      "source_sites": 9
+    },
+    {
+      "file": "frontend/app/settings/page.tsx",
+      "source_sites": 16
+    },
+    {
+      "file": "frontend/app/workflow/[sessionId]/page.tsx",
+      "source_sites": 10
+    },
+    {
+      "file": "frontend/components/PlannerRerun.tsx",
+      "source_sites": 7
+    },
+    {
+      "file": "frontend/components/app-shell.tsx",
+      "source_sites": 2
+    },
+    {
+      "file": "frontend/components/budget-panel.tsx",
+      "source_sites": 15
+    },
+    {
+      "file": "frontend/components/career-footprints.tsx",
+      "source_sites": 9
+    },
+    {
+      "file": "frontend/components/career-memories.tsx",
+      "source_sites": 6
+    },
+    {
+      "file": "frontend/components/expense-returns.tsx",
+      "source_sites": 15
+    },
+    {
+      "file": "frontend/components/itinerary-panel.tsx",
+      "source_sites": 32
+    },
+    {
+      "file": "frontend/components/linked-replan-preview.tsx",
+      "source_sites": 1
+    },
+    {
+      "file": "frontend/components/ontrip-controls.tsx",
+      "source_sites": 13
+    },
+    {
+      "file": "frontend/components/place-navigation.tsx",
+      "source_sites": 3
+    },
+    {
+      "file": "frontend/components/preference-choice.tsx",
+      "source_sites": 3
+    },
+    {
+      "file": "frontend/components/rail-ticket-link.tsx",
+      "source_sites": 2
+    },
+    {
+      "file": "frontend/components/recap-photos.tsx",
+      "source_sites": 9
+    },
+    {
+      "file": "frontend/components/recap-writer.tsx",
+      "source_sites": 6
+    },
+    {
+      "file": "frontend/components/receipt-picker.tsx",
+      "source_sites": 5
+    },
+    {
+      "file": "frontend/components/studio-adoption.tsx",
+      "source_sites": 11
+    },
+    {
+      "file": "frontend/components/studio-allocation-controls.tsx",
+      "source_sites": 10
+    },
+    {
+      "file": "frontend/components/studio-budget-controls.tsx",
+      "source_sites": 2
+    },
+    {
+      "file": "frontend/components/studio-candidate-location.tsx",
+      "source_sites": 3
+    },
+    {
+      "file": "frontend/components/studio-canvas.tsx",
+      "source_sites": 10
+    },
+    {
+      "file": "frontend/components/studio-data.tsx",
+      "source_sites": 8
+    },
+    {
+      "file": "frontend/components/studio-library.tsx",
+      "source_sites": 20
+    },
+    {
+      "file": "frontend/components/studio-merge-controls.tsx",
+      "source_sites": 4
+    },
+    {
+      "file": "frontend/components/studio-merge-data.tsx",
+      "source_sites": 2
+    },
+    {
+      "file": "frontend/components/travel-ledger.tsx",
+      "source_sites": 18
+    },
+    {
+      "file": "frontend/components/travel-recap.tsx",
+      "source_sites": 11
+    },
+    {
+      "file": "frontend/components/ui.tsx",
+      "source_sites": 2
+    },
+    {
+      "file": "frontend/components/workflow-studio.tsx",
+      "source_sites": 41
+    }
+  ]
+}

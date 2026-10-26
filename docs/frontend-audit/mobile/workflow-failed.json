@@ -1,0 +1,126 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 390,
+  "nav": {
+    "clientWidth": 212,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "把生成过程，搭成自己的工程"
+  ],
+  "alerts": [
+    "盘点用服务暂时不可用，请重试重新载入流程"
+  ],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "回到当前方案",
+      "width": 84,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "刷新流程",
+      "width": 56,
+      "height": 20,
+      "disabled": true,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "节点工程",
+      "width": 88,
+      "height": 36,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "对话流程与单日优化",
+      "width": 158,
+      "height": 36,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "重新载入流程",
+      "width": 84,
+      "height": 28,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

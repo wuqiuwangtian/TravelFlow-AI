@@ -1,0 +1,109 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 390,
+  "nav": {
+    "clientWidth": 212,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "旅行生涯",
+    "第一段回忆，从一次旅行开始"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "全部方案回顾",
+      "width": 104,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "管理常用旅行偏好 →",
+      "width": 129,
+      "height": 20,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "打开我的旅行 →",
+      "width": 292,
+      "height": 28,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}

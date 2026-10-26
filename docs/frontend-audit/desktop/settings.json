@@ -1,0 +1,216 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "scrollY": 0,
+  "focusedElement": "BODY",
+  "documentWidth": 1440,
+  "nav": {
+    "clientWidth": 640,
+    "scrollWidth": 640,
+    "currentLinks": 0
+  },
+  "headings": [
+    "设置",
+    "🤖 大模型",
+    "🔍 信息检索",
+    "🗺️ 高德地图",
+    "📐 生成偏好"
+  ],
+  "alerts": [],
+  "controls": [
+    {
+      "tag": "A",
+      "name": "TravelFlow",
+      "width": 114,
+      "height": 24,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "工作台",
+      "width": 88,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "会话",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行回顾",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "旅行生涯",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "分支对比",
+      "width": 102,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "设置",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "帮助",
+      "width": 74,
+      "height": 32,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "DeepSeekOpenAI月之暗面 Kimi智谱 GLM通义千问硅基流动本地 Ollama（无需 Key）本地 vLLM（无需 Key）本地 LM Studio（无需 Key）自定义（OpenAI ",
+      "width": 474,
+      "height": 37,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "官方文档",
+      "width": 58,
+      "height": 13,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "例如 deepseek-flash / qwen2.5:7b",
+      "width": 386,
+      "height": 42,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "获取可用模型",
+      "width": 80,
+      "height": 42,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "请填写你的 API Key",
+      "width": 474,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "https://api.deepseek.com/v1",
+      "width": 474,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "测试连接",
+      "width": 88,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "Tavily博查 BochaAI百度智能云千帆自建 SearXNG（无需 Key）DuckDuckGo（无需 Key）",
+      "width": 474,
+      "height": 37,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "官方文档",
+      "width": 44,
+      "height": 13,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "请填写检索服务的 API Key",
+      "width": 474,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "测试连接",
+      "width": 88,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "INPUT",
+      "name": "填写高德 Web 服务类型的 Key",
+      "width": 474,
+      "height": 38,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "A",
+      "name": "申请高德 Key",
+      "width": 65,
+      "height": 13,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "测试连接",
+      "width": 88,
+      "height": 26,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "SELECT",
+      "name": "极简标准详细保姆级",
+      "width": 474,
+      "height": 37,
+      "disabled": false,
+      "ariaBusy": null
+    },
+    {
+      "tag": "BUTTON",
+      "name": "保存设置",
+      "width": 122,
+      "height": 42,
+      "disabled": false,
+      "ariaBusy": null
+    }
+  ]
+}
