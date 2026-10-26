@@ -20,6 +20,7 @@ from app.services.budget_service import budget_overview
 from app.services.itinerary_service import build_itinerary, check_day, summarise_day
 from app.services.replan_service import check_overnight_links
 from app.services.studio_budget import supplements
+from app.services.studio_candidates import render_candidates
 from app.services.studio_transform import (
     apply_logistics,
     clear_changed_transport,
@@ -104,6 +105,19 @@ def render_plan(plan: StudioPlanData) -> str:
                 f" · {duration} · {leg.status}"
             )
     warnings = list(dict.fromkeys([*plan.warnings, *(w for d in plan.days for w in d.warnings)]))
+    if plan.allocation:
+        allocation = plan.allocation
+        lines.extend(
+            [
+                "\n## 候选分日记录",
+                f"候选{allocation.pool_count}处，本次安排{allocation.selected_count}处；未安排的仍保留在候选池。",
+            ]
+        )
+        lines.extend(
+            f"- {item.place_name} · {'第' + str(item.day) + '天' if item.day else '未安排'}："
+            f"{item.reason}"
+            for item in allocation.decisions
+        )
     if plan.selection:
         report = plan.selection
         lines.extend(
@@ -336,7 +350,14 @@ async def validate_plan(
         and all(leg.status == "ok" for day in result.days for leg in day.legs)
         else "partial"
     )
-    result.warnings = ["地图校验不验证营业、预约、车次或票价；建议安排不等于已确认行程。"]
+    result.warnings = list(
+        dict.fromkeys(
+            [
+                *result.warnings,
+                "地图校验不验证营业、预约、车次或票价；建议安排不等于已确认行程。",
+            ]
+        )
+    )
     return result
 
 
@@ -366,6 +387,12 @@ def project_artifact(artifact: NodeArtifact, port: str) -> NodeArtifact:
     """每条线只传声明的输出，不把同一产物的其他类型偷渡进下游。"""
     if port == "sources":
         return NodeArtifact(sources=artifact.sources)
+    if port == "candidates" and artifact.candidates:
+        return NodeArtifact(
+            text=render_candidates(artifact.candidates),
+            candidates=artifact.candidates,
+            sources=artifact.sources,
+        )
     if port == "itinerary" and artifact.plan:
         return NodeArtifact(
             text=render_plan(artifact.plan), plan=artifact.plan, sources=artifact.sources

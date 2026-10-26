@@ -22,6 +22,11 @@ from app.domain.workbench import (
 )
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
+from app.services.studio_candidates import (
+    allocate_candidates,
+    generate_candidates,
+    render_candidates,
+)
 from app.services.studio_tools import (
     calculate_budget,
     generate_plan,
@@ -55,15 +60,17 @@ def topology(graph: StudioGraph) -> list[str]:
         output = OUTPUT_PORTS[nodes[edge.source].kind].get(edge.source_port)
         input = INPUT_PORTS[nodes[edge.target].kind].get(edge.target_port)
         if output is None or input != output:
-            raise InvalidRequest("端口类型不兼容：请连接相同类型的文本、资料、行程或预算端口。")
+            raise InvalidRequest(
+                "端口类型不兼容：请连接相同类型的文本、资料、候选景点、行程或预算端口。"
+            )
         key = (edge.source, edge.target, edge.source_port, edge.target_port)
         if key in seen:
             raise InvalidRequest("同一组端口不能重复连线。")
         seen.add(key)
     for node in graph.nodes:
-        for port in ("itinerary", "budget"):
+        for port in ("itinerary", "budget", "candidates"):
             if (
-                node.kind in {"route", "budget", "output", "select"}
+                node.kind in {"route", "budget", "output", "select", "allocate"}
                 and sum(edge.target == node.id and edge.target_port == port for edge in graph.edges)
                 > 1
             ):
@@ -103,13 +110,15 @@ def execution_order(graph: StudioGraph, target: str | None) -> list[str]:
             raise InvalidRequest(f"「{node.title}」还没有输入内容。")
         if node.kind == "search" and not any(e.target_port == "query" for e in incoming):
             raise InvalidRequest(f"「{node.title}」需要连接文本查询输入。")
-        if node.kind in {"generate", "plan"} and (
+        if node.kind in {"generate", "plan", "candidates"} and (
             not incoming or not node.parameters.prompt.strip()
         ):
             raise InvalidRequest(f"「{node.title}」需要上游输入与生成指令。")
         if node.kind in {"route", "budget", "select"} and not incoming:
             raise InvalidRequest(f"「{node.title}」需要连接一份行程数据。")
-        if node.kind == "select":
+        if node.kind == "allocate" and not incoming:
+            raise InvalidRequest(f"「{node.title}」需要连接一份候选景点池。")
+        if node.kind in {"select", "allocate"}:
             keywords(node.parameters.required_places)
             keywords(node.parameters.excluded_places)
         if node.kind == "output" and not any(
@@ -130,7 +139,7 @@ def source_union(artifacts: list[NodeArtifact]) -> list[StudioSource]:
 def input_key(node: StudioNode, inputs: list[dict], runtime_key: str) -> str:
     return digest(
         {
-            "engine": 4,
+            "engine": 5,
             "kind": node.kind,
             "title": node.title,
             "parameters": node.parameters.model_dump(),
@@ -144,7 +153,7 @@ def provider_key(settings: Settings, kind: str) -> str:
     # 配置变化使缓存失效；密钥只参与哈希，从不出现在工程和响应中。
     fields = (
         ("llm_provider", "llm_model", "llm_api_key", "llm_base_url", "llm_temperature")
-        if kind in {"generate", "plan"}
+        if kind in {"generate", "plan", "candidates"}
         else ("amap_api_key", "amap_timeout_seconds")
         if kind == "route"
         else ("search_provider", "search_api_key", "searxng_base_url")
@@ -170,6 +179,12 @@ async def execute_node(
         raise InvalidRequest("上游正文超过当前节点的9万字输入上限，请减少连线或拆分生成。")
     if node.kind == "input":
         return NodeArtifact(text=node.parameters.text)
+    if node.kind == "allocate":
+        pool = next((a.candidates for a in artifacts if a.candidates), None)
+        if pool is None:
+            raise InvalidRequest("缺少上游候选景点数据，请检查连线后重跑。")
+        allocated = allocate_candidates(node, pool)
+        return NodeArtifact(text=render_plan(allocated), plan=allocated, sources=sources)
     if node.kind == "output":
         plan = next((a.plan for a in artifacts if a.plan), None)
         budget = next((a.budget for a in artifacts if a.budget), None)
@@ -230,13 +245,22 @@ async def execute_node(
             raise InvalidRequest("检索未返回可用资料，请调整查询或更换检索服务后重跑。")
         return NodeArtifact(sources=items)
     assert llm is not None
+    if node.kind == "candidates":
+        pool = await generate_candidates(node, text, sources, llm)
+        return NodeArtifact(text=render_candidates(pool), candidates=pool, sources=sources)
     if node.kind == "plan":
         return await generate_plan(node, text, sources, llm)
     material = "\n".join(f"[资料:{digest(str(s.url))[:8]}] {s.title}：{s.snippet}" for s in sources)
     # 结构化节点使用数字引用；自由生成节点沿用资料指纹，转换时只认已绑定的来源。
-    for artifact in artifacts:
-        if artifact.plan:
-            original = render_plan(artifact.plan)
+    context_parts = []
+    for item, artifact in zip(inputs, artifacts, strict=True):
+        content = artifact.text
+        if artifact.plan or artifact.candidates:
+            if artifact.plan:
+                original = render_plan(artifact.plan)
+            else:
+                assert artifact.candidates is not None
+                original = render_candidates(artifact.candidates)
 
             def marker(match: re.Match[str], bound: list[StudioSource] = artifact.sources) -> str:
                 index = int(match[1])
@@ -251,7 +275,10 @@ async def execute_node(
                 marker,
                 original,
             )
-            text = text.replace(original, converted)
+            content = content.replace(original, converted)
+        if content:
+            context_parts.append(f"【{item['title']} → {item['port']}】\n{content}")
+    text = "\n\n".join(context_parts)
     result = await llm.chat(
         [
             ChatMessage(
@@ -292,7 +319,8 @@ async def run_graph(
     order = execution_order(graph, payload.target_node)
     history = await store.runs(branch_id)
     runtime_keys = {
-        kind: provider_key(settings, kind) for kind in ("generate", "search", "plan", "route")
+        kind: provider_key(settings, kind)
+        for kind in ("generate", "search", "plan", "route", "candidates")
     }
     cache: dict[str, NodeExecution] = {}
     cutoff = datetime.now(UTC) - timedelta(hours=24)

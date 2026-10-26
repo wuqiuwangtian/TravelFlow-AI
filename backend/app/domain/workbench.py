@@ -5,10 +5,22 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from app.domain.studio_candidates import CandidatePool
 from app.domain.studio_data import BudgetRules, StudioBudgetData, StudioPlanData
 
-NodeKind = Literal["input", "search", "generate", "output", "plan", "route", "budget", "select"]
-PortType = Literal["text", "sources", "itinerary", "budget"]
+NodeKind = Literal[
+    "input",
+    "search",
+    "generate",
+    "output",
+    "plan",
+    "route",
+    "budget",
+    "select",
+    "candidates",
+    "allocate",
+]
+PortType = Literal["text", "sources", "itinerary", "budget", "candidates"]
 
 
 class NodeParameters(BaseModel):
@@ -24,6 +36,12 @@ class NodeParameters(BaseModel):
     attraction_stay_minutes: int | None = Field(default=None, ge=15, le=480)
     route_order: Literal["original", "nearby"] = "original"
     budget_rules: BudgetRules = Field(default_factory=BudgetRules)
+    candidate_limit: int = Field(default=12, ge=1, le=40)
+    allocation_days: int | None = Field(default=None, ge=1, le=60)
+    allocation_pace: Literal["relaxed", "balanced", "full"] = "balanced"
+    allocation_start_time: str = Field(default="09:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    allocation_buffer_minutes: int = Field(default=30, ge=0, le=180)
+    allocation_default_stay_minutes: int = Field(default=90, ge=15, le=480)
 
 
 class StudioNode(BaseModel):
@@ -41,7 +59,9 @@ class StudioEdge(BaseModel):
     source: str
     target: str
     source_port: PortType
-    target_port: Literal["context", "query", "sources", "content", "itinerary", "budget"]
+    target_port: Literal[
+        "context", "query", "sources", "content", "itinerary", "budget", "candidates"
+    ]
 
 
 class StudioGraph(BaseModel):
@@ -69,6 +89,7 @@ class NodeArtifact(BaseModel):
     sources: list[StudioSource] = Field(default_factory=list, max_length=80)
     plan: StudioPlanData | None = None
     budget: StudioBudgetData | None = None
+    candidates: CandidatePool | None = None
 
 
 class NodeExecution(BaseModel):
@@ -123,6 +144,8 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     "search": {"query": "text"},
     "generate": {"context": "text", "sources": "sources"},
     "plan": {"context": "text", "sources": "sources"},
+    "candidates": {"context": "text", "sources": "sources"},
+    "allocate": {"candidates": "candidates"},
     "route": {"itinerary": "itinerary"},
     "budget": {"itinerary": "itinerary"},
     "select": {"itinerary": "itinerary"},
@@ -134,11 +157,14 @@ INPUT_PORTS: dict[str, dict[str, PortType]] = {
     },
 }
 INPUT_PORTS["generate"].update({"itinerary": "itinerary", "budget": "budget"})
+INPUT_PORTS["generate"]["candidates"] = "candidates"
 OUTPUT_PORTS: dict[str, dict[str, PortType]] = {
     "input": {"text": "text"},
     "search": {"sources": "sources"},
     "generate": {"text": "text"},
     "plan": {"itinerary": "itinerary"},
+    "candidates": {"candidates": "candidates"},
+    "allocate": {"itinerary": "itinerary"},
     "route": {"itinerary": "itinerary"},
     "budget": {"budget": "budget"},
     "select": {"itinerary": "itinerary"},

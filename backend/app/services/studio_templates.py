@@ -248,4 +248,51 @@ def templates() -> list[StudioTemplate]:
             graph=curated,
         )
     )
+    candidate_graph = result[3].graph.model_copy(deep=True)
+    candidate_graph.title = "候选池分日规划"
+    for item in candidate_graph.nodes:
+        if item.id == "plan":
+            item.kind, item.id, item.title = "candidates", "candidates", "候选景点池"
+            item.parameters.prompt = (
+                "围绕目的地和偏好推荐具体景点，说明取舍、停留与费用口径，不分日，不补造交通或酒店。"
+            )
+        if item.id in {"route", "budget", "document"}:
+            item.x += 300
+    candidate_graph.nodes.insert(
+        3, StudioNode(id="allocation", kind="allocate", title="分日分配", x=960, y=230)
+    )
+    candidate_graph.edges = [
+        StudioEdge(
+            source="candidates" if e.source == "plan" else e.source,
+            target="candidates" if e.target == "plan" else e.target,
+            source_port=e.source_port,
+            target_port=e.target_port,
+        )
+        for e in candidate_graph.edges
+        if not (e.source == "plan" and e.target == "route")
+    ]
+    candidate_graph.edges.extend(
+        [
+            StudioEdge(
+                source="candidates",
+                target="allocation",
+                source_port="candidates",
+                target_port="candidates",
+            ),
+            StudioEdge(
+                source="allocation",
+                target="route",
+                source_port="itinerary",
+                target_port="itinerary",
+            ),
+        ]
+    )
+    result.append(
+        StudioTemplate(
+            id="candidate_days",
+            title="候选池分日规划",
+            description="先选候选景点，再按天数与节奏分日；改分配复用候选池，路线与预算接入成稿。",
+            graph=candidate_graph,
+        )
+    )
     return result

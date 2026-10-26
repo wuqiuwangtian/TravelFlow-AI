@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import uvicorn  # noqa: E402
 from adoption_fixtures import adoption_draft  # noqa: E402
+from candidate_fixtures import candidate_draft  # noqa: E402
 from conftest import MARKDOWN, FakeLLM, FakeSearch, requirements  # noqa: E402
 from expense_fixtures import expense_itinerary  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
@@ -46,6 +47,7 @@ from app.core.errors import (
 from app.domain.enums import PlanStatus  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.domain.studio_adoption import StudioPlanDraft  # noqa: E402
+from app.domain.studio_candidates import CandidateDraft  # noqa: E402
 from app.domain.workflow import DayOrder  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
 from app.services.itinerary_service import sync_markdown  # noqa: E402
@@ -70,6 +72,8 @@ class BrowserLLM(FakeLLM):
         return await super().chat(messages, **kwargs)
 
     async def structured(self, messages, schema, **kwargs):
+        if schema is CandidateDraft:
+            return candidate_draft()
         if schema is StudioPlanDraft:
             if "测试无每日安排" in messages[-1].content:
                 result = adoption_draft()

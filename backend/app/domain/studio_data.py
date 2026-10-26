@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.itinerary import BudgetItem, BudgetOverview, DayPlan
 from app.domain.models import Requirements, TodoItem
+from app.domain.studio_candidates import AllocationReport
 
 
 class SelectionDecision(BaseModel):
@@ -43,6 +44,7 @@ class StudioPlanData(BaseModel):
     route_status: Literal["unchecked", "unconfigured", "partial", "ready"] = "unchecked"
     selection: SelectionReport | None = None
     optimization: list[RouteOrderReport] = Field(default_factory=list)
+    allocation: AllocationReport | None = None
 
 
 class BudgetRules(BaseModel):
