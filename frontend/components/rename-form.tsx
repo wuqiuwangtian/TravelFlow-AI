@@ -50,7 +50,7 @@ export function RenameForm({
         void save();
       }}
     >
-      <label className="text-xs text-slate-600">
+      <label className="text-xs text-[var(--tf-muted)]">
         旅行名称
         <input
           ref={input}
@@ -58,7 +58,7 @@ export function RenameForm({
           maxLength={120}
           value={draft}
           readOnly={pending}
-          className="mt-1 block w-full rounded-md border border-brand-300 px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-100"
+          className="tf-form-control mt-1"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Escape" && !lock.current) {

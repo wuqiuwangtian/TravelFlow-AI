@@ -1,0 +1,476 @@
+/* FE-4 pages use the same palette, controls and density as the trip workspace. */
+@layer components {
+  .tf-page {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding: 32px 24px 48px;
+    color: var(--tf-ink);
+  }
+  .tf-page :is(fieldset, label, input, select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tf-page-heading,
+  .tf-section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+    margin-bottom: 24px;
+  }
+  .tf-page-heading h1 {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+  }
+  .tf-page-heading p,
+  .tf-page-intro {
+    margin-top: 8px;
+    color: var(--tf-muted);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .tf-page-intro {
+    max-width: 68ch;
+  }
+  .tf-section-heading h2,
+  .tf-section-title {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+  .tf-section-title:has(svg) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tf-page-link {
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--tf-line);
+    background: var(--tf-surface);
+    color: var(--tf-accent);
+    font-size: 13px;
+  }
+  .tf-page :is(input:not([type="checkbox"]), select, textarea),
+  .tf-form-control {
+    display: block;
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+    color: var(--tf-ink);
+    font-size: 14px;
+    line-height: 1.6;
+    transition:
+      border-color var(--tf-motion),
+      box-shadow var(--tf-motion);
+  }
+  .tf-page textarea {
+    resize: vertical;
+  }
+  .tf-page :is(input, select, textarea):focus-visible,
+  .tf-form-control:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 2px;
+    border-color: var(--tf-accent);
+  }
+  .tf-page :is(input, select, textarea):disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+  .tf-page input[type="checkbox"] {
+    accent-color: var(--tf-accent);
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+  }
+  .tf-field-help {
+    display: block;
+    margin-top: 8px;
+    color: var(--tf-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+  }
+  .tf-config-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--tf-warning-line);
+    border-left: 3px solid var(--tf-warning);
+    border-radius: var(--tf-radius);
+    background: var(--tf-warning-soft);
+    color: var(--tf-warning);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .tf-home-start {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    grid-template-areas: "copy preferences" "create preferences";
+    gap: 24px 48px;
+    padding: 32px 0 40px;
+    border-bottom: 1px solid var(--tf-line);
+  }
+  .tf-home-copy {
+    grid-area: copy;
+  }
+  .tf-eyebrow {
+    color: var(--tf-muted);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+  }
+  .tf-home-copy h1 {
+    font-size: clamp(28px, 3vw, 36px);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  .tf-home-preferences {
+    grid-area: preferences;
+    padding: 20px 24px;
+    border-left: 1px solid var(--tf-line);
+  }
+  .tf-home-create {
+    grid-area: create;
+    align-self: start;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .tf-home-create .tf-error {
+    flex-basis: 100%;
+  }
+  .tf-preference-choice {
+    min-width: 0;
+    color: var(--tf-muted);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .tf-preference-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    padding-block: 8px;
+    cursor: pointer;
+    color: var(--tf-ink);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tf-preference-checkbox:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+  .tf-home-recent {
+    margin-top: 32px;
+  }
+  .tf-home-trip-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 32px;
+  }
+  .tf-trip-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    width: 100%;
+    min-height: 100px;
+    padding: 20px 12px;
+    border-bottom: 1px solid var(--tf-line);
+    border-radius: 0;
+    color: var(--tf-ink);
+  }
+  .tf-trip-link h3 {
+    font-size: 16px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .tf-trip-link p {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--tf-muted);
+  }
+  .tf-sessions-page {
+    max-width: 1100px;
+  }
+  .tf-session-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .tf-session-tools label {
+    flex-basis: 240px;
+  }
+  .tf-page .tf-session-tools input {
+    padding-left: 38px;
+  }
+  .tf-segment {
+    display: inline-flex;
+    gap: 4px;
+  }
+  .tf-segment .tf-button[aria-pressed="true"] {
+    background: var(--tf-accent-soft);
+    border-color: var(--tf-accent);
+    color: var(--tf-accent);
+    font-weight: 600;
+  }
+  .tf-session-list > li + li {
+    border-top: 1px solid var(--tf-line);
+  }
+  .tf-session-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px;
+  }
+  .tf-session-title {
+    justify-content: flex-start;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 4px;
+    margin-left: -4px;
+    color: var(--tf-ink);
+    font-size: 16px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .tf-session-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .tf-settings-page {
+    max-width: 1100px;
+  }
+  .tf-settings-layout {
+    display: grid;
+    grid-template-columns: 172px minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .tf-settings-nav {
+    position: sticky;
+    top: 88px;
+    display: grid;
+    gap: 8px;
+  }
+  .tf-settings-nav a {
+    justify-content: flex-start;
+  }
+  .tf-settings-section {
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .tf-settings-section h2,
+  .tf-settings-save {
+    scroll-margin-top: 88px;
+  }
+  .tf-settings-field {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+  }
+  .tf-settings-field > label {
+    padding-top: 12px;
+    font-size: 13px;
+    color: var(--tf-muted);
+  }
+  .tf-model-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: 8px;
+  }
+  .tf-model-field input {
+    flex: 1 1 160px;
+  }
+  .tf-model-field button {
+    flex-shrink: 0;
+  }
+  .tf-map-remove {
+    margin-left: 116px;
+    min-height: 44px;
+  }
+  .tf-connection-test {
+    margin-left: 116px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .tf-connection-test > .tf-field-help {
+    flex-basis: 100%;
+    margin: 0;
+  }
+  .tf-settings-save {
+    padding: 24px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+  }
+  .tf-unsaved {
+    color: var(--tf-warning);
+    font-size: 12px;
+  }
+  .tf-settings-storage {
+    margin-top: 24px;
+    color: var(--tf-muted);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .tf-settings-storage summary {
+    cursor: pointer;
+    min-height: 44px;
+    padding: 12px;
+    border-radius: var(--tf-radius);
+    transition: background-color var(--tf-motion);
+  }
+  .tf-settings-storage summary:hover,
+  .tf-settings-storage summary:active {
+    background: var(--tf-accent-soft);
+  }
+  .tf-settings-storage summary:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 2px;
+  }
+  .tf-settings-storage code {
+    display: block;
+    overflow-wrap: anywhere;
+    margin-top: 8px;
+  }
+  .tf-preferences-page {
+    max-width: 1100px;
+  }
+  .tf-preferences-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    align-items: start;
+    gap: 32px;
+    margin-top: 24px;
+  }
+  .tf-preference-editor {
+    min-width: 0;
+    padding: 24px;
+  }
+  .tf-preference-saved {
+    min-width: 0;
+    padding: 20px 0;
+  }
+  .tf-saved-preference-list {
+    margin-top: 16px;
+  }
+  .tf-saved-preference-list li {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--tf-line);
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .tf-preference-feedback:not(:empty) {
+    margin-top: 16px;
+  }
+  @media (max-width: 900px) {
+    .tf-page {
+      padding: 24px 18px 36px;
+    }
+    .tf-page-heading {
+      margin-bottom: 20px;
+    }
+    .tf-page-heading h1 {
+      font-size: 22px;
+    }
+    .tf-page-heading p,
+    .tf-page-intro {
+      font-size: 13px;
+    }
+    .tf-home-start {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "copy" "preferences" "create";
+      gap: 18px;
+      padding: 16px 0 24px;
+    }
+    .tf-home-preferences {
+      padding: 16px 0 0;
+      border-left: 0;
+      border-top: 1px solid var(--tf-line);
+    }
+    .tf-home-recent {
+      margin-top: 24px;
+    }
+    .tf-home-trip-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .tf-trip-link {
+      min-height: 88px;
+      padding: 16px 8px;
+    }
+    .tf-session-tools {
+      gap: 12px;
+    }
+    .tf-session-row {
+      display: block;
+      padding: 18px;
+    }
+    .tf-session-row-actions {
+      margin-top: 16px;
+    }
+    .tf-settings-layout,
+    .tf-preferences-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
+    }
+    .tf-settings-nav {
+      position: static;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tf-settings-section,
+    .tf-settings-save,
+    .tf-preference-editor {
+      padding: 18px;
+    }
+    .tf-preference-saved {
+      padding: 0;
+    }
+  }
+  @media (max-width: 640px) {
+    .tf-settings-field {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+    }
+    .tf-settings-field > label {
+      padding-top: 0;
+    }
+    .tf-map-remove,
+    .tf-connection-test {
+      margin-left: 0;
+    }
+  }
+  @media (max-width: 900px), (pointer: coarse) {
+    .tf-page :is(input:not([type="checkbox"]), select, textarea),
+    .tf-form-control {
+      font-size: 16px;
+      min-height: 44px;
+    }
+    .tf-page .tf-action-link {
+      min-height: 44px;
+    }
+  }
+}

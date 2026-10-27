@@ -23,7 +23,7 @@ import {
 import { RenameForm } from "@/components/rename-form";
 import { api } from "@/lib/api";
 import type { SessionInfo } from "@/lib/types";
-import { cn, relativeTime } from "@/lib/utils";
+import { relativeTime } from "@/lib/utils";
 
 type Filter = "active" | "archived";
 type RowAction = "archive" | "delete";
@@ -106,56 +106,50 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-5 py-8">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="tf-page tf-sessions-page">
+      <div className="tf-page-heading">
         <div>
-          <h1 className="text-lg font-bold">会话管理</h1>
-          <p className="text-xs text-slate-400">所有数据保存在本机数据库中</p>
+          <h1>我的旅行</h1>
+          <p className="text-xs text-[var(--tf-muted)]">
+            继续规划、归档或整理已保存的旅行。
+          </p>
         </div>
-        <Link
-          href="/"
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white"
-        >
+        <Link href="/" className="tf-action-link tf-page-link">
           <Plus className="h-4 w-4" />
           新建旅行
         </Link>
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="relative min-w-[200px] flex-1">
+      <div className="tf-session-tools">
+        <label className="relative min-w-0 flex-1">
           <span className="sr-only">搜索旅行名称</span>
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-slate-300"
+            className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[var(--tf-muted)]"
           />
           <input
-            className="min-h-10 w-full rounded-lg border border-slate-200 bg-white py-2 pr-3 pl-9 text-sm outline-none focus:ring-2 focus:ring-brand-100"
+            className="tf-form-control"
             placeholder="搜索旅行名称…"
             disabled={!!renamingId}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
+        <div className="tf-segment">
           {(
             [
               ["active", "活跃"],
               ["archived", "已归档"],
             ] as [Filter, string][]
           ).map(([value, label]) => (
-            <button
+            <Button
+              size="sm"
               key={value}
               disabled={!!renamingId}
               aria-pressed={filter === value}
               onClick={() => setFilter(value)}
-              className={cn(
-                "min-h-10 px-3.5 py-2 text-xs transition",
-                filter === value
-                  ? "bg-gradient-to-r from-brand-500 to-teal-500 font-semibold text-white"
-                  : "bg-white text-slate-600 hover:bg-slate-50",
-              )}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -190,7 +184,7 @@ export default function SessionsPage() {
       ) : (
         sessions && (
           <Card className="mt-3 overflow-hidden">
-            <ul aria-label="旅行列表" className="divide-y divide-slate-100">
+            <ul aria-label="旅行列表" className="tf-session-list">
               {sessions.map((session) => {
                 const state = rows[session.id] ?? {};
                 const editing = renamingId === session.id;
@@ -198,7 +192,7 @@ export default function SessionsPage() {
                   <li
                     key={session.id}
                     aria-label={`旅行：${session.title}`}
-                    className="p-4 sm:flex sm:items-center sm:justify-between sm:gap-5"
+                    className="tf-session-row"
                   >
                     <div className="min-w-0 flex-1">
                       {editing ? (
@@ -229,13 +223,13 @@ export default function SessionsPage() {
                         />
                       ) : (
                         <Link
-                          className="break-words text-sm font-semibold text-slate-700 hover:text-brand-600"
+                          className="tf-action-link tf-session-title"
                           href={`/chat/${session.id}`}
                         >
                           {session.title}
                         </Link>
                       )}
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--tf-muted)]">
                         <span>{session.branch_count} 个分支</span>
                         <span>{relativeTime(session.updated_at)}</span>
                         {session.archived && <Badge tone="slate">已归档</Badge>}
@@ -258,9 +252,9 @@ export default function SessionsPage() {
                         }
                       />
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0 sm:shrink-0">
+                    <div className="tf-session-row-actions">
                       <Link
-                        className="inline-flex min-h-10 items-center rounded-md border border-slate-200 px-3 text-xs text-slate-700"
+                        className="tf-action-link tf-page-link"
                         href={`/chat/${session.id}`}
                       >
                         打开

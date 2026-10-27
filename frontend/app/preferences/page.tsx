@@ -1,19 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { ActionFeedback, Button, Card, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { SavedPreferences } from "@/lib/types";
+import { scrollToElement } from "@/lib/utils";
 
+type Operation = "load" | "save" | "remove" | null;
 export default function PreferencesPage() {
   const [current, setCurrent] = useState<SavedPreferences | null>(null);
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState(true);
+  const [operation, setOperation] = useState<Operation>("load");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const lock = useRef(true);
+  const feedback = useRef<HTMLDivElement>(null);
+  const busy = operation !== null;
+
+  useEffect(() => {
+    if (operation || (!error && !notice)) return;
+    feedback.current?.focus({ preventScroll: true });
+    if (error) scrollToElement(feedback.current, { block: "nearest" });
+  }, [error, notice, operation]);
 
   async function load(keepInput = false) {
+    if (lock.current) return;
+    lock.current = true;
+    setOperation("load");
+    setNotice("");
     try {
       const result = await api.travelPreferences();
       setCurrent(result);
@@ -25,7 +40,8 @@ export default function PreferencesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "偏好加载失败");
     } finally {
-      setBusy(false);
+      lock.current = false;
+      setOperation(null);
     }
   }
   useEffect(() => {
@@ -43,7 +59,10 @@ export default function PreferencesPage() {
           setError(err instanceof Error ? err.message : "偏好加载失败");
       })
       .finally(() => {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          lock.current = false;
+          setOperation(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -51,7 +70,7 @@ export default function PreferencesPage() {
   }, []);
 
   async function save() {
-    if (!current) return;
+    if (!current || lock.current) return;
     const values = text
       .split("\n")
       .map((value) => value.trim())
@@ -64,9 +83,11 @@ export default function PreferencesPage() {
       setError(
         "请填写1至12条偏好，每条最多60字；如需清空，请点击删除常用偏好。",
       );
+      setNotice("");
       return;
     }
-    setBusy(true);
+    lock.current = true;
+    setOperation("save");
     setNotice("");
     try {
       const result = await api.saveTravelPreferences(values, current.revision);
@@ -77,13 +98,15 @@ export default function PreferencesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败，输入已保留");
     } finally {
-      setBusy(false);
+      lock.current = false;
+      setOperation(null);
     }
   }
 
   async function remove() {
-    if (!current) return;
-    setBusy(true);
+    if (!current || lock.current) return;
+    lock.current = true;
+    setOperation("remove");
     setNotice("");
     try {
       const result = await api.deleteTravelPreferences(current.revision);
@@ -96,139 +119,132 @@ export default function PreferencesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除失败");
     } finally {
-      setBusy(false);
+      lock.current = false;
+      setOperation(null);
     }
   }
 
+  const result = (
+    <div ref={feedback} tabIndex={-1} className="tf-preference-feedback">
+      <ActionFeedback
+        pending={
+          operation === "save"
+            ? "正在保存常用偏好…"
+            : operation === "remove"
+              ? "正在删除常用偏好…"
+              : current && operation === "load"
+                ? "正在载入最新偏好，你的输入仍保留…"
+                : undefined
+        }
+        error={error}
+        message={notice}
+      />
+      {error && (
+        <Button
+          type="button"
+          size="sm"
+          className="mt-2"
+          disabled={busy}
+          onClick={() => void load(!!current)}
+        >
+          {current ? "载入最新偏好，保留我的输入" : "重试加载偏好"}
+        </Button>
+      )}
+    </div>
+  );
   return (
-    <div className="mx-auto max-w-3xl px-5 py-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <h1 className="text-xl font-bold text-teal-950">常用旅行偏好</h1>
-        <Link href="/" className="text-sm text-teal-800">
+    <div className="tf-page tf-preferences-page">
+      <header className="tf-page-heading">
+        <div>
+          <h1>常用旅行偏好</h1>
+          <p>记住你主动写下的习惯，下次规划时再选择使用。</p>
+        </div>
+        <Link href="/" className="tf-action-link tf-page-link">
           回到工作台
         </Link>
-      </div>
-      <p className="mt-3 text-sm leading-7 text-slate-500">
-        把常用的旅行节奏、兴趣、饮食和出行限制写在这里，下次不用重新说一遍。只保存你主动填写的内容，不从旅行记录自动推断。
+      </header>
+      <p className="tf-page-intro">
+        可以写旅行节奏、兴趣、饮食和出行限制。目的地、日期和预算仍由每次旅行单独确定，不从旅行记录自动推断偏好。
       </p>
-      <p className="mt-2 text-xs leading-6 text-slate-500">
-        内容保存在本机；新建旅行时主动勾选后，作为该旅行的参考，联网规划时会提供给当前模型及必要的检索服务。目的地、日期和预算仍由每次旅行单独确定。
-      </p>
-
-      {error && (
-        <div
-          role="alert"
-          className="mt-5 rounded-xl bg-amber-50 p-4 text-sm leading-7 text-amber-900"
-        >
-          <p>{error}</p>
-          <button
-            disabled={busy}
-            className="mt-2 text-teal-800 underline"
-            onClick={() => {
-              setBusy(true);
-              void load(!!current);
-            }}
-          >
-            {current ? "载入最新偏好，保留我的输入" : "重试加载偏好"}
-          </button>
-        </div>
-      )}
-      {notice && (
-        <p
-          role="status"
-          className="mt-5 rounded-xl bg-teal-50 p-4 text-sm leading-7 text-teal-800"
-        >
-          {notice}
-        </p>
-      )}
-      {!current && !error && (
-        <p className="mt-6 text-sm text-slate-500">正在加载偏好…</p>
-      )}
+      {!current && (busy ? <Spinner label="正在加载偏好…" /> : result)}
       {current && (
-        <>
-          <section
-            aria-label="当前已保存偏好"
-            className="mt-6 rounded-xl border border-teal-100 bg-white p-5"
-          >
-            <h2 className="text-sm font-semibold text-teal-900">当前已保存</h2>
-            {current.preferences.length ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {current.preferences.map((value) => (
-                  <span
-                    key={value}
-                    className="max-w-full break-words rounded-lg bg-teal-50 px-3 py-1.5 text-xs text-teal-800"
-                  >
-                    {value}
-                  </span>
-                ))}
+        <div className="tf-preferences-grid">
+          <Card className="tf-preference-editor">
+            <form
+              aria-label="常用偏好编辑"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+              }}
+            >
+              <label className="tf-section-title" htmlFor="travel-preferences">
+                编辑常用偏好
+              </label>
+              <p id="preference-help" className="tf-field-help">
+                每行一条，最多12条，每条60字。保存后不自动应用，新建旅行时再选择。
+              </p>
+              <textarea
+                id="travel-preferences"
+                aria-describedby="preference-help preference-sharing"
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setNotice("");
+                }}
+                disabled={busy}
+                maxLength={1200}
+                rows={7}
+                placeholder={"慢节奏\n当地美食\n少走路"}
+                className="tf-form-control mt-4"
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={operation === "save"}
+                  disabled={busy || !text.trim()}
+                >
+                  保存常用偏好
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  loading={operation === "remove"}
+                  disabled={busy || !current.preferences.length}
+                  onClick={() => void remove()}
+                >
+                  删除常用偏好
+                </Button>
               </div>
+              {result}
+            </form>
+            <p id="preference-sharing" className="tf-field-help mt-4">
+              内容保存在本机。主动选用于新旅行后，联网规划时会提供给当前模型及必要的检索服务。
+            </p>
+          </Card>
+          <section aria-label="当前已保存偏好" className="tf-preference-saved">
+            <h2 className="tf-section-title">当前已保存</h2>
+            {current.preferences.length ? (
+              <ul className="tf-saved-preference-list">
+                {current.preferences.map((value) => (
+                  <li key={value}>{value}</li>
+                ))}
+              </ul>
             ) : (
-              <p className="mt-3 text-sm text-slate-500">
+              <p className="tf-field-help">
                 尚无常用偏好，新旅行不会自动使用任何偏好。
               </p>
             )}
             {current.updated_at && (
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="tf-field-help">
                 更新于 {new Date(current.updated_at).toLocaleString("zh-CN")}
               </p>
             )}
-          </section>
-          <form
-            className="mt-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-          >
-            <label
-              className="block text-sm font-medium text-slate-700"
-              htmlFor="travel-preferences"
-            >
-              编辑常用偏好
-            </label>
-            <p
-              id="preference-help"
-              className="mt-2 text-xs leading-6 text-slate-500"
-            >
-              每行一条，最多12条，每条60字。保存后不自动应用，新建旅行时再选择。
+            <p className="tf-field-help mt-4">
+              修改、删除只影响后续新建时可选的内容，已有旅行保留创建时选用的副本。若本次不想沿用，可在旅行对话中说「这次清空偏好」或提出新的偏好。
             </p>
-            <textarea
-              id="travel-preferences"
-              aria-describedby="preference-help"
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                setNotice("");
-              }}
-              disabled={busy}
-              maxLength={1200}
-              rows={7}
-              placeholder={"慢节奏\n当地美食\n少走路"}
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white p-4 text-sm leading-7 focus:border-teal-400 focus:outline-none"
-            />
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Button
-                type="submit"
-                variant="primary"
-                loading={busy}
-                disabled={!text.trim()}
-              >
-                保存常用偏好
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                disabled={busy || !current.preferences.length}
-                onClick={() => void remove()}
-              >
-                删除常用偏好
-              </Button>
-            </div>
-          </form>
-          <p className="mt-5 text-xs leading-6 text-slate-500">
-            修改、删除只影响后续新建时可选的内容，已有旅行保留创建时选用的副本。若本次不想沿用，可在该旅行对话中直接说「这次清空偏好」或提出新的偏好。
-          </p>
-        </>
+          </section>
+        </div>
       )}
     </div>
   );

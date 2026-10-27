@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plane, Plus } from "lucide-react";
+import { ArrowUpRight, Plane, Plus } from "lucide-react";
 
 import {
   Button,
@@ -95,100 +95,103 @@ export default function HomePage() {
   const notConfigured = config && (!config.llm.ready || !config.search.ready);
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      {/* 未完成配置时给出明确出路，而不是让用户在对话页撞墙 */}
+    <div className="tf-page tf-home-page">
       {notConfigured && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-4 py-3">
-          <div className="text-sm text-amber-900">
-            <span className="font-semibold">还没完成配置</span>
-            <span className="ml-2">
-              {config?.warnings?.[0] ?? "请先配置大模型与检索服务"}
-            </span>
+        <aside className="tf-config-notice" aria-label="服务配置提醒">
+          <div>
+            <strong>还没完成配置</strong>
+            <p>
+              {!config?.llm.ready && !config?.search.ready
+                ? "请先在设置中完成模型与检索服务配置。已有旅行仍可查看。"
+                : !config?.llm.ready
+                  ? "请先在设置中完成模型服务配置。已有旅行仍可查看。"
+                  : "请先在设置中完成检索服务配置。已有旅行仍可查看。"}
+            </p>
           </div>
-          <Button size="sm" onClick={() => router.push("/settings")}>
+          <Link className="tf-action-link tf-page-link" href="/settings">
             去设置
-          </Button>
-        </div>
+          </Link>
+        </aside>
       )}
-
-      {configError && (
-        <div className="mb-4">
-          <ErrorBanner message={configError} onRetry={load} />
-        </div>
-      )}
-      <div className="mb-5">
-        <PreferenceChoice
-          key={preferenceRefresh}
-          selected={selectedPreferences}
-          onChange={setSelectedPreferences}
-          disabled={creating}
-        />
-      </div>
-
-      <section className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 via-brand-500 to-teal-600 px-7 py-9 text-white">
-        <div className="absolute -top-16 -right-10 h-56 w-56 rounded-full bg-teal-300/30 blur-3xl" />
-        <div className="relative">
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-            想去哪儿旅行？
-          </h1>
-          <p className="mt-2 max-w-lg text-sm text-white/85">
-            告诉我目的地和天数，我来帮你把行程、交通、预算和避雷都安排好。
+      {configError && <ErrorBanner message={configError} onRetry={load} />}
+      <section className="tf-home-start" aria-label="开始新的旅行">
+        <div className="tf-home-copy">
+          <p className="tf-eyebrow">你的旅行工作台</p>
+          <h1>想去哪儿旅行？</h1>
+          <p className="tf-page-intro">
+            从想去的城市开始，也可以先聊聊兴趣、天数和预算。
           </p>
+        </div>
+        <div className="tf-home-preferences">
+          <PreferenceChoice
+            key={preferenceRefresh}
+            selected={selectedPreferences}
+            onChange={setSelectedPreferences}
+            disabled={creating}
+          />
+        </div>
+        <div className="tf-home-create">
           <Button
+            variant="primary"
             size="lg"
-            className="mt-6 !border-transparent !bg-white !text-brand-700 hover:!brightness-100 hover:!bg-white/90"
             loading={creating}
             loadingLabel="正在创建旅行…"
             onClick={createTrip}
           >
-            <Plus className="h-4 w-4" />
+            <Plus aria-hidden="true" className="h-4 w-4" />
             新建旅行
           </Button>
+          {creating && <Spinner label="正在准备旅行对话…" />}
+          {error && <ErrorBanner message={error} onRetry={createTrip} />}
         </div>
       </section>
-
-      {error && (
-        <div className="mb-5">
-          <ErrorBanner message={error} onRetry={createTrip} />
+      <section aria-labelledby="recent-trips" className="tf-home-recent">
+        <div className="tf-section-heading">
+          <h2 id="recent-trips">最近的旅行</h2>
+          <Link href="/sessions" className="tf-action-link tf-page-link">
+            全部旅行
+            <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
         </div>
-      )}
-
-      <h2 className="mb-3 text-sm font-bold text-slate-700">最近的旅行</h2>
-      {loading && sessions !== null && <Spinner label="正在刷新旅行…" />}
-
-      {loadError ? (
-        <ErrorBanner message={loadError} onRetry={load} />
-      ) : sessions === null ? (
-        <Card className="p-6">
-          <Spinner label="正在加载…" />
-        </Card>
-      ) : sessions.length === 0 ? (
-        <EmptyState
-          icon={<Plane className="h-9 w-9" />}
-          title="还没有旅行计划"
-          description="点上面的「新建旅行」开始，我会先问你几个必要的问题。"
-        />
-      ) : (
-        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-          {sessions.map((session) => (
-            <Card
-              key={session.id}
-              className="cursor-pointer p-4 transition hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
-            >
-              <Link
-                className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-500"
-                href={`/chat/${session.id}`}
-              >
-                <h3 className="font-bold text-slate-800">{session.title}</h3>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                  <span>{session.branch_count} 个分支</span>
-                  <span>{relativeTime(session.updated_at)}</span>
-                </div>
-              </Link>
-            </Card>
-          ))}
-        </div>
-      )}
+        {loading && sessions !== null && <Spinner label="正在刷新旅行…" />}
+        {loadError ? (
+          <ErrorBanner message={loadError} onRetry={load} />
+        ) : sessions === null ? (
+          <Card className="p-6">
+            <Spinner label="正在加载…" />
+          </Card>
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon={<Plane className="h-9 w-9" />}
+            title="还没有旅行计划"
+            description="点上面的「新建旅行」开始，也可以先聊聊还没确定的想法。"
+          />
+        ) : (
+          <ul className="tf-home-trip-list" aria-label="最近旅行">
+            {sessions.slice(0, 6).map((session) => (
+              <li key={session.id}>
+                <Link
+                  className="tf-action-link tf-trip-link"
+                  href={`/chat/${session.id}`}
+                >
+                  <div className="min-w-0">
+                    <h3>{session.title}</h3>
+                    <p>
+                      {session.branch_count} 个分支
+                      <span aria-hidden="true"> · </span>
+                      {relativeTime(session.updated_at)}
+                    </p>
+                  </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
