@@ -17,7 +17,7 @@
   document.head.append(style);
   const bar = document.querySelector(".reviewbar");
   bar.innerHTML = `
-    <div class="review-title"><strong>第三轮：手感与图片</strong><span>固定 D3 / M1 · 本地演示，不写入旅行</span></div>
+    <div class="review-title"><strong>第三轮：手感与图片</strong><span>已选 C1＋P1 · D3 / M1 · 本地演示，不写入旅行</span></div>
     <div class="review-groups">
       <div class="choice-group" aria-label="组件手感"><span>手感</span><button data-component-choice="quiet">C1 轻圆角短反馈</button><button data-component-choice="precise">C2 方正干脆</button><button data-component-choice="soft">C3 柔和回弹</button></div>
       <div class="choice-group" aria-label="图片比例"><span>图片</span><button data-photo-choice="small">P1 小图辅助</button><button data-photo-choice="large">P2 景点大图</button><button data-photo-choice="on-demand">P3 按需看图</button></div>
@@ -29,7 +29,7 @@
   const dialog = document.createElement("dialog");
   dialog.id = "photo-dialog";
   dialog.setAttribute("aria-labelledby", "photo-title");
-  dialog.innerHTML = `<div class="dialog-heading"><h2 id="photo-title">西湖参考照片</h2><button data-close="photo-dialog" aria-label="关闭参考照片">关闭</button></div><img src="./assets/west-lake-reference.jpg" alt="西湖湖面与远处山景，仅作比例演示，非柳浪闻莺该站实拍"><p>仅用于图文比例比较，非该站实拍。</p><p>摄影：Takashishin · <a href="https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg" target="_blank" rel="noreferrer">原始图片与作者</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>。下载预览未编辑；版面展示有裁切。</p>`;
+  dialog.innerHTML = `<div class="dialog-heading"><h2 id="photo-title">西湖参考照片</h2><button data-close="photo-dialog" aria-label="关闭参考照片">关闭</button></div><img src="./assets/west-lake-reference.jpg" alt="西湖湖面与远处山景，仅作比例演示，非柳浪闻莺该站实拍"><p>仅用于图文比例比较，非该站实拍。</p><p>摄影：Takashishin · <a href="https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg" target="_blank" rel="noreferrer">原始图片与作者</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>。下载预览未编辑；缩略图有裁切，展开按原比例完整显示。</p>`;
   document.body.append(dialog);
   const descriptions = {
     quiet: "C1：8px 轻圆角、细分隔线、160ms 短反馈。适合频繁对话与修改。",

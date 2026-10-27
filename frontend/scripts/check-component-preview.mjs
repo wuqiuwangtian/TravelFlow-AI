@@ -51,9 +51,10 @@ const summary = {
   checks: [],
 };
 const output = path.join(directory, "components");
+const photosOnly = process.argv.includes("--photos-only");
 try {
   await mkdir(output, { recursive: true });
-  for (const width of [1440, 390, 320]) {
+  for (const width of photosOnly ? [] : [1440, 390, 320]) {
     const mobile = width < 900;
     const context = await browser.newContext({
       viewport: { width, height: mobile ? 1000 : 1200 },
@@ -260,6 +261,86 @@ try {
     summary.checks.push(`${width}: reduced-motion feedback`);
     await context.close();
   }
+  // Intrinsic image dimensions must not change the route geometry. SVGs are
+  // synthetic browser fixtures, not replacement photographs or shipped assets.
+  summary.photoShapeChecks = 0;
+  for (const width of [1440, 390, 320]) {
+    const mobile = width < 900;
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    page.on("pageerror", (error) => summary.pageErrors.push(error.message));
+    await page.goto(base);
+    await page.waitForFunction(
+      () => document.documentElement.dataset.componentReady === "true",
+    );
+    const app = page.locator(mobile ? "#phone-app" : "#desktop-app");
+    const row = app.locator('[data-stop-row="lake"]');
+    const image = row.locator(".stop-visual img");
+    const next = app.locator('[data-stop-row="lunch"]');
+    const originalRowHeight = await row.evaluate((el) => el.offsetHeight);
+    const originalNextTop = await next.evaluate((el) => el.offsetTop);
+    for (const [w, h] of [
+      [640, 480],
+      [360, 1280],
+      [1600, 160],
+      [160, 1600],
+      [64, 64],
+      [24, 16],
+    ]) {
+      const source = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#355744"/></svg>`)}`;
+      await image.evaluate((el, source) => {
+        el.src = source;
+      }, source);
+      await image.evaluate((el) => el.decode());
+      const frame = await row.locator("[data-reference-photo]").boundingBox();
+      assert(Math.abs(frame.width - 64) < 1);
+      assert(Math.abs(frame.height - 56) < 1);
+      assert.equal(
+        await image.evaluate((el) => getComputedStyle(el).objectFit),
+        "cover",
+      );
+      assert(
+        Math.abs(
+          (await row.evaluate((el) => el.offsetHeight)) - originalRowHeight,
+        ) < 1,
+        "image changed row height",
+      );
+      assert(
+        Math.abs(
+          (await next.evaluate((el) => el.offsetTop)) - originalNextTop,
+        ) < 1,
+        "image moved following stop",
+      );
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      await row.locator("[data-reference-photo]").click();
+      const full = page.locator("#photo-dialog > img");
+      await full.evaluate((el, source) => {
+        el.src = source;
+      }, source);
+      await full.evaluate((el) => el.decode());
+      assert.equal(
+        await full.evaluate((el) => getComputedStyle(el).objectFit),
+        "contain",
+      );
+      const fullBox = await full.boundingBox();
+      assert(
+        fullBox.height <= 900 * 0.62 + 1,
+        "full photograph exceeds viewport frame",
+      );
+      assert(
+        await page.getByRole("button", { name: "关闭参考照片" }).isVisible(),
+      );
+      await page.keyboard.press("Escape");
+      summary.photoShapeChecks++;
+    }
+    summary.checks.push(
+      `${width}: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog`,
+    );
+    await page.close();
+  }
   // A missing image collapses cleanly to the existing text route.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.route("**/west-lake-reference.jpg", (route) => route.abort());
@@ -277,8 +358,12 @@ try {
   assert.deepEqual(summary.pageErrors, []);
   assert.deepEqual(summary.httpErrors, []);
   assert.deepEqual(summary.externalRequests, []);
+  if (photosOnly) summary.combinations = summary.photoShapeChecks;
   await writeFile(
-    path.join(directory, "component-check.json"),
+    path.join(
+      directory,
+      photosOnly ? "photo-check.json" : "component-check.json",
+    ),
     `${JSON.stringify(summary, null, 2)}\n`,
   );
   console.log(JSON.stringify(summary, null, 2));

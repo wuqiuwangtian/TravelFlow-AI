@@ -201,7 +201,8 @@ html[data-photos="on-demand"] .stop-visual figcaption {
 #photo-dialog > img {
   display: block;
   width: 100%;
-  height: auto;
+  height: min(62dvh, 560px);
+  object-fit: contain;
 }
 #photo-dialog p {
   font-size: 13px;

@@ -1,0 +1,14 @@
+{
+  "combinations": 18,
+  "screenshots": [],
+  "pageErrors": [],
+  "httpErrors": [],
+  "externalRequests": [],
+  "checks": [
+    "1440: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
+    "390: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
+    "320: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
+    "missing image: removed photo and reserved space, text route intact"
+  ],
+  "photoShapeChecks": 18
+}
