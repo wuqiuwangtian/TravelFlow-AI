@@ -23,6 +23,7 @@ from app.domain.clarification import clarification_prompt
 from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.models import Requirements
 from app.services.branch_lock import branch_guard
+from app.services.plan_undo import recover_plan_undo
 from app.storage.session_store import SessionStore
 
 logger = get_logger(__name__)
@@ -82,6 +83,7 @@ class ChatService:
         request_id: str | None = None,
     ) -> ChatOutcome:
         async with branch_guard(branch_id):
+            await recover_plan_undo(self._store, self._graph, branch_id)
             return await self._send(
                 session_id=session_id,
                 branch_id=branch_id,
@@ -100,6 +102,7 @@ class ChatService:
         request_id: str | None = None,
     ) -> AsyncIterator[dict]:
         async with branch_guard(branch_id):
+            await recover_plan_undo(self._store, self._graph, branch_id)
             async for item in self._send_stream(
                 session_id=session_id,
                 branch_id=branch_id,

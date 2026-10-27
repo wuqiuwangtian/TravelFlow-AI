@@ -46,6 +46,13 @@ from app.services.branch_lock import branch_guard
 from app.services.budget_service import budget_overview, save_budget_item
 from app.services.chat_service import ChatService
 from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.plan_undo import (
+    PlanChange,
+    UndoPlanInput,
+    current_change,
+    recover_plan_undo,
+    undo_plan,
+)
 from app.services.recap_writing import RecapDraftInput
 from app.services.receipt_service import MAX_RECEIPT_BYTES, normalise_receipt, recognise_receipt
 from app.services.replan_service import preserve_replan_scope, record_booking, set_replan_context
@@ -53,6 +60,23 @@ from app.services.travel_service import add_expense, edit_expense, remove_expens
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["itinerary"])
+
+
+@router.get("/versions/{version_id}/planning-change", response_model=PlanChange | None)
+async def planning_change(version_id: str, store: SessionStore = Depends(get_store)):
+    return await current_change(store, version_id)
+
+
+@router.post("/versions/{version_id}/undo-plan", response_model=VersionDetail)
+async def undo_planning_change(
+    version_id: str,
+    payload: UndoPlanInput,
+    store: SessionStore = Depends(get_store),
+    graph=Depends(get_graph),
+):
+    original = await _detail(store, version_id)
+    async with branch_guard(original.version.branch_id):
+        return await undo_plan(store, graph, version_id, payload)
 
 
 class RecapInput(TravelRecap):
@@ -378,6 +402,9 @@ async def _save_revision(
 ) -> VersionDetail:
     """同时更新图状态和版本快照，下一轮对话接着修改后的行程继续。"""
     branch_id = detail.version.branch_id
+    recovered = await recover_plan_undo(store, graph, branch_id)
+    if recovered and recovered.version.id != detail.version.id:
+        raise ConflictError("上次撤销结果已恢复，请刷新后再保存这次修改。")
     config = thread_config(branch_id)
     snapshot = await graph.aget_state(config)
     values = dict(snapshot.values or {})

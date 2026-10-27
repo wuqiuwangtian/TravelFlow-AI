@@ -45,6 +45,7 @@ class PlanState(TypedDict, total=False):
     pending_move: MoveClarification | None
     chat_request: dict[str, str] | None
     completed_chat: dict[str, str] | None
+    completed_plan_undo: dict | None
 
     # 状态机
     status: PlanStatus

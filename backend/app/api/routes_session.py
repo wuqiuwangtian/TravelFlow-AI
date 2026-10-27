@@ -38,6 +38,7 @@ from app.domain.workflow import WorkflowView
 from app.search.base import SearchResult
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
+from app.services.plan_undo import recover_plan_undo
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
@@ -318,6 +319,7 @@ async def create_branch(
         values = {}
         if parent_id:
             assert graph is not None
+            await recover_plan_undo(store, graph, parent_id)
             source_config = thread_config(parent_id)
             if source and source.version.checkpoint_id:
                 source_config = thread_config(parent_id, checkpoint_id=source.version.checkpoint_id)
@@ -361,6 +363,7 @@ async def create_branch(
             values["pending_move"] = None
             values["chat_request"] = None
             values["completed_chat"] = None
+            values["completed_plan_undo"] = None
             config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
             vid = await ChatService(graph=graph, store=store).record_version(
                 branch.id,
