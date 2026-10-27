@@ -154,7 +154,7 @@ test("切换分支分别恢复各自的未发送草稿", async ({ page }) => {
   await page.getByRole("button", { name: "隔离方案", exact: true }).click();
   await expect(input).toHaveValue("");
   await input.fill("另一个方案的草稿");
-  await page.getByRole("button", { name: "主方案 ★", exact: true }).click();
+  await page.getByRole("button", { name: "主方案", exact: true }).click();
   await expect(input).toHaveValue("主方案的未发送草稿");
   await page.getByRole("button", { name: "隔离方案", exact: true }).click();
   await expect(input).toHaveValue("另一个方案的草稿");

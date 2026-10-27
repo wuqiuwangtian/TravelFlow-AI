@@ -237,7 +237,9 @@ test("设为当前原位等待和失败重试，选择不被重置且不生成�
   release();
   await expect(card.getByRole("alert")).toContainText(failure.error.message);
   await card.getByRole("button", { name: "重试", exact: true }).click();
-  await expect(card.getByRole("status")).toContainText("已设为当前方案");
+  await expect(
+    card.getByRole("status").filter({ hasText: "已设为当前方案" }),
+  ).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
   const saved = await (
     await page.request.get(`${proxy}/api/sessions/${trip.session_id}`)

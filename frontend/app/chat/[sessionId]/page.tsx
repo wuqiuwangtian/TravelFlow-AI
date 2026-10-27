@@ -5,12 +5,18 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Download,
+  AlertTriangle,
+  BookOpen,
   GitBranch,
   Loader2,
   Pencil,
+  Map,
+  MessageCircle,
+  Route,
   Send,
   Sparkles,
   Undo2,
+  Wallet,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ItineraryPanel } from "@/components/itinerary-panel";
@@ -33,7 +39,7 @@ import type {
   VersionInfo,
 } from "@/lib/types";
 import { DETAIL_LEVEL_LABELS } from "@/lib/types";
-import { cn, relativeTime, scrollToElement } from "@/lib/utils";
+import { cn, relativeTime, scrollToElement, scrollToLatest } from "@/lib/utils";
 
 interface Message {
   role: "user" | "assistant";
@@ -75,8 +81,12 @@ export default function ChatPage() {
   const [level, setLevel] = useState<DetailLevel>("L2_standard");
   const [sending, setSending] = useState(false);
   const [itineraryBusy, setItineraryBusy] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messageViewport = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<HTMLDetailsElement>(null);
+  const [mobileSection, setMobileSection] = useState<
+    "route" | "map" | "budget" | "chat" | null
+  >(null);
 
   /** 输入框随内容自动增高（上限约 6 行，超出后内部滚动）。 */
   const autoGrow = useCallback(() => {
@@ -196,8 +206,22 @@ export default function ChatPage() {
   }, [detail, activeBranchId]);
 
   useEffect(() => {
-    scrollToElement(bottomRef.current);
+    scrollToLatest(messageViewport.current);
   }, [messages, sending]);
+
+  function openSection(section: "route" | "map" | "budget" | "chat") {
+    setMobileSection(section);
+    const id = section === "chat" ? "journey-chat" : `journey-${section}`;
+    const target = document.getElementById(id);
+    scrollToElement(target, { block: "start" });
+    if (section === "chat") textareaRef.current?.focus({ preventScroll: true });
+    else target?.focus({ preventScroll: true });
+  }
+
+  function askFromRoute(message: string) {
+    if (window.matchMedia("(max-width: 900px)").matches) openSection("chat");
+    void send(message);
+  }
 
   async function send(override?: string, retry?: ChatAttempt) {
     const text = (override ?? input).trim();
@@ -339,9 +363,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-5">
+    <div
+      className="journey-workspace"
+      data-has-itinerary={!!versionDetail?.itinerary?.days.length}
+    >
       {/* 顶部：会话标题 + 分支切换 */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="journey-workspace-heading">
         <div>
           {editingTitle ? (
             <RenameForm
@@ -353,11 +380,11 @@ export default function ChatPage() {
               }}
             />
           ) : (
-            <h1 className="flex items-center gap-2 text-lg font-bold">
+            <h1 className="journey-title flex items-center gap-2">
               {detail.session.title}
               <button
                 ref={renameTrigger}
-                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-slate-500 transition hover:text-brand-500 focus-visible:outline-2 focus-visible:outline-brand-500"
+                className="journey-rename"
                 title="重命名这个旅行"
                 aria-label="重命名这个旅行"
                 onClick={() => {
@@ -375,36 +402,45 @@ export default function ChatPage() {
             </p>
           )}
           <p className="text-xs text-slate-400">
-            {detail.branches.length} 个分支 · 版本历史可随时回退
+            {detail.branches.length} 个分支 · 已保留版本历史
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="journey-branch-controls">
           {detail.branches.map((branch: BranchInfo) => (
             <button
               key={branch.id}
               disabled={sending || itineraryBusy}
               onClick={() => setActiveBranchId(branch.id)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs transition",
-                branch.id === activeBranchId
-                  ? "border-transparent bg-gradient-to-r from-brand-500 to-teal-500 font-semibold text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-brand-300",
-              )}
+              aria-pressed={branch.id === activeBranchId}
+              className="journey-branch-choice"
             >
               {branch.title}
-              {branch.is_primary && " ★"}
+              {branch.is_primary && branch.title !== "主方案" && (
+                <span className="journey-primary-label">主方案</span>
+              )}
             </button>
           ))}
-          <Link href="/compare">
-            <Button size="sm">
-              <GitBranch className="h-3.5 w-3.5" />
-              对比分支
-            </Button>
+          <Link href="/compare" className="tf-button" data-size="sm">
+            <GitBranch aria-hidden="true" className="h-3.5 w-3.5" />
+            对比分支
           </Link>
+          <Button
+            size="sm"
+            onClick={() => {
+              if (bookRef.current) {
+                bookRef.current.open = true;
+                scrollToElement(bookRef.current, { block: "start" });
+              }
+            }}
+          >
+            <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
+            完整路书
+          </Button>
           {activeBranchId && (
             <Link
               href={`/workflow/${sessionId}?branch=${activeBranchId}${versionDetail && versions.at(-1)?.id !== versionDetail.version.id ? `&version=${versionDetail.version.id}` : ""}`}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-teal-800 hover:border-teal-400"
+              className="tf-button"
+              data-size="sm"
             >
               高级流程
             </Link>
@@ -412,12 +448,17 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
-        <div className="min-w-0 lg:sticky lg:top-20">
+      <div className="journey-workspace-grid">
+        <section
+          id="journey-chat"
+          tabIndex={-1}
+          aria-label="旅行对话"
+          className="journey-chat-column"
+        >
           {/* ---------------- 对话 ---------------- */}
-          <Card className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-              <span className="text-xs font-bold text-slate-500">对话</span>
+          <Card className="journey-chat-shell">
+            <div className="journey-chat-heading">
+              <h2>继续聊这趟旅行</h2>
               {activeBranch && (
                 <Badge tone={activeBranch.is_primary ? "brand" : "teal"}>
                   {activeBranch.title}
@@ -425,7 +466,11 @@ export default function ChatPage() {
               )}
             </div>
 
-            <div className="max-h-[460px] min-h-[300px] flex-1 space-y-3 overflow-y-auto p-4">
+            <div
+              ref={messageViewport}
+              aria-label="对话消息"
+              className="journey-messages"
+            >
               {!!detail?.session.initial_preferences?.length && (
                 <details
                   aria-label="创建时选用的偏好"
@@ -445,11 +490,21 @@ export default function ChatPage() {
               )}
               {messages.length === 0 && (
                 <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
-                  告诉我你的旅行想法即可，例如：
-                  <br />
-                  「我想去重庆玩 3 天，从北京出发，预算 2000」
-                  <br />
-                  我会先问清楚必要信息，再联网检索真实资料生成路书。
+                  {versionDetail ? (
+                    <>
+                      这份行程已经保存。想换个地方、少走一点，或调整费用，继续告诉我就好。
+                      {!versionDetail.itinerary?.days.length &&
+                        "也可以先将旧路书整理成每日路线。"}
+                    </>
+                  ) : (
+                    <>
+                      告诉我你的旅行想法即可，例如：
+                      <br />
+                      「我想去重庆玩 3 天，从北京出发，预算 2000」
+                      <br />
+                      还没想好去哪，也可以让我先推荐城市。
+                    </>
+                  )}
                 </div>
               )}
 
@@ -462,23 +517,13 @@ export default function ChatPage() {
                   )}
                 >
                   <div
-                    className={cn(
-                      "flex h-7 w-7 flex-none items-center justify-center rounded-lg text-xs font-bold",
-                      message.role === "user"
-                        ? "bg-slate-200 text-slate-600"
-                        : "bg-gradient-to-br from-brand-500 to-teal-500 text-white",
-                    )}
+                    className="journey-avatar"
+                    data-author={message.role}
+                    aria-hidden="true"
                   >
                     {message.role === "user" ? "我" : "AI"}
                   </div>
-                  <div
-                    className={cn(
-                      "animate-fade-up max-w-[85%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm",
-                      message.role === "user"
-                        ? "bg-brand-100 text-brand-900"
-                        : "bg-slate-50 text-slate-700",
-                    )}
-                  >
+                  <div className="journey-message" data-author={message.role}>
                     {message.content}
                   </div>
                 </div>
@@ -489,7 +534,11 @@ export default function ChatPage() {
                   key={notice}
                   className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700"
                 >
-                  ⚠️ {notice}
+                  <AlertTriangle
+                    aria-hidden="true"
+                    className="mr-1 inline h-3.5 w-3.5"
+                  />
+                  {notice}
                 </div>
               ))}
 
@@ -499,10 +548,9 @@ export default function ChatPage() {
                   {progress ?? "正在处理…"}
                 </div>
               )}
-              <div ref={bottomRef} />
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50 p-3">
+            <div className="journey-composer">
               {sendFailure && (
                 <div
                   role="alert"
@@ -585,7 +633,7 @@ export default function ChatPage() {
                 <textarea
                   ref={textareaRef}
                   rows={1}
-                  className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  className="journey-chat-input"
                   placeholder="说出你的想法，或回复「确认」定稿…"
                   aria-label="旅行对话输入"
                   value={input}
@@ -635,8 +683,33 @@ export default function ChatPage() {
               </div>
             </div>
           </Card>
-        </div>
-        <div className="min-w-0">
+        </section>
+        <div className="journey-route-column">
+          {versionDetail?.itinerary?.days.length ? (
+            <nav className="journey-desktop-tools" aria-label="行程工具">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openSection("route")}
+              >
+                今日路线
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openSection("map")}
+              >
+                地图
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openSection("budget")}
+              >
+                费用
+              </Button>
+            </nav>
+          ) : null}
           {versionDetail ? (
             <ItineraryPanel
               key={versionDetail.version.branch_id}
@@ -651,42 +724,28 @@ export default function ChatPage() {
                 setVersionDetail(updated);
               }}
               onFork={() => forkFromVersion(versionDetail.version)}
-              onAsk={(message) => void send(message)}
+              onAsk={askFromRoute}
             />
           ) : (
-            <Card className="min-h-[400px] overflow-hidden p-6 sm:p-10">
+            <Card className="journey-planning-help">
               <div className="flex h-full flex-col justify-center">
-                <Sparkles className="mb-5 h-9 w-9 text-teal-500" />
                 <p className="text-xs font-medium tracking-widest text-teal-600">
                   从一句想法开始
                 </p>
-                <h2 className="mt-3 text-2xl font-bold leading-relaxed text-slate-800">
-                  聊聊你想怎样旅行，
-                  <br />
-                  剩下的我来串起来。
-                </h2>
+                <h2>先聊旅行想法</h2>
                 <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">
                   可以告诉我目的地、时间和偏好；还没想好去哪，也可以让我先推荐几个城市。
                 </p>
-                <div className="mt-7 flex flex-wrap gap-2 text-xs text-slate-500">
-                  {["聊偏好", "选城市", "定地点", "串路线", "完整计划"].map(
-                    (step) => (
-                      <span
-                        key={step}
-                        className="rounded-full bg-teal-50 px-3 py-2 text-teal-700"
-                      >
-                        {step}
-                      </span>
-                    ),
-                  )}
-                </div>
+                <p className="mt-4 text-xs text-slate-500">
+                  例如：从上海出发，周末两天，想少走路。
+                </p>
               </div>
             </Card>
           )}{" "}
         </div>
       </div>
 
-      <details className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+      <details ref={bookRef} className="journey-book">
         <summary className="cursor-pointer text-sm font-medium text-slate-600">
           完整计划书、导出与版本历史
         </summary>
@@ -822,17 +881,21 @@ export default function ChatPage() {
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50 p-3">
               {versionDetail ? (
                 <>
-                  <a href={api.exportUrl(versionDetail.version.id, "md")}>
-                    <Button size="sm">
-                      <Download className="h-3.5 w-3.5" />
-                      导出 Markdown
-                    </Button>
+                  <a
+                    className="tf-button"
+                    data-size="sm"
+                    href={api.exportUrl(versionDetail.version.id, "md")}
+                  >
+                    <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                    导出 Markdown
                   </a>
-                  <a href={api.exportUrl(versionDetail.version.id, "html")}>
-                    <Button size="sm">
-                      <Download className="h-3.5 w-3.5" />
-                      导出 HTML
-                    </Button>
+                  <a
+                    className="tf-button"
+                    data-size="sm"
+                    href={api.exportUrl(versionDetail.version.id, "html")}
+                  >
+                    <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                    导出 HTML
                   </a>
                   {versionDetail.citations.length > 0 && (
                     <span className="text-[11px] text-slate-400">
@@ -850,6 +913,40 @@ export default function ChatPage() {
         </div>
       </details>
 
+      <nav className="journey-mobile-nav" aria-label="旅行快捷导航">
+        {(
+          [
+            { id: "route", label: "今日", icon: Route },
+            { id: "map", label: "地图", icon: Map },
+            { id: "budget", label: "费用", icon: Wallet },
+            { id: "chat", label: "对话", icon: MessageCircle },
+          ] as const
+        ).map((item) => {
+          const Icon = item.icon;
+          const available =
+            item.id === "chat" ||
+            (item.id === "route"
+              ? !!versionDetail
+              : !!versionDetail?.itinerary?.days.length);
+          const current =
+            mobileSection ??
+            (versionDetail?.itinerary?.days.length ? "route" : "chat");
+          return (
+            <Button
+              type="button"
+              variant="ghost"
+              key={item.id}
+              aria-current={current === item.id ? "location" : undefined}
+              disabled={!available}
+              onClick={() => openSection(item.id)}
+              className="journey-mobile-link"
+            >
+              <Icon aria-hidden="true" className="h-4 w-4" />
+              <span>{item.label}</span>
+            </Button>
+          );
+        })}
+      </nav>
       {error && (
         <div className="mt-4">
           <ErrorBanner message={error} onRetry={load} />

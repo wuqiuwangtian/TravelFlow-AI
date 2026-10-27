@@ -17,6 +17,16 @@ export function scrollToElement(
   });
 }
 
+/** Scroll message content without pulling a mobile route out of view. */
+export function scrollToLatest(element: HTMLElement | null) {
+  element?.scrollTo({
+    top: element.scrollHeight,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth",
+  });
+}
+
 /** 把 ISO 时间转成「刚刚 / 3 小时前 / 2 天前」这类人话。 */
 export function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();

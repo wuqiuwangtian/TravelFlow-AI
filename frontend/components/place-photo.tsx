@@ -1,9 +1,12 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
-import { MapPin } from "lucide-react";
+import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ScheduledActivity } from "@/lib/types";
+
 const cache = new Map<string, string[]>();
+
 export function PlacePhoto({
   versionId,
   activity,
@@ -12,26 +15,38 @@ export function PlacePhoto({
   activity: ScheduledActivity;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [loading, setLoading] = useState(!!activity.place);
+  const [viewing, setViewing] = useState(false);
+  const [fullFailed, setFullFailed] = useState(false);
+  const source = photos[photoIndex];
+  const title = activity.place?.name || activity.place_name || activity.title;
+
   useEffect(() => {
     let active = true;
+    dialog.current?.close();
+    setViewing(false);
     setPhotos([]);
     setPhotoIndex(0);
+    setLoading(!!activity.place);
     if (!activity.place || !host.current) return;
     const key = activity.place.id;
-    const cached = cache.get(key);
-    if (cached) {
-      setPhotos(cached);
+    const saved = cache.get(key);
+    if (saved) {
+      setPhotos(saved);
+      setLoading(false);
       return;
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
+        if (!entries.some((entry) => entry.isIntersecting)) return;
         observer.disconnect();
-        const saved = cache.get(key);
-        if (saved) {
-          setPhotos(saved);
+        const existing = cache.get(key);
+        if (existing) {
+          setPhotos(existing);
+          setLoading(false);
           return;
         }
         void api
@@ -41,52 +56,99 @@ export function PlacePhoto({
             cache.set(key, result.photos);
             if (active) setPhotos(result.photos);
           })
-          .catch(() => {});
+          .catch(() => {
+            // Photo availability never blocks a route or becomes a required field.
+          })
+          .finally(() => {
+            if (active) setLoading(false);
+          });
       },
       { rootMargin: "120px" },
     );
-    observer.observe(host.current);
+    // Observe the real card, including while a missing thumbnail has no area.
+    observer.observe(
+      host.current.closest("[data-activity-card]") || host.current,
+    );
     return () => {
       active = false;
       observer.disconnect();
     };
   }, [versionId, activity.id, activity.place]);
+
+  useEffect(() => {
+    if (viewing) dialog.current?.showModal();
+  }, [viewing]);
+
   return (
     <div
       ref={host}
-      className="relative mb-3 h-36 overflow-hidden rounded-xl bg-gradient-to-br from-teal-100 via-sky-50 to-slate-100 sm:h-44"
+      className="journey-photo"
+      data-state={source ? "ready" : loading ? "loading" : "unavailable"}
     >
-      {photos[photoIndex] ? (
+      {source ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photos[photoIndex]}
-            alt={`${activity.place?.name || activity.place_name}地点参考图`}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-            onError={() => setPhotoIndex((index) => index + 1)}
-          />
-          <span className="absolute bottom-2 right-2 rounded bg-black/45 px-2 py-0.5 text-[9px] text-white">
-            图片来自高德地点资料
-          </span>
+          <button
+            type="button"
+            className="journey-photo-trigger"
+            aria-label={`查看${title}地点参考图`}
+            onClick={() => {
+              setFullFailed(false);
+              setViewing(true);
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={source}
+              width={64}
+              height={56}
+              alt={`${title}地点参考图`}
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={() => {
+                dialog.current?.close();
+                setViewing(false);
+                setPhotoIndex((index) => index + 1);
+              }}
+            />
+          </button>
+          <dialog
+            ref={dialog}
+            className="journey-photo-dialog"
+            aria-label={`${title}完整参考图`}
+            onClose={() => setViewing(false)}
+          >
+            <div className="journey-photo-heading">
+              <h2>{title}</h2>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => dialog.current?.close()}
+              >
+                关闭参考图
+              </Button>
+            </div>
+            {viewing &&
+              (fullFailed ? (
+                <p role="status">大图暂不可用，路线与缩略图仍保留。</p>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="journey-full-photo"
+                  src={source}
+                  alt={`${title}完整地点参考图`}
+                  referrerPolicy="no-referrer"
+                  onError={() => setFullFailed(true)}
+                />
+              ))}
+            <p className="journey-photo-credit">
+              图片来自高德地点资料，仅作地点参考。缩略图适度裁切，展开按原比例完整显示。
+            </p>
+          </dialog>
         </>
-      ) : (
-        <div className="flex h-full items-end justify-between p-4 text-teal-800">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-teal-600">
-              {activity.city || "Along the journey"}
-            </p>
-            <p className="mt-1 text-sm font-semibold">
-              {activity.place_name || activity.title}
-            </p>
-            <p className="mt-1 text-[10px] text-slate-500">
-              {activity.place ? "地点参考图暂不可用" : "按当前建议安排探索"}
-            </p>
-          </div>
-          <MapPin className="h-9 w-9 opacity-25" />
-        </div>
-      )}
+      ) : loading ? (
+        <span className="journey-photo-wait" aria-hidden="true" />
+      ) : null}
     </div>
   );
 }

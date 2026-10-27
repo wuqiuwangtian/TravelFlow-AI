@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowDown,
   ArrowRight,
   Bus,
   Car,
-  Check,
   Clock,
   Footprints,
   Hotel,
@@ -31,6 +30,7 @@ import { OnTripControls } from "@/components/ontrip-controls";
 import { timeLabel, dayLabel } from "@/lib/travel-time";
 import { api, ApiError } from "@/lib/api";
 import { scrollToElement } from "@/lib/utils";
+import { initialJourneyDay, nextJourneyStop } from "@/lib/journey-view";
 import type {
   Activity,
   ActivityProgress,
@@ -116,25 +116,33 @@ export function ItineraryPanel({
   onFork: () => void;
   onAsk: (message: string) => void;
 }) {
-  const [dayNumber, setDayNumber] = useState(
-    detail.itinerary?.days[0]?.day ?? 1,
-  );
+  const [dayNumber, setDayNumber] = useState(initialJourneyDay(detail));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsModelSettings, setNeedsModelSettings] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const itinerary = detail.itinerary;
   const day =
     itinerary?.days.find((d) => d.day === dayNumber) ?? itinerary?.days[0];
   const active =
-    day?.activities.find((a) => a.id === selected) ?? day?.activities[0];
+    day?.activities.find((a) => a.id === selected) ?? nextJourneyStop(day);
   const activeIndex =
     day?.activities.findIndex((a) => a.id === active?.id) ?? -1;
   const previousStop =
     activeIndex > 0 ? day?.activities[activeIndex - 1] : undefined;
   const durationKnown = day?.legs.every((leg) => leg.duration_seconds !== null);
+
+  function selectStop(id: string) {
+    setSelected(id);
+    requestAnimationFrame(() =>
+      scrollToElement(document.getElementById("journey-current-stop"), {
+        block: "nearest",
+      }),
+    );
+  }
 
   async function mutate(work: () => Promise<VersionDetail>) {
     setBusy(true);
@@ -154,7 +162,7 @@ export function ItineraryPanel({
         err instanceof ApiError && err.code === "LLM_AUTH_FAILED",
       );
       requestAnimationFrame(() =>
-        scrollToElement(document.querySelector('[role="alert"]'), {
+        scrollToElement(errorRef.current, {
           block: "center",
         }),
       );
@@ -166,12 +174,17 @@ export function ItineraryPanel({
   }
 
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-teal-50 via-white to-sky-50 px-5 py-5 sm:px-7">
+    <Card
+      id="journey-route"
+      tabIndex={-1}
+      aria-label="旅行路线与执行"
+      className="journey-itinerary min-w-0 overflow-hidden"
+    >
+      <div className="journey-itinerary-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="mb-1 text-[10px] font-semibold tracking-[0.16em] text-teal-600">
-              YOUR JOURNEY
+              每日路线与旅中记录
             </p>
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
               <Route className="h-5 w-5 text-teal-600" />
@@ -198,26 +211,10 @@ export function ItineraryPanel({
             </button>
           </div>
         </div>
-        <div
-          className="mt-5 flex items-center gap-2 overflow-x-auto text-[11px] text-slate-500"
-          aria-label="规划流程"
-        >
-          {["聊偏好", "定地点", "串路线", "完整路书"].map((step, index) => (
-            <span key={step} className="flex shrink-0 items-center gap-2">
-              <span
-                className={`flex items-center gap-1.5 ${itinerary ? "text-teal-700" : ""}`}
-              >
-                <Check className="h-3 w-3" />
-                {step}
-              </span>
-              {index < 3 && <ArrowRight className="h-3 w-3 text-slate-300" />}
-            </span>
-          ))}
-        </div>
       </div>
-      <div className="min-w-0 p-4 sm:p-6">
+      <div className="journey-itinerary-content">
         {error && (
-          <div className="mb-4">
+          <div ref={errorRef} className="mb-4">
             <ErrorBanner message={error} />
             {needsModelSettings && (
               <Link
@@ -264,12 +261,155 @@ export function ItineraryPanel({
                     setEditing(null);
                     setSelected(null);
                   }}
-                  className={`shrink-0 rounded-xl px-4 py-2 text-xs transition ${day.day === item.day ? "bg-teal-700 font-semibold text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-teal-50"}`}
+                  className="journey-day-choice"
                 >
                   第 {item.day} 天
                 </button>
               ))}
             </div>
+            {active && (
+              <section
+                id="journey-current-stop"
+                className="journey-current-stop"
+                aria-label="当前站点"
+              >
+                <p className="journey-current-label">
+                  {selected
+                    ? "当前查看"
+                    : active.progress === "in_progress"
+                      ? "正在这一站"
+                      : active.progress === "completed" ||
+                          active.progress === "skipped"
+                        ? "今日已走完，回看此站"
+                        : "接下来"}{" "}
+                  ·{" "}
+                  {timeLabel(
+                    day.replan_context?.activity_id === active.id
+                      ? day.replan_context.time
+                      : active.start_time,
+                    day.replan_context?.activity_id === active.id
+                      ? day.replan_context.start_day_offset
+                      : active.start_day_offset,
+                  )}
+                </p>
+                <p className="journey-current-title">
+                  {active.place?.name ?? active.place_name ?? active.title}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  {active.place?.address || active.city}
+                </p>
+                {(day.replan_context ||
+                  day.linked_replan ||
+                  day.warnings.some((warning) =>
+                    /冲突|跨日|超过.*24|跨越午夜|前段预约/.test(warning),
+                  )) && (
+                  <button
+                    type="button"
+                    className="journey-time-note"
+                    onClick={() =>
+                      scrollToElement(
+                        document.getElementById("journey-notes"),
+                        { block: "start" },
+                      )
+                    }
+                  >
+                    查看时间与调整说明
+                  </button>
+                )}
+                {active.place && (
+                  <PlaceNavigation
+                    key={active.id}
+                    place={active.place}
+                    previousPlace={previousStop?.place}
+                    previousName={
+                      previousStop?.place_name || previousStop?.title
+                    }
+                    mode={day.legs[activeIndex - 1]?.mode ?? "transit"}
+                  />
+                )}
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="text-xs text-slate-500">
+                    旅中状态：
+                    {progressLabels[active.progress ?? "not_started"]}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(active.progress === "completed" ||
+                    active.progress === "skipped"
+                      ? (["not_started"] as const)
+                      : (["in_progress", "completed", "skipped"] as const)
+                    )
+                      .filter((status) => status !== active.progress)
+                      .map((status) => (
+                        <button
+                          type="button"
+                          key={status}
+                          disabled={!editable || disabled || busy}
+                          className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                          onClick={async () => {
+                            const ok = await mutate(() =>
+                              api.updateProgress(
+                                detail.version.id,
+                                day.day,
+                                active.id,
+                                status,
+                              ),
+                            );
+                            if (
+                              ok &&
+                              (status === "completed" || status === "skipped")
+                            )
+                              setSelected(null);
+                          }}
+                        >
+                          {status === "not_started"
+                            ? "恢复未开始"
+                            : status === "in_progress"
+                              ? "开始这一站"
+                              : status === "completed"
+                                ? "标记完成"
+                                : "跳过这一站"}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+                <OnTripControls
+                  key={`${detail.version.id}:${active.id}`}
+                  day={day}
+                  active={active}
+                  versionId={detail.version.id}
+                  disabled={!editable || disabled || busy}
+                  onCommit={mutate}
+                />
+                {active.progress === "not_started" &&
+                  !active.booking &&
+                  active.time_is_suggested &&
+                  !active.is_context_anchor &&
+                  !["hotel", "station", "transport"].includes(active.kind) && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {itinerary?.days
+                        .filter(
+                          (target) => Math.abs(target.day - day.day) === 1,
+                        )
+                        .map((target) => (
+                          <button
+                            key={target.day}
+                            type="button"
+                            aria-label={`将${active.title}移到第${target.day}天`}
+                            disabled={!editable || disabled || busy}
+                            onClick={() =>
+                              onAsk(
+                                `把第${day.day}天第${activeIndex + 1}站「${active.title}」移到第${target.day}天`,
+                              )
+                            }
+                            className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                          >
+                            移到第{target.day}天，先看预览
+                          </button>
+                        ))}
+                    </div>
+                  )}
+              </section>
+            )}
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-800">
@@ -297,106 +437,102 @@ export function ItineraryPanel({
                   : "建议行程 · 可直接对话调整"}
               </span>
             </div>
-            <TravelRecap
-              key={detail.version.id}
-              detail={detail}
-              disabled={!editable || disabled || busy}
-              onCommit={mutate}
-            />
             {advanced && (
               <RouteStrip
                 day={day}
                 selected={active?.id}
-                onSelect={setSelected}
+                onSelect={selectStop}
               />
             )}
-            {day.replan_context && (
-              <div
-                role="status"
-                aria-label="途中调整说明"
-                className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-4 text-xs leading-6 text-teal-800"
-              >
-                <p>
-                  从
-                  {day.activities.find(
-                    (a) => a.id === day.replan_context?.activity_id,
-                  )?.place_name || "所选地点"}{" "}
-                  {timeLabel(
-                    day.replan_context.time,
-                    day.replan_context.start_day_offset,
-                  )}{" "}
-                  出发
-                  {day.replan_context.end_time
-                    ? `，${timeLabel(day.replan_context.end_time, day.replan_context.end_day_offset)}前结束`
-                    : "，继续后续安排"}
-                  。预约与前段记录已保留。
-                </p>
-                {day.replan_context.omitted_titles.length > 0 && (
-                  <p>
-                    本次精简：{day.replan_context.omitted_titles.join("、")}
-                    。原安排可在版本历史中查看。
-                  </p>
-                )}
-                {day.warnings
-                  .filter((w) => w.includes("交通耗时尚未查到"))
-                  .map((w) => (
-                    <p key={w} className="text-amber-800">
-                      {w}
-                    </p>
-                  ))}
-              </div>
-            )}
-            {day.linked_replan && (
-              <p
-                role="status"
-                aria-label="两天联动说明"
-                className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-xs leading-6 text-teal-800"
-              >
-                最近联动第{day.linked_replan.first_day}—
-                {day.linked_replan.second_day}天：预留
-                {day.linked_replan.rest_minutes / 60}小时休息，第
-                {day.linked_replan.second_day}天
-                {day.linked_replan.next_departure}出发。预约与实际记录保留。
-                {!!day.linked_replan.movement_notes?.length && (
-                  <span className="block">
-                    跨天搬移：{day.linked_replan.movement_notes.join("；")}。
-                    付款日期与凭证保留。
-                  </span>
-                )}
-              </p>
-            )}
-            {itinerary?.days.some((item) => item.day === day.day + 1) &&
-              (day.replan_context ||
-                day.activities.some(
-                  (activity) => activity.start_day_offset > 0,
-                )) && (
-                <button
-                  type="button"
-                  disabled={!editable || disabled || busy}
-                  onClick={() =>
-                    onAsk(
-                      `联动调整第${day.day}天和第${day.day + 1}天，预留8小时休息`,
-                    )
-                  }
-                  className="mt-3 rounded-lg border border-teal-200 px-3 py-2 text-xs text-teal-800 hover:bg-teal-50 disabled:opacity-40"
-                >
-                  联动调整第{day.day}天和第{day.day + 1}天
-                </button>
-              )}
-            {day.warnings
-              .filter((warning) =>
-                /冲突|跨日|超过.*24|跨越午夜|前段预约/.test(warning),
-              )
-              .map((warning, index) => (
-                <p
-                  key={index}
+            <section id="journey-notes" tabIndex={-1} aria-label="行程时间说明">
+              {day.replan_context && (
+                <div
                   role="status"
-                  className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800"
+                  aria-label="途中调整说明"
+                  className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-4 text-xs leading-6 text-teal-800"
                 >
-                  {warning}
+                  <p>
+                    从
+                    {day.activities.find(
+                      (a) => a.id === day.replan_context?.activity_id,
+                    )?.place_name || "所选地点"}{" "}
+                    {timeLabel(
+                      day.replan_context.time,
+                      day.replan_context.start_day_offset,
+                    )}{" "}
+                    出发
+                    {day.replan_context.end_time
+                      ? `，${timeLabel(day.replan_context.end_time, day.replan_context.end_day_offset)}前结束`
+                      : "，继续后续安排"}
+                    。预约与前段记录已保留。
+                  </p>
+                  {day.replan_context.omitted_titles.length > 0 && (
+                    <p>
+                      本次精简：{day.replan_context.omitted_titles.join("、")}
+                      。原安排可在版本历史中查看。
+                    </p>
+                  )}
+                  {day.warnings
+                    .filter((w) => w.includes("交通耗时尚未查到"))
+                    .map((w) => (
+                      <p key={w} className="text-amber-800">
+                        {w}
+                      </p>
+                    ))}
+                </div>
+              )}
+              {day.linked_replan && (
+                <p
+                  role="status"
+                  aria-label="两天联动说明"
+                  className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-xs leading-6 text-teal-800"
+                >
+                  最近联动第{day.linked_replan.first_day}—
+                  {day.linked_replan.second_day}天：预留
+                  {day.linked_replan.rest_minutes / 60}小时休息，第
+                  {day.linked_replan.second_day}天
+                  {day.linked_replan.next_departure}出发。预约与实际记录保留。
+                  {!!day.linked_replan.movement_notes?.length && (
+                    <span className="block">
+                      跨天搬移：{day.linked_replan.movement_notes.join("；")}。
+                      付款日期与凭证保留。
+                    </span>
+                  )}
                 </p>
-              ))}
-            <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              )}
+              {itinerary?.days.some((item) => item.day === day.day + 1) &&
+                (day.replan_context ||
+                  day.activities.some(
+                    (activity) => activity.start_day_offset > 0,
+                  )) && (
+                  <button
+                    type="button"
+                    disabled={!editable || disabled || busy}
+                    onClick={() =>
+                      onAsk(
+                        `联动调整第${day.day}天和第${day.day + 1}天，预留8小时休息`,
+                      )
+                    }
+                    className="mt-3 rounded-lg border border-teal-200 px-3 py-2 text-xs text-teal-800 hover:bg-teal-50 disabled:opacity-40"
+                  >
+                    联动调整第{day.day}天和第{day.day + 1}天
+                  </button>
+                )}
+              {day.warnings
+                .filter((warning) =>
+                  /冲突|跨日|超过.*24|跨越午夜|前段预约/.test(warning),
+                )
+                .map((warning, index) => (
+                  <p
+                    key={index}
+                    role="status"
+                    className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800"
+                  >
+                    {warning}
+                  </p>
+                ))}
+            </section>
+            <div className="journey-detail-grid">
               <div className="min-w-0">
                 <p className="mb-4 flex items-center gap-1.5 text-xs font-medium text-slate-500">
                   <Clock className="h-3.5 w-3.5" />
@@ -423,12 +559,65 @@ export function ItineraryPanel({
                         )}
                       </div>
                       <div className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(activity.id)}
-                          aria-pressed={active?.id === activity.id}
-                          className={`w-full rounded-xl border p-3.5 text-left transition ${active?.id === activity.id ? "border-teal-300 bg-teal-50/50 shadow-sm" : "border-slate-100 bg-white hover:border-teal-200"}`}
+                        <div
+                          className="journey-activity-card"
+                          data-activity-card
                         >
+                          <button
+                            type="button"
+                            onClick={() => selectStop(activity.id)}
+                            aria-pressed={active?.id === activity.id}
+                            className="journey-stop-select"
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700">
+                                <StopIcon kind={activity.kind} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold leading-relaxed text-slate-800">
+                                  {activity.title}
+                                </p>
+                                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                                  {activity.place?.name ?? activity.place_name}
+                                  {activity.duration_minutes
+                                    ? ` · 停留约 ${activity.duration_minutes} 分钟`
+                                    : ""}
+                                </p>
+                                {activity.cost !== null &&
+                                  !activity.is_context_anchor && (
+                                    <p className="mt-1.5 text-[11px] text-slate-500">
+                                      {["estimate", "manual"].includes(
+                                        activity.cost_source,
+                                      )
+                                        ? "预计 "
+                                        : ""}
+                                      ¥{activity.cost}
+                                      {activity.cost_basis === "per_person"
+                                        ? " / 人"
+                                        : activity.cost_basis === "total"
+                                          ? " / 全团"
+                                          : "（口径待核实）"}
+                                    </p>
+                                  )}
+                              </div>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-teal-600">
+                                {activity.progress &&
+                                activity.progress !== "not_started"
+                                  ? progressLabels[activity.progress]
+                                  : index + 1}
+                              </span>
+                            </div>
+                            {activity.booking && (
+                              <p className="mt-2 text-[11px] text-amber-700">
+                                已有预约{" "}
+                                {timeLabel(
+                                  activity.booking.start_time,
+                                  activity.booking.start_day_offset,
+                                )}{" "}
+                                · 停留 {activity.booking.duration_minutes} 分钟
+                              </p>
+                            )}
+                          </button>
                           {!activity.is_context_anchor &&
                             !["station", "meal", "transport"].includes(
                               activity.kind,
@@ -438,55 +627,7 @@ export function ItineraryPanel({
                                 activity={activity}
                               />
                             )}
-                          <div className="flex items-start gap-2.5">
-                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700">
-                              <StopIcon kind={activity.kind} />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold leading-relaxed text-slate-800">
-                                {activity.title}
-                              </p>
-                              <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                                {activity.place?.name ?? activity.place_name}
-                                {activity.duration_minutes
-                                  ? ` · 停留约 ${activity.duration_minutes} 分钟`
-                                  : ""}
-                              </p>
-                              {activity.cost !== null &&
-                                !activity.is_context_anchor && (
-                                  <p className="mt-1.5 text-[11px] text-slate-500">
-                                    {["estimate", "manual"].includes(
-                                      activity.cost_source,
-                                    )
-                                      ? "预计 "
-                                      : ""}
-                                    ¥{activity.cost}
-                                    {activity.cost_basis === "per_person"
-                                      ? " / 人"
-                                      : activity.cost_basis === "total"
-                                        ? " / 全团"
-                                        : "（口径待核实）"}
-                                  </p>
-                                )}
-                            </div>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-teal-600">
-                              {activity.progress &&
-                              activity.progress !== "not_started"
-                                ? progressLabels[activity.progress]
-                                : index + 1}
-                            </span>
-                          </div>
-                          {activity.booking && (
-                            <p className="mt-2 text-[11px] text-amber-700">
-                              已有预约{" "}
-                              {timeLabel(
-                                activity.booking.start_time,
-                                activity.booking.start_day_offset,
-                              )}{" "}
-                              · 停留 {activity.booking.duration_minutes} 分钟
-                            </p>
-                          )}
-                        </button>
+                        </div>
                         {activity.notes && (
                           <p className="px-2 pt-2 text-xs leading-relaxed text-slate-500">
                             {activity.notes}
@@ -607,115 +748,17 @@ export function ItineraryPanel({
                   ))}
                 </ol>
               </div>
-              <div className="min-w-0 space-y-4">
+              <div
+                id="journey-map"
+                tabIndex={-1}
+                className="journey-map-section min-w-0 space-y-4"
+              >
                 <DayMap
                   key={`${detail.version.id}:${day.day}`}
                   versionId={detail.version.id}
                   day={day}
                   configured={itinerary?.map_status !== "unconfigured"}
                 />
-                {active && (
-                  <div className="rounded-xl border border-slate-100 p-4">
-                    <p className="text-[10px] font-medium text-slate-400">
-                      当前查看
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {active.place?.name ?? active.place_name ?? active.title}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                      {active.place?.address || active.city}
-                    </p>
-                    {active.place && (
-                      <PlaceNavigation
-                        key={active.id}
-                        place={active.place}
-                        previousPlace={previousStop?.place}
-                        previousName={
-                          previousStop?.place_name || previousStop?.title
-                        }
-                        mode={day.legs[activeIndex - 1]?.mode ?? "transit"}
-                      />
-                    )}
-                    <div className="mt-4 border-t border-slate-100 pt-3">
-                      <p className="text-xs text-slate-500">
-                        旅中状态：
-                        {progressLabels[active.progress ?? "not_started"]}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {(active.progress === "completed" ||
-                        active.progress === "skipped"
-                          ? (["not_started"] as const)
-                          : (["in_progress", "completed", "skipped"] as const)
-                        )
-                          .filter((status) => status !== active.progress)
-                          .map((status) => (
-                            <button
-                              type="button"
-                              key={status}
-                              disabled={!editable || disabled || busy}
-                              className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
-                              onClick={() =>
-                                void mutate(() =>
-                                  api.updateProgress(
-                                    detail.version.id,
-                                    day.day,
-                                    active.id,
-                                    status,
-                                  ),
-                                )
-                              }
-                            >
-                              {status === "not_started"
-                                ? "恢复未开始"
-                                : status === "in_progress"
-                                  ? "开始这一站"
-                                  : status === "completed"
-                                    ? "标记完成"
-                                    : "跳过这一站"}
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                    <OnTripControls
-                      key={`${detail.version.id}:${active.id}`}
-                      day={day}
-                      active={active}
-                      versionId={detail.version.id}
-                      disabled={!editable || disabled || busy}
-                      onCommit={mutate}
-                    />
-                    {active.progress === "not_started" &&
-                      !active.booking &&
-                      active.time_is_suggested &&
-                      !active.is_context_anchor &&
-                      !["hotel", "station", "transport"].includes(
-                        active.kind,
-                      ) && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {itinerary?.days
-                            .filter(
-                              (target) => Math.abs(target.day - day.day) === 1,
-                            )
-                            .map((target) => (
-                              <button
-                                key={target.day}
-                                type="button"
-                                aria-label={`将${active.title}移到第${target.day}天`}
-                                disabled={!editable || disabled || busy}
-                                onClick={() =>
-                                  onAsk(
-                                    `把第${day.day}天第${activeIndex + 1}站「${active.title}」移到第${target.day}天`,
-                                  )
-                                }
-                                className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
-                              >
-                                移到第{target.day}天，先看预览
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                  </div>
-                )}
                 <div className="rounded-xl bg-slate-50 p-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <MessageCircle className="h-4 w-4 text-teal-600" />
@@ -765,12 +808,18 @@ export function ItineraryPanel({
                 </details>
               </div>
             </div>
-            <BudgetPanel
-              detail={detail}
-              day={day.day}
-              disabled={!editable || disabled || busy}
-              onCommit={mutate}
-            />
+            <div
+              id="journey-budget"
+              tabIndex={-1}
+              className="journey-budget-section"
+            >
+              <BudgetPanel
+                detail={detail}
+                day={day.day}
+                disabled={!editable || disabled || busy}
+                onCommit={mutate}
+              />
+            </div>
             <details className="mt-4 rounded-xl border border-slate-100 p-4">
               <summary className="cursor-pointer text-xs text-slate-600">
                 消费明细、图片凭证与退款报销
@@ -782,6 +831,12 @@ export function ItineraryPanel({
                 onCommit={mutate}
               />
             </details>
+            <TravelRecap
+              key={detail.version.id}
+              detail={detail}
+              disabled={!editable || disabled || busy}
+              onCommit={mutate}
+            />
             {advanced && (
               <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-slate-200 p-4">
                 <label className="text-xs text-slate-500">

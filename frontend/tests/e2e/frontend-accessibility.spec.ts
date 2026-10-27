@@ -46,13 +46,13 @@ test("全局导航标注页面与旅行上下文，画布按钮触屏可点击",
 test("减少动画偏好作用于对话自动滚动和共享加载图标", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function (options) {
+    const original = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = function (options) {
       if (typeof options === "object")
         document.documentElement.dataset.lastScrollBehavior = String(
           options.behavior,
         );
-      original.call(this, options);
+      Reflect.apply(original, this, [options]);
     };
   });
   const trip = await seed(page);
