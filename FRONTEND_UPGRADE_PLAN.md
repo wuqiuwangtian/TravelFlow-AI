@@ -4,7 +4,7 @@
 
 当前进度：**FE-0 盘点与 FE-1 反馈基础／优先缺陷修复已交付，正在进行 FE-2 视觉与信息架构讨论。** [修复与验证](docs/frontend-feedback.md)记录分组提交、完整 204 项浏览器回归及边界；[历史盘点](docs/frontend-audit/README.md)保留原始证据。整体视觉与全站组件迁移尚未完成，风格仍需与用户讨论。
 
-FE-2 已确认方向：[设计约定](DESIGN_BRIEF.md)固定统一风格、避免模板化 AI 界面、完整按钮动效和禁用 emoji 等要求。A/B/C 保留为设置可选主题、默认 A，电脑松弛、手机紧凑；电脑默认 D3 对话主导，手机默认 M1 今日路线。[布局样稿](docs/design/layout-options.html)默认值已同步。2026-10-27 用户恢复推进，通过[第三轮组件与图文比较](docs/design/layout-options.html?round=components)确认 C1 轻圆角短反馈＋P1 小图辅助，已补充固定缩略图、完整图查看和缺图回落规则。正式页面尚未改造；下一项为完整任务样稿与规范确认。
+FE-2 已确认方向：[设计约定](DESIGN_BRIEF.md)固定统一风格、避免模板化 AI 界面、完整按钮动效和禁用 emoji 等要求。A/B/C 保留为设置可选主题、默认 A，电脑松弛、手机紧凑；电脑默认 D3 对话主导，手机默认 M1 今日路线。[布局样稿](docs/design/layout-options.html)默认值已同步。2026-10-27 用户恢复推进，通过[第三轮组件与图文比较](docs/design/layout-options.html?round=components)确认 C1 轻圆角短反馈＋P1 小图辅助，已补充固定缩略图、完整图查看和缺图回落规则。第四轮[完整任务样稿](docs/design/task-flows.html)已提供，对比 R1／R2 行程修改方式和 W1／W2 高级工程检查区；等待用户选择与实际任务核对。正式页面尚未改造，确认规范后进入 FE-3。
 
 ## 启动节点与优先级
 

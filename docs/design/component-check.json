@@ -32,6 +32,10 @@
     "320: route update/photo preservation",
     "320: waiting, duplicate-submit guard, success and recoverable failure",
     "320: reduced-motion feedback",
+    "1440: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
+    "390: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
+    "320: six image sizes/ratios preserve thumbnail size, row height and next-stop position; complete picture fits dialog",
     "missing image: removed photo and reserved space, text route intact"
-  ]
+  ],
+  "photoShapeChecks": 18
 }

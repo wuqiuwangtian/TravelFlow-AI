@@ -1,0 +1,747 @@
+.task-app,
+.graph-app {
+  max-width: 1360px;
+}
+.task-body {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+.task-sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 12px;
+  gap: 10px;
+  border-right: 1px solid var(--line);
+}
+.task-sidebar button {
+  justify-content: flex-start;
+  font-size: 12px;
+}
+.task-main {
+  min-width: 0;
+}
+.task-daybar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 24px 30px;
+  border-bottom: 1px solid var(--line);
+}
+.task-daybar h1,
+.graph-header h1 {
+  font-size: 23px;
+  line-height: 1.5;
+  margin: 0;
+}
+.task-daybar .eyebrow,
+.graph-header .eyebrow {
+  margin: 0 0 4px;
+}
+.task-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 28px;
+  padding: 28px 30px;
+}
+.task-chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  padding-right: 28px;
+}
+.task-chat h2 {
+  font-size: 24px;
+}
+.task-chat > .muted {
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+#task-dialogue {
+  font-size: 16px;
+  line-height: 1.9;
+  flex: 1;
+  min-height: 160px;
+}
+#task-dialogue p {
+  margin: 0 0 22px;
+  overflow-wrap: anywhere;
+}
+#task-dialogue .user-message {
+  padding: 12px 15px;
+  background: var(--tint);
+  border-radius: 8px;
+}
+.task-support {
+  min-width: 0;
+}
+.task-next {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.task-next h2 {
+  font-size: 24px;
+  margin: 0;
+}
+.task-next .eyebrow {
+  margin: 0;
+}
+.task-next .muted {
+  font-size: 12px;
+  margin: 5px 0 12px;
+}
+.task-next .next-actions button {
+  font-size: 12px;
+}
+.task-route,
+.task-map,
+.task-budget {
+  padding-top: 24px;
+}
+.task-route h2,
+.task-map h2,
+.task-budget h2 {
+  font-size: 18px;
+}
+.task-route .stop-select {
+  grid-template-columns: 38px 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 6px;
+}
+.task-route .stop-title {
+  font-size: 16px;
+}
+.task-route .leg {
+  margin-left: 56px;
+  padding-left: 18px;
+  font-size: 11px;
+}
+.task-route .stop-meta {
+  margin-top: 4px;
+}
+.task-route .has-photo .stop-select {
+  min-height: 102px;
+}
+.task-map {
+  border-top: 1px solid var(--line);
+}
+#task-map {
+  position: relative;
+  height: 165px;
+  overflow: hidden;
+  background: var(--map);
+  border-radius: 8px;
+}
+#task-map svg {
+  width: 100%;
+  height: 100%;
+}
+#task-map button {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  translate: none;
+  scale: 1;
+  animation: none;
+}
+.task-map > p,
+.task-budget > p.muted {
+  font-size: 12px;
+}
+.task-budget {
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+}
+html[data-device="desktop"] .task-budget {
+  display: none;
+}
+html[data-device="desktop"][data-panel="budget"] .task-budget {
+  display: block;
+}
+html[data-device="desktop"][data-panel="budget"] :is(.task-route, .task-map),
+html[data-device="desktop"][data-panel="map"] .task-route {
+  display: none;
+}
+html[data-device="desktop"][data-panel="map"] #task-map {
+  height: 360px;
+}
+.task-budget .panel-heading {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.budget-summary {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.budget-summary strong {
+  font-size: 23px;
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.budget-summary p {
+  font-size: 12px;
+  margin: 2px 0;
+}
+.budget-summary [data-over="true"] {
+  color: var(--danger);
+}
+.budget-head,
+.budget-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 90px;
+  align-items: center;
+  gap: 8px;
+}
+.budget-head {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 12px 0 4px;
+}
+.budget-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.budget-row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.budget-row > span {
+  font-variant-numeric: tabular-nums;
+}
+.budget-row button {
+  padding: 6px;
+  font-size: 12px;
+}
+.budget-row .budget-editor {
+  grid-column: 1/-1;
+}
+.budget-editor label,
+.custom-form label {
+  font-size: 12px;
+  display: block;
+}
+.budget-editor input,
+.custom-form :is(input, select),
+.task-chat-form textarea,
+#graph-inspector :is(input, textarea),
+.graph-toolbar select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  min-height: 44px;
+  padding: 8px;
+  width: 100%;
+}
+.budget-editor .choice-group {
+  margin-top: 8px;
+}
+.budget-editor p {
+  color: var(--danger);
+  margin: 3px 0;
+}
+.custom-form {
+  padding: 12px 0;
+  display: grid;
+  gap: 10px;
+}
+.task-chat-form {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+}
+.task-chat-form > label {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 6px;
+}
+.task-chat-form textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.form-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.failure-toggle {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.failure-toggle input {
+  width: 16px;
+  height: 16px;
+}
+.suggestion {
+  font-size: 12px;
+  margin: 14px 0 0;
+  align-self: flex-start;
+  text-align: left;
+}
+#change-result {
+  padding: 14px;
+  background: var(--tint);
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+#change-result p {
+  margin: 5px 0 10px;
+}
+#change-result button {
+  font-size: 12px;
+}
+.task-bottom {
+  display: none;
+}
+.mobile-book {
+  display: none;
+}
+html[data-device="mobile"] .mobile-book {
+  display: inline-flex;
+}
+.task-app .scene-footer {
+  padding: 14px 30px;
+}
+#book-content {
+  font-size: 14px;
+}
+#book-content li {
+  margin: 10px 0;
+}
+.task-app .appbar .icon-button {
+  margin-left: auto;
+}
+html[data-round="tasks"] button:disabled {
+  cursor: not-allowed;
+}
+html[data-round="tasks"] button[aria-busy="true"] {
+  cursor: progress;
+}
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 18px 24px;
+}
+.graph-toolbar label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.graph-toolbar select {
+  font-size: 12px;
+  max-width: 250px;
+}
+.inspector-choices {
+  padding: 0 24px;
+}
+.inspector-choices button {
+  font-size: 12px;
+}
+.graph-status {
+  margin: 12px 24px;
+  font-size: 12px;
+  min-height: 22px;
+}
+.graph-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  border-top: 1px solid var(--line);
+}
+.canvas-panel {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+.canvas-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  flex-wrap: wrap;
+}
+.canvas-controls button {
+  font-size: 12px;
+}
+.canvas-controls span {
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: center;
+}
+#graph-viewport {
+  height: 510px;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-color: var(--surface);
+  cursor: grab;
+}
+#graph-viewport:active {
+  cursor: grabbing;
+}
+#graph-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  transform-origin: 0 0;
+}
+#graph-wires {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2400px;
+  height: 1400px;
+  overflow: visible;
+  pointer-events: none;
+}
+#graph-wires path {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.65;
+}
+.graph-node {
+  position: absolute;
+  width: 180px;
+  min-height: 164px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 3px 10px #0000000b;
+  overflow: hidden;
+}
+.graph-node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--tint);
+}
+.graph-node .node-title {
+  width: 100%;
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--tint);
+  font-weight: 600;
+  font-size: 12px;
+  touch-action: none;
+  cursor: grab;
+}
+html[data-round="tasks"] .graph-node button {
+  translate: none;
+  scale: 1;
+  animation: none;
+}
+.node-state {
+  margin: 5px 10px 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.node-ports {
+  position: relative;
+  min-height: 88px;
+}
+.node-inputs {
+  width: 91px;
+}
+.graph-node .port {
+  padding: 4px;
+  font-size: 10px;
+  border: 0;
+  border-radius: 0;
+  min-height: 32px;
+  max-width: 91px;
+  background: transparent;
+  justify-content: flex-start;
+  gap: 4px;
+}
+.port::before {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+}
+.graph-node .out-port {
+  position: absolute;
+  right: 0;
+  top: 0;
+  flex-direction: row-reverse;
+}
+.port[data-type="candidates"]::before {
+  border-style: double;
+  border-radius: 1px;
+}
+.port[data-type="itinerary"]::before {
+  border-radius: 1px;
+}
+.port[data-type="budget"]::before {
+  background: var(--accent);
+}
+.port[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent);
+}
+.canvas-caption {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 10px 14px;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+#graph-inspector {
+  padding: 20px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#graph-inspector h2 {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+#graph-inspector h3 {
+  font-size: 13px;
+  margin: 20px 0 7px;
+}
+#graph-inspector label {
+  display: block;
+  font-size: 12px;
+  margin: 12px 0;
+}
+#graph-inspector label :is(input, textarea) {
+  display: block;
+  margin-top: 5px;
+}
+#graph-inspector textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+#graph-inspector .choice-group button {
+  font-size: 12px;
+}
+#graph-artifact {
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.8;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.edge-list {
+  display: grid;
+  gap: 6px;
+}
+.edge-list button {
+  font-size: 11px;
+  text-align: left;
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+}
+html[data-inspector="bottom"] .graph-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-inspector="bottom"] .canvas-panel {
+  border-right: 0;
+}
+html[data-inspector="bottom"] #graph-inspector {
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+html[data-device="mobile"] .task-app {
+  width: 390px;
+  height: 850px;
+  max-width: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: clip;
+}
+html[data-device="mobile"] .task-app .appbar {
+  padding: 16px 18px;
+  gap: 10px;
+}
+html[data-device="mobile"] .task-app .brand {
+  font-size: 15px;
+}
+html[data-device="mobile"] .trip-name {
+  font-size: 12px;
+}
+html[data-device="mobile"] .trip-name span {
+  display: none;
+}
+html[data-device="mobile"] .task-body {
+  display: block;
+  overflow: auto;
+}
+html[data-device="mobile"] .task-sidebar,
+html[data-device="mobile"] .task-daybar,
+html[data-device="mobile"] .task-app .scene-footer {
+  display: none;
+}
+html[data-device="mobile"] .task-content {
+  display: block;
+  padding: 0;
+}
+html[data-device="mobile"] .task-support {
+  display: contents;
+}
+html[data-device="mobile"]
+  .task-content
+  :is(.task-chat, .task-next, .task-route, .task-budget, .task-map) {
+  display: none;
+  padding: 18px;
+  margin: 0;
+  border: 0;
+}
+html[data-device="mobile"][data-panel="route"]
+  .task-content
+  :is(.task-next, .task-route),
+html[data-device="mobile"][data-panel="budget"] .task-content .task-budget,
+html[data-device="mobile"][data-panel="chat"] .task-content .task-chat,
+html[data-device="mobile"][data-panel="map"] .task-content .task-map {
+  display: block;
+}
+html[data-device="mobile"][data-panel="route"] .task-content .task-next {
+  border-bottom: 1px solid var(--line);
+}
+html[data-device="mobile"] .task-chat {
+  min-height: 650px;
+}
+html[data-device="mobile"] .task-chat h2 {
+  font-size: 22px;
+}
+html[data-device="mobile"][data-panel="chat"] .task-body {
+  overflow: clip;
+}
+html[data-device="mobile"][data-panel="chat"] .task-main {
+  height: 100%;
+  min-height: 0;
+}
+html[data-device="mobile"][data-panel="chat"] .task-content {
+  height: 100%;
+}
+html[data-device="mobile"][data-panel="chat"] .task-content .task-chat {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: clip;
+}
+html[data-device="mobile"] #task-dialogue {
+  overflow: auto;
+  min-height: 0;
+}
+html[data-device="mobile"] #change-result {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+html[data-device="mobile"] .task-chat-form {
+  flex-shrink: 0;
+  padding-top: 10px;
+  margin-top: 10px;
+}
+html[data-device="mobile"] .task-chat-form textarea {
+  height: 72px;
+  min-height: 72px;
+  resize: none;
+}
+html[data-device="mobile"] .task-chat > .panel-heading {
+  margin-bottom: 10px;
+}
+html[data-device="mobile"] .task-chat > .muted {
+  margin-bottom: 12px;
+}
+html[data-device="mobile"] .task-bottom {
+  display: grid;
+}
+html[data-device="mobile"] #task-map {
+  height: 390px;
+}
+@media (pointer: coarse) {
+  .graph-node .port {
+    min-height: 44px;
+  }
+  .node-ports {
+    min-height: 100px;
+  }
+  .graph-node {
+    min-height: 180px;
+  }
+}
+@media (max-width: 900px) {
+  .reviewbar {
+    padding: 18px 14px;
+  }
+  [data-device="desktop"]:is(button) {
+    display: none;
+  }
+  .graph-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .canvas-panel {
+    border-right: 0;
+  }
+  #graph-inspector {
+    border-top: 1px solid var(--line);
+  }
+  html[data-inspector="bottom"] #graph-inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graph-header {
+    padding: 18px;
+    flex-wrap: wrap;
+  }
+  .graph-header h1 {
+    font-size: 22px;
+  }
+  .graph-toolbar {
+    padding: 16px;
+    gap: 8px;
+  }
+  .graph-toolbar label {
+    width: 100%;
+  }
+  .graph-toolbar select {
+    max-width: none;
+  }
+  .graph-status {
+    margin-inline: 16px;
+  }
+  .inspector-choices {
+    padding-inline: 16px;
+  }
+  #graph-viewport {
+    height: 440px;
+  }
+}

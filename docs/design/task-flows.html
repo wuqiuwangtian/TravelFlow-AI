@@ -1,0 +1,350 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-theme="paper"
+  data-density="airy"
+  data-round="tasks"
+  data-component="quiet"
+  data-photos="small"
+  data-device="desktop"
+  data-panel="route"
+  data-inspector="side"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TravelFlow · 第四轮任务流程</title>
+    <link rel="stylesheet" href="./layout-options.css" />
+    <link rel="stylesheet" href="./component-options.css" />
+    <link rel="stylesheet" href="./task-flows.css" />
+  </head>
+  <body>
+    <header class="reviewbar">
+      <div class="review-title">
+        <strong>第四轮：把一趟旅行真正用起来</strong
+        ><span>D3 / M1 · A / C1 / P1 · 虚构数据与本地模拟，不调用任何服务</span>
+      </div>
+      <div class="review-groups">
+        <div class="choice-group" aria-label="行程修改方式">
+          <span>修改</span
+          ><button data-revision="direct" aria-pressed="true">
+            R1 直接更新，可撤销</button
+          ><button data-revision="review" aria-pressed="false">
+            R2 先核对，再采用
+          </button>
+        </div>
+        <div class="choice-group" aria-label="试用工作区">
+          <button data-workspace="trip" aria-pressed="true">普通行程</button
+          ><button data-workspace="graph" aria-pressed="false">高级工程</button>
+        </div>
+      </div>
+      <div class="component-tools">
+        <div class="choice-group">
+          <button data-device="desktop" aria-pressed="true">电脑 D3</button
+          ><button data-device="mobile" aria-pressed="false">手机 M1</button>
+        </div>
+        <p id="mode-description">
+          R1 推荐：一句话改好行程、路线和预估费用，保留修改说明与撤销。
+        </p>
+      </div>
+      <p class="reference-note">
+        试用顺序：改成喝茶 → 填午餐实付 → 看完整路书 →
+        导航与完成下一站。对话仅模拟下方示例，其他输入会保留。高级工程可拖节点、增删改线、修改参数和检查产物。
+      </p>
+    </header>
+
+    <main
+      class="app task-app"
+      id="trip-workspace"
+      aria-label="完整旅行任务样稿"
+    >
+      <header class="appbar">
+        <div class="brand"><span data-icon="route"></span>TravelFlow</div>
+        <div class="trip-name">
+          杭州三日慢游<span>2 人同行 · 示例旅行</span>
+        </div>
+        <button
+          data-action="settings"
+          class="icon-button"
+          aria-label="打开设置"
+        >
+          <span data-icon="settings"></span>
+        </button>
+      </header>
+      <div class="task-body">
+        <nav class="task-sidebar" aria-label="旅行工作区">
+          <button data-panel="route">
+            <span data-icon="route"></span>今日行程</button
+          ><button data-panel="budget">
+            <span data-icon="wallet"></span>费用与记账</button
+          ><button data-action="book">
+            <span data-icon="book"></span>完整路书
+          </button>
+          <div class="nav-space"></div>
+          <button data-workspace="graph">
+            <span data-icon="workflow"></span>高级工程
+          </button>
+        </nav>
+        <div class="task-main">
+          <div class="task-daybar">
+            <div>
+              <p class="eyebrow">第 2 天 · 西湖与街巷</p>
+              <h1>边聊边安排，沿着路线走</h1>
+            </div>
+            <button data-action="book">
+              <span data-icon="file"></span>查看完整路书
+            </button>
+          </div>
+          <div class="task-content">
+            <section class="task-chat" aria-label="对话修改行程">
+              <div class="panel-heading">
+                <h2>继续聊这趟旅行</h2>
+                <span data-icon="message"></span>
+              </div>
+              <p class="muted">
+                已有可用路线。说出想改的地方，其余安排一起跟着更新。
+              </p>
+              <div id="task-dialogue" aria-live="polite">
+                <p class="assistant-message">
+                  上午沿湖散步，中午休息，下午逛步道与街巷。你可以直接告诉我想怎样调整。
+                </p>
+              </div>
+              <div id="change-result" hidden>
+                <strong id="change-title"></strong>
+                <p id="change-description"></p>
+                <div class="choice-group">
+                  <button data-action="apply" class="primary" hidden>
+                    采用这次修改</button
+                  ><button data-action="discard" hidden>保留原安排</button
+                  ><button data-action="undo" hidden>撤销这次行程修改</button>
+                </div>
+              </div>
+              <button data-action="try-change" class="suggestion">
+                试一试：下午少走一点，留出喝茶时间
+              </button>
+              <form id="task-chat-form" class="task-chat-form">
+                <label for="task-message">想怎样调整</label
+                ><textarea
+                  id="task-message"
+                  rows="3"
+                  placeholder="下午少走一点，留出喝茶时间"
+                ></textarea>
+                <div class="form-controls">
+                  <label class="failure-toggle"
+                    ><input
+                      type="checkbox"
+                      id="fail-next"
+                    />下一次演示请求失败</label
+                  ><button type="submit" class="primary">
+                    <span data-icon="send"></span>发送
+                  </button>
+                </div>
+                <p id="chat-result" class="inline-result" role="status"></p>
+              </form>
+            </section>
+            <div class="task-support">
+              <section class="task-next" aria-label="当前站点">
+                <p class="eyebrow" id="next-label">接下来 · 12:00</p>
+                <h2 id="next-title">午餐与休息</h2>
+                <p id="next-origin" class="muted">从柳浪闻莺出发</p>
+                <div class="next-actions">
+                  <button data-action="navigate" class="primary">
+                    <span data-icon="navigation"></span>从上一站导航</button
+                  ><button data-action="done">
+                    <span data-icon="check"></span>我已完成
+                  </button>
+                </div>
+                <p
+                  id="navigation-result"
+                  class="inline-result"
+                  role="status"
+                ></p>
+              </section>
+              <section class="task-route" aria-label="连续今日路线">
+                <div class="panel-heading">
+                  <h2>今天的路线</h2>
+                  <button data-panel="map" class="text-button">查看地图</button>
+                </div>
+                <ol class="route-list" id="task-route"></ol>
+                <button data-action="book" class="text-button mobile-book">
+                  完整路书与费用摘要
+                </button>
+              </section>
+              <section class="task-map" aria-label="路线地图示意">
+                <div class="panel-heading">
+                  <h2>路线与位置</h2>
+                  <span>地图示意</span>
+                </div>
+                <div id="task-map"></div>
+                <p class="muted">
+                  站点与路线联动；此处不读取定位，不发起真实导航。
+                </p>
+              </section>
+              <section class="task-budget" aria-label="原位费用与记账">
+                <div class="panel-heading">
+                  <h2>费用与记账</h2>
+                  <button data-action="custom" class="text-button">
+                    <span data-icon="plus"></span>自定义项
+                  </button>
+                </div>
+                <p class="muted">
+                  点击“实付”原位填写；结算项按实付推算，其余继续使用预估。
+                </p>
+                <div
+                  id="budget-summary"
+                  class="budget-summary"
+                  aria-live="polite"
+                ></div>
+                <div class="budget-head">
+                  <span>项目</span><span>预估</span><span>实付</span>
+                </div>
+                <div id="budget-rows"></div>
+                <div id="custom-area"></div>
+                <p id="budget-result" class="inline-result" role="status"></p>
+              </section>
+            </div>
+          </div>
+          <footer class="scene-footer">
+            <span id="trip-revision">示例版本 1</span
+            ><span>本地演示 · 刷新后重置</span>
+          </footer>
+        </div>
+      </div>
+      <nav class="bottom-nav task-bottom" aria-label="手机旅行导航">
+        <button data-panel="route"><span data-icon="route"></span>今日</button
+        ><button data-panel="map"><span data-icon="map"></span>地图</button
+        ><button data-panel="budget">
+          <span data-icon="wallet"></span>费用</button
+        ><button data-panel="chat">
+          <span data-icon="message"></span>对话
+        </button>
+      </nav>
+    </main>
+
+    <main
+      class="app graph-app"
+      id="graph-workspace"
+      aria-label="自由节点工程样稿"
+      hidden
+    >
+      <header class="graph-header">
+        <div>
+          <p class="eyebrow">高级工程 · 生成过程可以编辑</p>
+          <h1>每一步，都有输入与产物</h1>
+        </div>
+        <button data-workspace="trip">回到旅行</button>
+      </header>
+      <div class="graph-toolbar">
+        <label
+          >起步模板<select id="graph-template">
+            <option value="standard">景点池 → 分日 → 预算 → 成稿</option>
+            <option value="quick">快速成稿</option>
+            <option value="branches">两路景点 → 合并 → 分日</option>
+          </select></label
+        ><button data-action="template">载入模板</button
+        ><label
+          >添加节点<select id="graph-kind">
+            <option value="candidates">候选景点池</option>
+            <option value="input">文本输入</option>
+            <option value="plan">景点与日程</option>
+            <option value="merge">候选合并</option>
+            <option value="allocate">分日分配</option>
+            <option value="budget">预算汇总</option>
+            <option value="output">成稿输出</option>
+          </select></label
+        ><button data-action="add-node">
+          <span data-icon="plus"></span>添加</button
+        ><button data-action="graph-undo" disabled>撤销编辑</button
+        ><button data-action="run" class="primary">模拟运行工程</button>
+      </div>
+      <div
+        class="inspector-choices choice-group"
+        aria-label="节点参数与产物位置"
+      >
+        <span>布局</span
+        ><button data-inspector="side" aria-pressed="true">
+          W1 画布＋右侧检查</button
+        ><button data-inspector="bottom" aria-pressed="false">
+          W2 画布＋底部检查
+        </button>
+      </div>
+      <p id="graph-status" class="graph-status" role="status">
+        拖标题移动节点；先点输出，再点匹配的输入端口连线。选中标题后可用方向键移动。
+      </p>
+      <div class="graph-shell">
+        <section class="canvas-panel" aria-label="工程画布">
+          <div class="canvas-controls">
+            <button data-action="zoom-out" aria-label="缩小画布">−</button
+            ><span id="graph-zoom">100%</span
+            ><button data-action="zoom-in" aria-label="放大画布">＋</button
+            ><button data-action="fit">适应画布</button
+            ><button data-action="cancel-wire" hidden>取消连线</button>
+          </div>
+          <div
+            id="graph-viewport"
+            tabindex="0"
+            aria-label="节点画布，拖动空白可平移"
+          >
+            <div id="graph-stage">
+              <svg id="graph-wires" aria-label="节点之间的数据连接"></svg>
+              <div id="graph-nodes"></div>
+            </div>
+          </div>
+          <p class="canvas-caption">
+            文本 → 候选景点 → 行程 → 预算／正文 ·
+            连线按数据类型校验。仅模拟，不调用模型或地图。
+          </p>
+        </section>
+        <aside id="graph-inspector" aria-label="选中节点的参数与产物"></aside>
+      </div>
+    </main>
+
+    <dialog id="task-settings" aria-labelledby="settings-title">
+      <div class="dialog-heading">
+        <h2 id="settings-title">外观设置</h2>
+        <button data-close="task-settings" aria-label="关闭设置">关闭</button>
+      </div>
+      <div class="theme-picker">
+        <button data-theme="paper" aria-pressed="true">A 暖纸墨绿</button
+        ><button data-theme="guide" aria-pressed="false">B 冷白深蓝</button
+        ><button data-theme="night" aria-pressed="false">C 深灰绿</button>
+      </div>
+      <p>三主题共用 C1 组件。电脑松弛，手机紧凑；本轮只比较任务流程。</p>
+    </dialog>
+    <dialog id="task-book" aria-labelledby="book-title">
+      <div class="dialog-heading">
+        <h2 id="book-title">杭州三日慢游 · 路书摘要</h2>
+        <button data-close="task-book">关闭</button>
+      </div>
+      <div id="book-content"></div>
+    </dialog>
+    <dialog id="photo-dialog" aria-labelledby="photo-title">
+      <div class="dialog-heading">
+        <h2 id="photo-title">西湖参考照片</h2>
+        <button data-close="photo-dialog">关闭</button>
+      </div>
+      <img
+        src="./assets/west-lake-reference.jpg"
+        alt="西湖参考照片，非柳浪闻莺该站实拍"
+      />
+      <p>
+        仅用于图片比例演示，非该站实拍。摄影 Takashishin ·
+        <a
+          href="https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg"
+          target="_blank"
+          rel="noreferrer"
+          >原图与作者</a
+        >
+        ·
+        <a
+          href="https://creativecommons.org/licenses/by/4.0/"
+          target="_blank"
+          rel="noreferrer"
+          >CC BY 4.0</a
+        >。
+      </p>
+    </dialog>
+    <script src="./icons.js"></script>
+    <script src="./task-flows.js"></script>
+  </body>
+</html>

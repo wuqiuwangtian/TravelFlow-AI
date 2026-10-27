@@ -1,5 +1,5 @@
-/* Loaded only by the third-round prototype. Confirmed themes/layouts stay shared. */
-html[data-round="components"] {
+/* Shared by the third/fourth-round prototypes; themes and C1 stay consistent. */
+html:is([data-round="components"], [data-round="tasks"]) {
   --control-radius: 8px;
   --feedback-time: 160ms;
   --feedback-curve: ease-out;
@@ -17,12 +17,12 @@ html[data-component="soft"] {
   --feedback-curve: cubic-bezier(0.2, 0.8, 0.3, 1.2);
   --press-scale: 0.96;
 }
-html[data-round="components"] button {
+html:is([data-round="components"], [data-round="tasks"]) button {
   border-radius: var(--control-radius);
   transition-duration: var(--feedback-time);
   transition-timing-function: var(--feedback-curve);
 }
-html[data-round="components"] button.clicked {
+html:is([data-round="components"], [data-round="tasks"]) button.clicked {
   animation: component-tap var(--feedback-time) var(--feedback-curve);
 }
 @keyframes component-tap {
@@ -33,10 +33,11 @@ html[data-round="components"] button.clicked {
     scale: 1;
   }
 }
-html[data-round="components"] button:not(:disabled):active {
+html:is([data-round="components"], [data-round="tasks"])
+  button:not(:disabled):active {
   scale: var(--press-scale);
 }
-html[data-round="components"] .map-pin {
+html:is([data-round="components"], [data-round="tasks"]) .map-pin {
   border-radius: 50%;
   translate: none;
   scale: 1;
@@ -73,7 +74,8 @@ html[data-component="soft"] dialog {
     translate: 0 -2px;
     box-shadow: 0 4px 10px color-mix(in srgb, var(--ink) 12%, transparent);
   }
-  html[data-round="components"] .map-pin:not(:disabled):hover {
+  html:is([data-round="components"], [data-round="tasks"])
+    .map-pin:not(:disabled):hover {
     translate: none;
     box-shadow: 0 0 0 3px var(--line);
   }
@@ -82,7 +84,8 @@ html[data-component="precise"] button:not(:disabled):active {
   translate: 0 1px;
   box-shadow: inset 0 2px 2px color-mix(in srgb, var(--ink) 16%, transparent);
 }
-html[data-round="components"] .map-pin:not(:disabled):active {
+html:is([data-round="components"], [data-round="tasks"])
+  .map-pin:not(:disabled):active {
   translate: none;
   scale: 1;
   background: var(--accent);
@@ -230,11 +233,12 @@ html[data-photos="on-demand"] .stop-visual figcaption {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-round="components"] button {
+  html:is([data-round="components"], [data-round="tasks"]) button {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
-  html[data-round="components"] button:not(:disabled):is(:active, :hover) {
+  html:is([data-round="components"], [data-round="tasks"])
+    button:not(:disabled):is(:active, :hover) {
     translate: none;
     scale: 1;
   }

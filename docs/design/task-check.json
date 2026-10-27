@@ -1,0 +1,31 @@
+{
+  "widths": [
+    1440,
+    390,
+    320
+  ],
+  "themeWorkspaceCombinations": 27,
+  "taskScenarios": [
+    "1440: R1 apply/undo preserves actuals; R2 preview/discard/apply; failed draft retry and duplicate-submit guard; inline actual/custom expenses and budget excess; previous-stop navigation and completion",
+    "1440: editable branched template, real drag/keyboard move, add/delete/undo, typed connection/cycle guards, parameter draft preservation, downstream-only invalidation and cached rerun, both inspector layouts and reduced motion",
+    "390: R1 apply/undo preserves actuals; R2 preview/discard/apply; failed draft retry and duplicate-submit guard; inline actual/custom expenses and budget excess; previous-stop navigation and completion",
+    "390: editable branched template, real drag/keyboard move, add/delete/undo, typed connection/cycle guards, parameter draft preservation, downstream-only invalidation and cached rerun, both inspector layouts and reduced motion",
+    "320: R1 apply/undo preserves actuals; R2 preview/discard/apply; failed draft retry and duplicate-submit guard; inline actual/custom expenses and budget excess; previous-stop navigation and completion",
+    "320: editable branched template, real drag/keyboard move, add/delete/undo, typed connection/cycle guards, parameter draft preservation, downstream-only invalidation and cached rerun, both inspector layouts and reduced motion"
+  ],
+  "screenshots": [
+    "desktop-route.png",
+    "desktop-change-direct.png",
+    "desktop-budget.png",
+    "desktop-change-review.png",
+    "desktop-graph-side.png",
+    "desktop-graph-bottom.png",
+    "mobile-route.png",
+    "mobile-change-direct.png",
+    "mobile-budget.png",
+    "mobile-graph-inspection.png"
+  ],
+  "pageErrors": [],
+  "httpErrors": [],
+  "externalRequests": []
+}
