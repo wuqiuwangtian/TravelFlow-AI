@@ -99,6 +99,7 @@ function renderRoutes() {
     });
   });
   icons();
+  document.dispatchEvent(new Event("travelflow:routes-rendered"));
 }
 const mapSvg = `<svg viewBox="0 0 500 360" preserveAspectRatio="none" role="img" aria-label="路线位置示意，不代表真实地理坐标"><rect width="500" height="360" fill="var(--map)"/><path d="M0 0H250C210 75 250 100 206 160S222 290 170 360H0Z" fill="var(--water)"/><path d="M295 0H500V360H245L267 300L245 230L283 170L265 95Z" fill="var(--land)"/><g fill="none" stroke="var(--paper)" stroke-width="10"><path d="M285 35L500 65M275 107L500 143M260 225L500 260M260 300L500 325M385 0L345 360"/></g><path d="M245 72C236 109 300 114 310 160S300 236 325 280" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/><text x="70" y="180" fill="var(--muted)" font-family="sans-serif" font-size="17">湖面</text></svg>`;
 $$("[data-map]").forEach((map) => {
@@ -164,7 +165,13 @@ function applyView() {
       ? "手机 M1 · 打开先看下一站与今日路线。"
       : "手机 M2 · 打开先看地图与接下来的导航。"
     : descriptions[root.dataset.layout];
+  document.dispatchEvent(new Event("travelflow:view-changed"));
 }
+document.addEventListener("travelflow:preview-device", (event) => {
+  if (!["desktop", "mobile"].includes(event.detail)) return;
+  previewDevice = event.detail;
+  applyView();
+});
 function openDialog(id) {
   const dialog = document.getElementById(id);
   if (!dialog.open) dialog.showModal();

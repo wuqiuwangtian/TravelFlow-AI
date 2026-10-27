@@ -1,0 +1,240 @@
+/* Loaded only by the third-round prototype. Confirmed themes/layouts stay shared. */
+html[data-round="components"] {
+  --control-radius: 8px;
+  --feedback-time: 160ms;
+  --feedback-curve: ease-out;
+  --press-scale: 0.975;
+}
+html[data-component="precise"] {
+  --control-radius: 3px;
+  --feedback-time: 120ms;
+  --feedback-curve: ease-out;
+  --press-scale: 0.99;
+}
+html[data-component="soft"] {
+  --control-radius: 14px;
+  --feedback-time: 260ms;
+  --feedback-curve: cubic-bezier(0.2, 0.8, 0.3, 1.2);
+  --press-scale: 0.96;
+}
+html[data-round="components"] button {
+  border-radius: var(--control-radius);
+  transition-duration: var(--feedback-time);
+  transition-timing-function: var(--feedback-curve);
+}
+html[data-round="components"] button.clicked {
+  animation: component-tap var(--feedback-time) var(--feedback-curve);
+}
+@keyframes component-tap {
+  from {
+    scale: var(--press-scale);
+  }
+  to {
+    scale: 1;
+  }
+}
+html[data-round="components"] button:not(:disabled):active {
+  scale: var(--press-scale);
+}
+html[data-round="components"] .map-pin {
+  border-radius: 50%;
+  translate: none;
+  scale: 1;
+  animation: none;
+}
+html[data-component="precise"] .panel-heading {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+html[data-component="precise"] .stop-select {
+  border: 1px solid var(--line);
+}
+html[data-component="precise"] .chat-form,
+html[data-component="precise"] dialog {
+  border-radius: 3px;
+}
+html[data-component="soft"] .assistant-panel,
+html[data-component="soft"] .phone-next {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+}
+html[data-component="soft"] .chat-form,
+html[data-component="soft"] dialog {
+  border-radius: 14px;
+}
+@media (hover: hover) {
+  html[data-component="precise"] button:not(:disabled):hover {
+    translate: none;
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  html[data-component="soft"] button:not(:disabled):hover {
+    translate: 0 -2px;
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+  html[data-round="components"] .map-pin:not(:disabled):hover {
+    translate: none;
+    box-shadow: 0 0 0 3px var(--line);
+  }
+}
+html[data-component="precise"] button:not(:disabled):active {
+  translate: 0 1px;
+  box-shadow: inset 0 2px 2px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+html[data-round="components"] .map-pin:not(:disabled):active {
+  translate: none;
+  scale: 1;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.component-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+.component-tools #preview-description {
+  margin: 0;
+}
+#component-description {
+  margin: 10px 0;
+  font-size: 13px;
+}
+.feedback-lab {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+  border-block: 1px solid var(--line);
+}
+.feedback-lab > span:first-child {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+#lab-status {
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#lab-status[data-result="failure"] {
+  color: var(--danger);
+}
+.reference-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+.stop-visual {
+  margin: 0;
+}
+.stop-visual button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.stop-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stop-visual span {
+  display: none;
+}
+.stop-visual figcaption {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+html[data-photos="small"] .has-photo .stop-select,
+html[data-photos="on-demand"] .has-photo .stop-select {
+  padding-right: 84px;
+  min-height: 102px;
+}
+html[data-photos="small"] .stop-visual,
+html[data-photos="on-demand"] .stop-visual {
+  position: absolute;
+  right: 4px;
+  top: 11px;
+  width: 64px;
+}
+html[data-photos="small"] .stop-visual button {
+  height: 56px;
+}
+html[data-photos="small"] .stop-visual figcaption {
+  max-width: 64px;
+}
+html[data-photos="large"] .stop-visual {
+  margin: 2px 8px 12px 70px;
+}
+html[data-photos="large"] .stop-visual button {
+  height: 144px;
+}
+html[data-photos="large"] .phone-route .stop-visual button {
+  height: 172px;
+}
+html[data-photos="on-demand"] .stop-visual button {
+  height: 44px;
+  font-size: 12px;
+  padding: 6px;
+}
+html[data-photos="on-demand"] .stop-visual img {
+  display: none;
+}
+html[data-photos="on-demand"] .stop-visual span {
+  display: inline;
+}
+html[data-photos="on-demand"] .stop-visual figcaption {
+  display: none;
+}
+#photo-dialog {
+  width: min(720px, calc(100% - 24px));
+}
+#photo-dialog > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+#photo-dialog p {
+  font-size: 13px;
+}
+#photo-dialog a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+  transition: background-color 160ms;
+}
+#photo-dialog a:hover {
+  background: var(--tint);
+}
+#photo-dialog a:active {
+  opacity: 0.7;
+}
+@media (max-width: 900px) {
+  .component-tools [data-device-choice="desktop"] {
+    display: none;
+  }
+  .feedback-lab button {
+    font-size: 12px;
+  }
+  html[data-component="soft"] .phone-next {
+    padding: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-round="components"] button {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  html[data-round="components"] button:not(:disabled):is(:active, :hover) {
+    translate: none;
+    scale: 1;
+  }
+}

@@ -10,6 +10,7 @@ const assets = [
   "layout-options.html",
   "layout-options.css",
   "layout-options.js",
+  "component-options.js",
   "icons.js",
 ];
 for (const name of assets)

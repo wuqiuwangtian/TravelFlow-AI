@@ -1,0 +1,37 @@
+{
+  "combinations": 81,
+  "screenshots": [
+    "desktop-quiet-small.png",
+    "desktop-quiet-large.png",
+    "desktop-quiet-on-demand.png",
+    "desktop-precise-small.png",
+    "desktop-soft-small.png",
+    "mobile-quiet-small.png",
+    "mobile-quiet-large.png",
+    "mobile-quiet-on-demand.png",
+    "mobile-precise-small.png",
+    "mobile-soft-small.png"
+  ],
+  "pageErrors": [],
+  "httpErrors": [],
+  "externalRequests": [],
+  "checks": [
+    "1440: default layouts/density, three distinct radii, photograph sizing, theme compatibility",
+    "1440: photograph dialog, attribution, Escape and focus return",
+    "1440: route update/photo preservation, no false photos on other days and device switching",
+    "1440: waiting, duplicate-submit guard, success and recoverable failure",
+    "desktop: actual hover/press/focus in all three variants",
+    "1440: reduced-motion feedback",
+    "390: default layouts/density, three distinct radii, photograph sizing, theme compatibility",
+    "390: photograph dialog, attribution, Escape and focus return",
+    "390: route update/photo preservation",
+    "390: waiting, duplicate-submit guard, success and recoverable failure",
+    "390: reduced-motion feedback",
+    "320: default layouts/density, three distinct radii, photograph sizing, theme compatibility",
+    "320: photograph dialog, attribution, Escape and focus return",
+    "320: route update/photo preservation",
+    "320: waiting, duplicate-submit guard, success and recoverable failure",
+    "320: reduced-motion feedback",
+    "missing image: removed photo and reserved space, text route intact"
+  ]
+}
