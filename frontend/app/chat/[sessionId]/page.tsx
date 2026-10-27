@@ -22,6 +22,7 @@ import ReactMarkdown from "react-markdown";
 import { ItineraryPanel } from "@/components/itinerary-panel";
 import { LinkedReplanPreview } from "@/components/linked-replan-preview";
 import { RenameForm } from "@/components/rename-form";
+import { PlanChangeNotice } from "@/components/plan-change-notice";
 
 import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
 import { api, ApiError, chatStream } from "@/lib/api";
@@ -528,6 +529,18 @@ export default function ChatPage() {
                   </div>
                 </div>
               ))}
+
+              {versions.at(-1) && activeBranchId && (
+                <PlanChangeNotice
+                  key={activeBranchId}
+                  branchId={activeBranchId}
+                  versionId={versions.at(-1)!.id}
+                  visible={versionDetail?.version.id === versions.at(-1)?.id}
+                  disabled={sending || itineraryBusy}
+                  onBusy={setItineraryBusy}
+                  onRefresh={load}
+                />
+              )}
 
               {notices.map((notice) => (
                 <div

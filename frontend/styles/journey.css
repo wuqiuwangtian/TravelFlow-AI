@@ -494,3 +494,24 @@
     }
   }
 }
+.journey-change-note {
+  scroll-margin-block: 80px 100px;
+  padding: var(--tf-space-3, 12px);
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-surface);
+  color: var(--tf-ink);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+.journey-change-note ul {
+  padding-left: 1.2em;
+  list-style: disc;
+}
+.journey-change-note [role="alert"] {
+  color: var(--tf-danger);
+}
+.journey-change-note:focus-visible {
+  outline: 2px solid var(--tf-accent);
+  outline-offset: 2px;
+}

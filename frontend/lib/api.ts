@@ -26,6 +26,7 @@ import type {
   SessionDetail,
   SessionInfo,
   VersionDetail,
+  PlanChange,
   VersionInfo,
   TravelMode,
   RecapView,
@@ -438,6 +439,16 @@ export const api = {
     request<{ items: VersionInfo[] }>(`/api/branches/${branchId}/versions`),
   getVersion: (versionId: string) =>
     request<VersionDetail>(`/api/versions/${versionId}`),
+  planningChange: (versionId: string) =>
+    request<PlanChange | null>(`/api/versions/${versionId}/planning-change`),
+  undoPlan: (
+    versionId: string,
+    payload: { request_id: string; change_version_id: string },
+  ) =>
+    request<VersionDetail>(`/api/versions/${versionId}/undo-plan`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   organiseItinerary: (versionId: string) =>
     request<VersionDetail>(`/api/versions/${versionId}/itinerary`, {
       method: "POST",

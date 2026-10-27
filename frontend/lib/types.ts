@@ -140,6 +140,15 @@ export interface VersionDetail {
   budget_overview: BudgetOverview | null;
 }
 
+export interface PlanChange {
+  version_id: string;
+  previous_version_id: string;
+  current_version_id: string;
+  summary: string;
+  changes: string[];
+  blocked_reason: string | null;
+}
+
 export type TravelMode =
   | "auto"
   | "walking"
