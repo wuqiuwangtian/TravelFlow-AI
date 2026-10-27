@@ -4,7 +4,7 @@
 
 ## 第三轮：组件手感与图文比例
 
-打开[第三轮交互预览](http://127.0.0.1:4387/layout-options.html?round=components)，在固定 D3／M1 和默认 A 主题下比较：
+打开[第三轮交互预览](http://127.0.0.1:18487/layout-options.html?round=components)，在固定 D3／M1 和默认 A 主题下比较：
 
 | 组别 | 选项                         | 推荐与取舍                   |
 | ---- | ---------------------------- | ---------------------------- |
@@ -23,7 +23,7 @@ C 与 P 可以任意搭配，也可以反馈混合偏好。推荐不是用户确
 
 ## 第二轮：布局比较记录
 
-打开 [布局交互预览](http://127.0.0.1:4387/layout-options.html)，或查看 [本地源文件](layout-options.html)。本轮使用同一 A 主题，通过不同面积、位置和默认入口比较工作重心；设置内仍可试切换 B、C。电脑默认松弛、手机默认紧凑，正文与触屏目标保留可读、可点的下限。
+打开 [布局交互预览](http://127.0.0.1:18487/layout-options.html)，或查看 [本地源文件](layout-options.html)。本轮使用同一 A 主题，通过不同面积、位置和默认入口比较工作重心；设置内仍可试切换 B、C。电脑默认松弛、手机默认紧凑，正文与触屏目标保留可读、可点的下限。
 
 | 选项            | 工作重心                                             | 原始截图                                 |
 | --------------- | ---------------------------------------------------- | ---------------------------------------- |
@@ -53,13 +53,24 @@ C 与 P 可以任意搭配，也可以反馈混合偏好。推荐不是用户确
 
 ## 试用样稿
 
-从仓库根目录运行：
+预览统一使用端口 **18487**。在 Linux 本机浏览器中，从仓库根目录运行：
 
 ```sh
-python3 -m http.server 4387 --bind 127.0.0.1 --directory docs/design
+python3 -m http.server 18487 --bind 127.0.0.1 --directory docs/design
 ```
 
-在本机打开 [视觉方向预览](http://127.0.0.1:4387/visual-directions.html)。可切换风格、密度与电脑／手机尺寸，试按保存、调整、记账、日期和路书按钮。所有数据与结果都只在样稿内演示，不读取环境文件、不请求模型、地图或项目后端，也不保存最终设计投票；用户在对话中的选择才进入设计记录。
+Windows 浏览器访问 WSL 项目时，优先在 **Windows PowerShell** 中启动，当前目录同样设为仓库根目录（可通过 `\\wsl.localhost\发行版\项目目录` 进入）。下面使用 Codex 随附的 Windows Python，避免依赖 WSL 的 localhost 转发：
+
+```powershell
+$previewPython = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+& $previewPython -m http.server 18487 --bind 127.0.0.1 --directory (Join-Path (Get-Location) 'docs/design')
+```
+
+预览保持前台运行，关闭终端或按 Ctrl+C 会停止服务；只提供 `docs/design` 静态目录。在当前开发环境中，已由 Windows Python 启动并验证页面、脚本与照片可访问。
+
+2026-10-27 排障记录：旧端口 4387 落在 Windows TCP 保留范围 **4369–4468**，WSL 内部返回 200 不代表 Windows 浏览器可访问。已改用 18487，Windows 原生客户端实测三个资源均返回 200。若其他电脑仍无法打开，应在 Windows 执行 `netsh interface ipv4 show excludedportrange protocol=tcp` 检查保留端口，再用 `curl.exe --noproxy "*" -I "http://127.0.0.1:18487/layout-options.html?round=components"` 验证；不要只检查 WSL，也无需修改系统保留范围或防火墙。
+
+在本机打开 [视觉方向预览](http://127.0.0.1:18487/visual-directions.html)。可切换风格、密度与电脑／手机尺寸，试按保存、调整、记账、日期和路书按钮。所有数据与结果都只在样稿内演示，不读取环境文件、不请求模型、地图或项目后端，也不保存最终设计投票；用户在对话中的选择才进入设计记录。
 
 图标从项目现有 `lucide-react` 渲染并保存在 `icons.js`，无需外部请求，[许可文本](LUCIDE-LICENSE.txt)随样稿保留。湖面与路线只是版式示意，不是可导航的实际地图。界面没有 emoji，控件的悬停、按下、焦点及等待状态可实际检查；减少动画设置下保留静态反馈。
 
