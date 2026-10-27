@@ -13,62 +13,62 @@ export const NODE_KINDS: Record<
   input: {
     title: "文本输入",
     subtitle: "旅行需求、约束或自备资料",
-    color: "#2dd4bf",
+    color: "var(--tf-port-text)",
   },
   search: {
     title: "资料检索",
     subtitle: "真实搜索，输出带来源的资料",
-    color: "#fbbf24",
+    color: "var(--tf-port-sources)",
   },
   generate: {
     title: "AI 生成",
     subtitle: "为这一小步编写独立指令",
-    color: "#a78bfa",
+    color: "var(--tf-port-text)",
   },
   plan: {
     title: "景点与日程",
     subtitle: "模型生成可校验的每日行程数据",
-    color: "#60a5fa",
+    color: "var(--tf-port-itinerary)",
   },
   candidates: {
     title: "候选景点池",
     subtitle: "先选具体景点，保留理由与来源，供多套分日方案复用",
-    color: "#c084fc",
+    color: "var(--tf-port-candidates)",
   },
   allocate: {
     title: "分日分配",
     subtitle: "按天数与节奏分配同城候选，不重新调用模型",
-    color: "#fb7185",
+    color: "var(--tf-port-itinerary)",
   },
   locate: {
     title: "候选定位",
     subtitle: "查询地图地点，独立核对歧义，供多个分日分支复用",
-    color: "#22d3ee",
+    color: "var(--tf-port-candidates)",
   },
   merge: {
     title: "候选合并",
     subtitle: "合并多路选点，保留来源、差异和明确地点",
-    color: "#a3e635",
+    color: "var(--tf-port-candidates)",
   },
   select: {
     title: "景点筛选",
     subtitle: "按必去、排除和数量规则筛选日程",
-    color: "#f472b6",
+    color: "var(--tf-port-itinerary)",
   },
   route: {
     title: "路线校验",
     subtitle: "地图定位、交通与跨日衔接检查",
-    color: "#34d399",
+    color: "var(--tf-port-itinerary)",
   },
   budget: {
     title: "预算汇总",
     subtitle: "程序计算分类预估与预算差额",
-    color: "#fb923c",
+    color: "var(--tf-port-budget)",
   },
   output: {
     title: "成稿输出",
     subtitle: "汇总上游内容，保留来源",
-    color: "#38bdf8",
+    color: "var(--tf-accent)",
   },
 };
 export const INPUTS: Record<
@@ -124,11 +124,11 @@ export const OUTPUTS: Record<
 };
 export const WIDTH = 242;
 export const PORT_COLORS: Record<StudioPort, string> = {
-  text: "#2dd4bf",
-  sources: "#fbbf24",
-  itinerary: "#60a5fa",
-  budget: "#fb923c",
-  candidates: "#c084fc",
+  text: "var(--tf-port-text)",
+  sources: "var(--tf-port-sources)",
+  itinerary: "var(--tf-port-itinerary)",
+  budget: "var(--tf-port-budget)",
+  candidates: "var(--tf-port-candidates)",
 };
 export const PORT_LABELS: Record<StudioPort, string> = {
   text: "文本",

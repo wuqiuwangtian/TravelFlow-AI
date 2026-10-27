@@ -2,6 +2,7 @@
 @import "../styles/tokens.css";
 @import "../styles/components.css";
 @import "../styles/journey.css";
+@import "../styles/studio.css";
 
 /* ------------------------------------------------------------------
    Tailwind v4 采用 CSS-first 配置：主题变量直接写在这里。

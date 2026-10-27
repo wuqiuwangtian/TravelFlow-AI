@@ -1,0 +1,560 @@
+/* W1 uses the shared paper palette. Spatial controls never translate or scale. */
+.studio-workspace {
+  color: var(--tf-ink);
+  padding-block: 24px;
+  overflow-wrap: anywhere;
+}
+:is(.studio-workspace, .studio-dialog) fieldset {
+  min-width: 0;
+}
+.studio-run-history label {
+  min-width: 0;
+  max-width: 100%;
+}
+.studio-toolbar-feedback {
+  flex-basis: 100%;
+  min-width: 0;
+  max-height: 24dvh;
+  overflow: auto;
+}
+.studio-toolbar-feedback:empty {
+  display: none;
+}
+.studio-project-state {
+  display: inline-block;
+  min-width: 170px;
+}
+.studio-toolbar-feedback > :first-child {
+  margin-top: 0;
+}
+.studio-toolbar {
+  position: sticky;
+  top: 64px;
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-surface);
+}
+.studio-view-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 16px;
+}
+.studio-toolbox {
+  padding: 16px;
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-paper);
+  scroll-margin-top: calc(80px + var(--studio-toolbar-height, 88px));
+}
+.studio-template-area {
+  scroll-margin-top: calc(80px + var(--studio-toolbar-height, 88px));
+}
+.studio-workspace summary:active,
+.studio-dialog summary:active {
+  background: var(--tf-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--tf-accent-line);
+}
+.studio-node-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+.studio-add-node {
+  padding: 6px 12px;
+  border: 1px solid var(--tf-line);
+  background: var(--tf-surface);
+}
+.studio-transfer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.studio-toolbox-hint {
+  margin-top: 8px;
+  color: var(--tf-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+.studio-stage,
+.studio-inspector {
+  position: sticky;
+  top: calc(80px + var(--studio-toolbar-height, 88px));
+  min-width: 0;
+  scroll-margin-top: calc(80px + var(--studio-toolbar-height, 88px));
+}
+.studio-stage {
+  height: clamp(
+    400px,
+    calc(100dvh - var(--studio-toolbar-height, 88px) - 108px),
+    880px
+  );
+}
+.studio-inspector {
+  display: flex;
+  flex-direction: column;
+  height: clamp(
+    400px,
+    calc(100dvh - var(--studio-toolbar-height, 88px) - 108px),
+    880px
+  );
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-surface);
+  overflow: clip;
+}
+.studio-inspector-heading {
+  flex-shrink: 0;
+  padding: 16px 20px;
+  background: var(--tf-paper);
+  border-bottom: 1px solid var(--tf-line);
+}
+.studio-inspector-heading h2 {
+  font-size: 16px;
+}
+.studio-inspector-heading label {
+  margin-top: 12px;
+}
+.studio-inspector-heading select {
+  margin-top: 6px;
+}
+.studio-inspector-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.studio-inspector-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  border: 1px solid var(--tf-line);
+}
+.studio-inspector-nav button[aria-pressed="true"] {
+  background: var(--tf-accent-soft);
+  color: var(--tf-accent);
+  border-color: var(--tf-accent-line);
+}
+.studio-inspector-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px 20px;
+  scrollbar-gutter: stable;
+}
+.studio-parameter-section {
+  padding-top: 12px;
+  scroll-margin-top: 12px;
+}
+.studio-artifact-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--tf-line);
+  padding-top: 16px;
+  scroll-margin-top: 12px;
+}
+.studio-connections {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-surface);
+  font-size: 12px;
+  color: var(--tf-muted);
+}
+.studio-workspace
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select,
+    textarea
+  ),
+.studio-dialog
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select,
+    textarea
+  ) {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--tf-surface);
+  color: var(--tf-ink);
+  border-color: var(--tf-line);
+  border-radius: var(--tf-radius);
+}
+.studio-workspace :is(input, select, textarea):focus-visible,
+.studio-dialog :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--tf-accent);
+  outline-offset: 2px;
+}
+.studio-workspace :is(button:not(.tf-button), a, summary),
+.studio-dialog :is(button:not(.tf-button), a, summary) {
+  border-radius: var(--tf-radius);
+  cursor: pointer;
+  transition:
+    background-color var(--tf-motion),
+    color var(--tf-motion),
+    border-color var(--tf-motion),
+    box-shadow var(--tf-motion),
+    translate var(--tf-motion),
+    scale var(--tf-press-motion);
+}
+.studio-workspace button:not(.tf-button),
+.studio-dialog button:not(.tf-button) {
+  min-height: 40px;
+}
+.studio-workspace :is(button, a, summary):focus-visible,
+.studio-dialog :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--tf-accent);
+  outline-offset: 3px;
+}
+.studio-workspace button:disabled,
+.studio-dialog button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.studio-workspace :is(button, a)[aria-busy="true"],
+.studio-dialog button[aria-busy="true"] {
+  cursor: progress;
+}
+.studio-workspace
+  :is(button:not(.tf-button), a):not(:disabled):not([data-spatial]):active,
+.studio-dialog :is(button:not(.tf-button), a):not(:disabled):active {
+  scale: 0.975;
+  translate: none;
+}
+@media (hover: hover) {
+  .studio-workspace
+    :is(button:not(.tf-button), a, summary):not(:disabled):hover,
+  .studio-dialog :is(button:not(.tf-button), a, summary):not(:disabled):hover {
+    background-color: var(--tf-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--tf-accent-line);
+  }
+  .studio-workspace
+    :is(button:not(.tf-button), a):not(:disabled):not([data-spatial]):hover,
+  .studio-dialog :is(button:not(.tf-button), a):not(:disabled):hover {
+    translate: 0 -1px;
+  }
+}
+/* Existing structured editors and template/adoption dialogs share the same tokens. */
+:is(.studio-workspace, .studio-dialog) :is(.bg-white, .bg-slate-50) {
+  background-color: var(--tf-surface);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(.bg-teal-50, .bg-teal-100, .bg-emerald-50) {
+  background-color: var(--tf-accent-soft);
+}
+:is(.studio-workspace, .studio-dialog) :is(.bg-teal-700, .bg-slate-900) {
+  background-color: var(--tf-accent);
+  color: var(--tf-accent-ink);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(
+    .text-slate-950,
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700,
+    .text-teal-950,
+    .text-teal-900
+  ) {
+  color: var(--tf-ink);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: var(--tf-muted);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(
+    .text-teal-800,
+    .text-teal-700,
+    .text-teal-600,
+    .text-teal-300,
+    .text-sky-300
+  ) {
+  color: var(--tf-accent);
+}
+:is(.studio-workspace, .studio-dialog) :is(.bg-amber-50, .bg-amber-100) {
+  background-color: var(--tf-warning-soft);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(.text-amber-300, .text-amber-700, .text-amber-800, .text-amber-950) {
+  color: var(--tf-warning);
+}
+:is(.studio-workspace, .studio-dialog) :is(.bg-red-50, .bg-red-100) {
+  background-color: var(--tf-danger-soft);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(
+    .text-red-300,
+    .text-red-600,
+    .text-red-700,
+    .text-red-800,
+    .text-red-900
+  ) {
+  color: var(--tf-danger);
+}
+:is(.studio-workspace, .studio-dialog)
+  :is(
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300,
+    .border-teal-100,
+    .border-purple-100
+  ) {
+  border-color: var(--tf-line);
+}
+:is(.studio-workspace, .studio-dialog) :is(.rounded-2xl, .rounded-xl) {
+  border-radius: var(--tf-radius);
+}
+.studio-dialog {
+  width: calc(100dvw - 24px);
+  max-width: min(var(--studio-dialog-max, 1152px), calc(100dvw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 12px auto;
+  overflow-wrap: anywhere;
+  color: var(--tf-ink);
+  background: var(--tf-surface);
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+}
+.studio-template-dialog {
+  --studio-dialog-max: 672px;
+}
+/* The canvas retains real graph coordinates; hover/press only changes paint. */
+.studio-canvas-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  background: var(--tf-paper);
+}
+.studio-canvas-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--tf-line);
+  background: var(--tf-surface);
+  font-size: 12px;
+  color: var(--tf-muted);
+}
+.studio-canvas-viewport {
+  flex: 1;
+  min-height: 220px;
+  touch-action: none;
+  overflow: hidden;
+  outline: none;
+}
+.studio-canvas-viewport:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--tf-accent);
+}
+.studio-canvas-footer {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--tf-line);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--tf-muted);
+}
+.studio-canvas-node {
+  position: absolute;
+  background: var(--tf-surface);
+  border: 1px solid var(--tf-line);
+  border-radius: var(--tf-radius);
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--tf-ink) 7%, transparent);
+}
+.studio-canvas-node[data-selected="true"] {
+  border-color: var(--tf-accent);
+  box-shadow: 0 0 0 2px var(--tf-accent-line);
+}
+.studio-node-heading {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--tf-line);
+  text-align: left;
+  cursor: grab !important;
+  user-select: none;
+}
+.studio-node-heading:active {
+  cursor: grabbing !important;
+  background: var(--tf-accent-soft);
+}
+.studio-node-heading[data-readonly="true"] {
+  cursor: pointer !important;
+}
+.studio-node-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tf-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.studio-node-kind {
+  display: block;
+  margin-top: 4px;
+  color: var(--tf-muted);
+  font-size: 10px;
+}
+.studio-port-label {
+  position: absolute;
+  color: var(--tf-muted);
+  font-size: 10px;
+}
+.studio-workspace button.studio-port {
+  min-height: 22px;
+  height: 22px;
+  width: 22px;
+  padding: 5px;
+}
+.studio-port span {
+  border-color: var(--tf-surface);
+}
+.studio-node-footer {
+  position: absolute;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  bottom: 12px;
+  right: 16px;
+  left: 16px;
+  font-size: 10px;
+}
+.studio-wire-hit {
+  cursor: pointer;
+  pointer-events: auto;
+  outline: none;
+}
+.studio-wire-line {
+  transition:
+    stroke-width var(--tf-motion),
+    opacity var(--tf-motion);
+}
+.studio-wire:has(.studio-wire-hit:is(:hover, :focus-visible))
+  .studio-wire-line {
+  stroke-width: 4;
+  opacity: 1;
+  stroke-dasharray: 6 3;
+}
+.studio-wire-hit[aria-disabled="true"] {
+  cursor: default;
+  pointer-events: none;
+}
+@media (max-width: 1100px) and (min-width: 901px) {
+  .studio-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 12px;
+  }
+}
+@media (pointer: coarse) {
+  .studio-workspace button:not([data-spatial]),
+  .studio-dialog button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 900px) {
+  .studio-run-history label {
+    width: 100%;
+  }
+  .studio-run-history select {
+    display: block;
+    width: 100%;
+    margin: 8px 0 0;
+  }
+  .studio-workspace {
+    padding-block: 18px;
+  }
+  .studio-toolbar {
+    position: static;
+    padding: 14px;
+  }
+  .studio-view-nav {
+    position: sticky;
+    top: 64px;
+    z-index: 20;
+    padding: 8px 0;
+    background: var(--tf-paper);
+  }
+  .studio-view-nav .tf-button {
+    flex: 1;
+  }
+  .studio-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .studio-stage,
+  .studio-inspector {
+    position: static;
+    width: 100%;
+    scroll-margin-top: 128px;
+  }
+  .studio-toolbox,
+  .studio-template-area,
+  .studio-parameter-section,
+  .studio-artifact-section {
+    scroll-margin-top: 128px;
+  }
+  .studio-stage {
+    height: 570px;
+  }
+  .studio-inspector {
+    height: auto;
+    overflow: visible;
+  }
+  .studio-inspector-scroll {
+    overflow: visible;
+    padding-inline: 16px;
+  }
+  .studio-inspector-heading {
+    padding: 14px 16px;
+  }
+  .studio-canvas-tools {
+    gap: 4px;
+  }
+  .studio-node-palette {
+    gap: 6px;
+  }
+  .studio-add-node {
+    flex: 1 1 110px;
+  }
+  .studio-workspace :is(input, select, textarea) {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-workspace :is(button, a, summary),
+  .studio-dialog :is(button, a, summary),
+  .studio-wire-line {
+    transition: none;
+  }
+  .studio-workspace :is(button, a):not(:disabled):is(:hover, :active),
+  .studio-dialog :is(button, a):not(:disabled):is(:hover, :active) {
+    translate: none;
+    scale: 1;
+  }
+}

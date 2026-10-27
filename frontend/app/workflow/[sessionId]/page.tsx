@@ -172,13 +172,13 @@ export default function WorkflowPage() {
 
   return (
     <div
-      className={`mx-auto px-4 py-8 sm:px-5 ${mode === "studio" ? "max-w-[1800px]" : "max-w-6xl"}`}
+      className={`studio-workspace mx-auto px-4 py-8 sm:px-5 ${mode === "studio" ? "max-w-[1800px]" : "max-w-6xl"}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs tracking-widest text-teal-700">高级流程</p>
           <h1 className="mt-2 text-2xl font-bold text-teal-950">
-            {mode === "studio" ? "把生成过程，搭成自己的工程" : "对话流程观察"}
+            {mode === "studio" ? "旅行规划工程" : "对话流程观察"}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
             {mode === "studio"

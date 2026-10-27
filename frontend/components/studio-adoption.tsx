@@ -229,7 +229,7 @@ export default function StudioAdoption({
                 ref={dialog}
                 aria-label="成稿采用核对"
                 onCancel={() => setReview(false)}
-                className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-24px)] max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-0 text-sm shadow-2xl backdrop:bg-slate-950/60"
+                className="studio-dialog fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-24px)] max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-0 text-sm shadow-2xl backdrop:bg-slate-950/60"
               >
                 <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white p-4">
                   <div>

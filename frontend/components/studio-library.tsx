@@ -363,7 +363,7 @@ export default function StudioLibrary({
               if (busy) event.preventDefault();
               else setEditor(null);
             }}
-            className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-24px)] max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl backdrop:bg-slate-950/60"
+            className="studio-dialog studio-template-dialog fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-24px)] max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl backdrop:bg-slate-950/60"
           >
             <form
               onSubmit={(e) => {

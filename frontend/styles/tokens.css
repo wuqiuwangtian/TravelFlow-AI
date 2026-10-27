@@ -24,6 +24,11 @@
   --tf-motion-curve: ease-out;
   --tf-panel-padding: 24px;
   --tf-content-gap: 22px;
+  --tf-port-text: #23745f;
+  --tf-port-sources: #8c641d;
+  --tf-port-itinerary: #3768a6;
+  --tf-port-budget: #9a5928;
+  --tf-port-candidates: #8250a0;
 }
 
 html[data-theme="guide"] {
@@ -41,6 +46,11 @@ html[data-theme="guide"] {
 }
 
 html[data-theme="night"] {
+  --tf-port-text: #7bc9ae;
+  --tf-port-sources: #e0c17e;
+  --tf-port-itinerary: #92b9e9;
+  --tf-port-budget: #e8b086;
+  --tf-port-candidates: #c8a2e7;
   color-scheme: dark;
   --tf-background: #161a19;
   --tf-paper: #202625;
