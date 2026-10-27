@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Place, TravelMode } from "@/lib/types";
 export function navigation(
@@ -73,36 +74,37 @@ export function PlaceNavigation({
     }
   }
   return (
-    <div className="mt-3 space-y-2">
+    <div className="trip-ui mt-3 space-y-2">
       <div className="flex flex-wrap gap-2">
         <a
           href={navigation(place, mode, previousPlace)}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700"
+          className="tf-action-link"
         >
           打开地点导航
         </a>
-        <button
+        <Button
           type="button"
-          disabled={busy}
+          loading={busy}
+          loadingLabel="正在获取位置…"
           onClick={() => void locate()}
-          className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+          className="rounded-lg border border-[var(--tf-accent-line)] px-2.5 py-1.5 text-xs text-[var(--tf-accent)] disabled:opacity-40"
         >
           {busy ? "正在获取位置…" : "用我的位置导航"}
-        </button>
+        </Button>
       </div>
       {origin && (
         <a
           href={navigation(place, mode, origin)}
           target="_blank"
           rel="noopener noreferrer"
-          className="block rounded-lg bg-teal-600 px-3 py-2 text-center text-xs font-medium text-white"
+          className="tf-action-link trip-navigation-ready"
         >
           位置已就绪，从这里出发
         </a>
       )}
-      <p className="text-[10px] leading-5 text-slate-400">
+      <p className="text-[10px] leading-5 text-[var(--tf-muted)]">
         {previousPlace
           ? `默认从上一站「${previousPlace.name}」出发。`
           : previousName
@@ -111,7 +113,7 @@ export function PlaceNavigation({
         点击“用我的位置导航”才申请定位，坐标仅用于本次高德导航，不写入旅行记录。
       </p>
       {error && (
-        <p role="status" className="text-xs text-amber-700">
+        <p role="status" className="text-xs text-[var(--tf-warning)]">
           {error}
         </p>
       )}

@@ -1,0 +1,196 @@
+/* Budget, ledger and on-trip forms share the approved C1 interaction system. */
+@layer components {
+  .trip-ui {
+    min-width: 0;
+    color: var(--tf-ink);
+  }
+  .trip-ui :is(fieldset, label, select, input) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .trip-ui :is(input:not([type="checkbox"]):not([type="file"]), select) {
+    display: block;
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+    color: var(--tf-ink);
+    transition:
+      border-color var(--tf-motion),
+      box-shadow var(--tf-motion);
+  }
+  .trip-ui :is(input, select):focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 2px;
+  }
+  .trip-ui fieldset:disabled {
+    cursor: progress;
+  }
+  .trip-ui summary {
+    min-height: 40px;
+    padding: 10px 4px;
+    border-radius: var(--tf-radius);
+    transition:
+      background-color var(--tf-motion),
+      color var(--tf-motion);
+  }
+  .trip-ui summary:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 2px;
+  }
+  .trip-ui summary:active {
+    background: var(--tf-accent-soft);
+  }
+  .trip-ui .tf-action-link {
+    padding: 6px 10px;
+    border: 1px solid var(--tf-line);
+    font-size: 12px;
+    color: var(--tf-accent);
+  }
+  .trip-ui .trip-navigation-ready {
+    background: var(--tf-accent);
+    color: var(--tf-accent-ink);
+  }
+  .trip-ui .trip-icon-button {
+    flex-shrink: 0;
+    width: 40px;
+    padding: 6px;
+  }
+  .trip-budget,
+  .trip-ledger {
+    container-type: inline-size;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--tf-line);
+  }
+  .trip-budget-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: 20px;
+    padding: 14px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-paper);
+  }
+  .trip-budget-summary > div {
+    padding: 10px;
+    background: transparent;
+    border-radius: 0;
+    color: var(--tf-ink);
+  }
+  .trip-budget-summary > [data-primary] {
+    order: -2;
+    border-bottom: 1px solid var(--tf-line);
+  }
+  .trip-budget-summary > div:last-child {
+    order: -1;
+    border-bottom: 1px solid var(--tf-line);
+    color: var(--tf-accent);
+  }
+  .trip-budget-summary > [data-primary] p:last-child {
+    font-size: 23px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+  .trip-budget-summary > [data-warning] {
+    color: var(--tf-warning) !important;
+  }
+  .trip-budget-categories {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .trip-ledger-summary {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .trip-ledger-summary > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--tf-line);
+    background: transparent;
+    border-radius: 0;
+  }
+  .trip-ledger-summary p {
+    margin: 0;
+  }
+  .trip-upload,
+  .trip-receipt-preview {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    cursor: pointer;
+    color: var(--tf-accent);
+    transition:
+      background-color var(--tf-motion),
+      border-color var(--tf-motion),
+      scale var(--tf-press-motion);
+  }
+  .trip-upload {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .trip-upload[data-disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .trip-upload:focus-within,
+  .trip-receipt-preview:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 3px;
+  }
+  .trip-upload:not([data-disabled]):active,
+  .trip-receipt-preview:active {
+    scale: 0.975;
+  }
+  @media (hover: hover) {
+    .trip-ui summary:hover {
+      background: var(--tf-paper);
+      color: var(--tf-accent);
+    }
+    .trip-upload:not([data-disabled]):hover,
+    .trip-receipt-preview:hover {
+      border-color: var(--tf-accent);
+      background: var(--tf-accent-soft);
+    }
+    .trip-ui .trip-navigation-ready:hover {
+      background: var(--tf-accent-hover);
+      color: var(--tf-accent-ink);
+    }
+  }
+  @container (min-width: 620px) {
+    .trip-budget-categories {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 900px), (pointer: coarse) {
+    .trip-ui :is(input:not([type="checkbox"]):not([type="file"]), select) {
+      font-size: 16px;
+      min-height: 44px;
+    }
+    .trip-ui
+      :is(summary, .trip-upload, .trip-receipt-preview, .trip-icon-button) {
+      min-height: 44px;
+    }
+    .trip-ui .trip-icon-button {
+      width: 44px;
+    }
+    .trip-budget,
+    .trip-ledger {
+      margin-top: 18px;
+      padding-top: 18px;
+    }
+    .trip-budget-summary {
+      padding: 8px;
+    }
+  }
+}

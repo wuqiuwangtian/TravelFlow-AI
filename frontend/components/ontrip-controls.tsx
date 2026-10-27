@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { CalendarClock, Route } from "lucide-react";
 import type { DayPlan, ScheduledActivity, VersionDetail } from "@/lib/types";
+import { TripActionFeedback, useTripAction } from "@/components/trip-action";
+import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { dayLabel, timeLabel } from "@/lib/travel-time";
 
 const field =
-  "mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs";
-const button =
-  "rounded-lg border border-teal-100 px-3 py-2 text-xs text-teal-700 disabled:opacity-40";
+  "mt-1 w-full rounded-lg border border-[var(--tf-line)] bg-[var(--tf-paper)] px-2 py-2 text-xs";
 
 export function OnTripControls({
   day,
@@ -26,6 +26,7 @@ export function OnTripControls({
 }) {
   const activeContext =
     day.replan_context?.activity_id === active.id ? day.replan_context : null;
+  const action = useTripAction(onCommit);
   const [mode, setMode] = useState<"booking" | "replan" | null>(null);
   const [time, setTime] = useState(
     active.booking?.start_time ?? active.start_time ?? "14:00",
@@ -59,6 +60,21 @@ export function OnTripControls({
 
   function open(next: "booking" | "replan") {
     setMode(mode === next ? null : next);
+    setDuration(
+      active.booking?.duration_minutes ?? active.duration_minutes ?? 60,
+    );
+    setNotes(active.booking?.notes ?? "");
+    setEndTime(activeContext?.end_time ?? "");
+    setEndOffset(
+      activeContext?.end_time
+        ? activeContext.end_day_offset
+        : (activeContext?.start_day_offset ?? active.start_day_offset ?? 0),
+    );
+    const candidate = activeContext?.end_activity_id;
+    setEndId(
+      candidate && ends.some((item) => item.id === candidate) ? candidate : "",
+    );
+    action.clear();
     setError("");
     setStartOffset(
       next === "booking"
@@ -85,29 +101,34 @@ export function OnTripControls({
         return;
       }
     }
-    const ok = await onCommit(() =>
+    const ok = await action.run(
+      "trip",
       mode === "booking"
-        ? api.recordBooking(versionId, day.day, active.id, {
-            start_time: time,
-            start_day_offset: startOffset,
-            duration_minutes: duration,
-            notes,
-          })
-        : api.replanDay(versionId, day.day, {
-            activity_id: active.id,
-            time,
-            start_day_offset: startOffset,
-            end_time: endTime || null,
-            end_day_offset: endTime ? endOffset : 0,
-            end_activity_id: endId || null,
-          }),
+        ? "预约记录已保存。"
+        : "后续安排已更新，路线与费用已同步。",
+      () =>
+        mode === "booking"
+          ? api.recordBooking(versionId, day.day, active.id, {
+              start_time: time,
+              start_day_offset: startOffset,
+              duration_minutes: duration,
+              notes,
+            })
+          : api.replanDay(versionId, day.day, {
+              activity_id: active.id,
+              time,
+              start_day_offset: startOffset,
+              end_time: endTime || null,
+              end_day_offset: endTime ? endOffset : 0,
+              end_activity_id: endId || null,
+            }),
     );
     if (ok) setMode(null);
   }
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3">
+    <div className="trip-ui mt-3 border-t border-[var(--tf-line)] pt-3">
       {active.booking && (
-        <p className="mb-2 flex items-center gap-1 text-xs text-amber-700">
+        <p className="mb-2 flex items-center gap-1 text-xs text-[var(--tf-warning)]">
           <CalendarClock className="h-3.5 w-3.5" />
           已有预约{" "}
           {timeLabel(
@@ -118,35 +139,35 @@ export function OnTripControls({
         </p>
       )}
       {active.booking?.notes && (
-        <p className="mb-2 text-xs leading-5 text-slate-500">
+        <p className="mb-2 text-xs leading-5 text-[var(--tf-muted)]">
           {active.booking.notes}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
           disabled={disabled}
-          className={button}
+          size="sm"
           onClick={() => open("replan")}
         >
           <Route className="mr-1 inline h-3.5 w-3.5" />
           从这里调整后续
-        </button>
+        </Button>
         {active.progress === "not_started" && !active.is_context_anchor && (
-          <button
+          <Button
             type="button"
             disabled={disabled}
-            className={button}
+            size="sm"
             onClick={() => open("booking")}
           >
             {active.booking ? "更正预约记录" : "记录已有预约"}
-          </button>
+          </Button>
         )}
       </div>
       {mode && (
         <form
           aria-label={mode === "booking" ? "记录预约" : "调整后续安排"}
-          className="mt-3 rounded-xl bg-slate-50 p-3"
+          className="mt-3 rounded-[var(--tf-radius)] bg-[var(--tf-surface)] p-3"
           onSubmit={(e) => {
             e.preventDefault();
             void save();
@@ -156,13 +177,13 @@ export function OnTripControls({
             disabled={disabled}
             className="space-y-3 disabled:opacity-60"
           >
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-[var(--tf-muted)]">
               {mode === "booking"
                 ? "记录您已有的预约，商家订单请在原平台管理。"
                 : "从所选地点接上后续路线，保留预约；时间不够时减少普通活动。想换景点可继续对话。"}
             </p>
             <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs text-slate-600">
+              <label className="text-xs text-[var(--tf-muted)]">
                 {mode === "booking" ? "预约日期" : "出发日期"}
                 <select
                   aria-label={mode === "booking" ? "预约日期" : "出发日期"}
@@ -181,7 +202,7 @@ export function OnTripControls({
                 </select>
               </label>
               {mode === "replan" && (
-                <label className="text-xs text-slate-600">
+                <label className="text-xs text-[var(--tf-muted)]">
                   结束日期
                   <select
                     aria-label="结束日期"
@@ -205,7 +226,7 @@ export function OnTripControls({
                   </select>
                 </label>
               )}
-              <label className="text-xs text-slate-600">
+              <label className="text-xs text-[var(--tf-muted)]">
                 {mode === "booking" ? "预约开始时间" : "从此处出发的时间"}
                 <input
                   required
@@ -216,7 +237,7 @@ export function OnTripControls({
                 />
               </label>
               {mode === "booking" ? (
-                <label className="text-xs text-slate-600">
+                <label className="text-xs text-[var(--tf-muted)]">
                   预约停留（分钟）
                   <input
                     required
@@ -229,7 +250,7 @@ export function OnTripControls({
                   />
                 </label>
               ) : (
-                <label className="text-xs text-slate-600">
+                <label className="text-xs text-[var(--tf-muted)]">
                   最晚结束时间
                   <input
                     type="time"
@@ -240,12 +261,12 @@ export function OnTripControls({
                 </label>
               )}
             </div>
-            <p className="text-[11px] leading-5 text-slate-400">
+            <p className="text-[11px] leading-5 text-[var(--tf-muted)]">
               “当日”和“次日”均相对第{day.day}
               个行程日。跨午夜的后续仍显示在本日时间轴，单次窗口最长24小时。
             </p>
             {mode === "replan" && (
-              <label className="block text-xs text-slate-600">
+              <label className="block text-xs text-[var(--tf-muted)]">
                 结束地点
                 <select
                   aria-label="结束地点"
@@ -263,7 +284,7 @@ export function OnTripControls({
               </label>
             )}
             {mode === "booking" && (
-              <label className="block text-xs text-slate-600">
+              <label className="block text-xs text-[var(--tf-muted)]">
                 预约备注
                 <input
                   maxLength={500}
@@ -275,31 +296,34 @@ export function OnTripControls({
               </label>
             )}
             {error && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-[var(--tf-danger)]">
                 {error}
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
+                variant="primary"
+                loading={action.feedback?.pending}
                 type="submit"
-                className="rounded-lg bg-teal-700 px-3 py-2 text-xs text-white"
               >
                 {mode === "booking" ? "保存预约记录" : "更新后续安排"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={button}
-                onClick={() => setMode(null)}
+                size="sm"
+                onClick={() => {
+                  action.clear();
+                  setMode(null);
+                }}
               >
                 取消
-              </button>
+              </Button>
               {mode === "booking" && active.booking && (
-                <button
+                <Button
                   type="button"
-                  className="text-xs text-slate-500"
                   onClick={async () => {
                     if (
-                      await onCommit(() =>
+                      await action.run("trip", "本计划的预约记录已清除。", () =>
                         api.recordBooking(versionId, day.day, active.id, null),
                       )
                     )
@@ -307,17 +331,18 @@ export function OnTripControls({
                   }}
                 >
                   清除预约记录
-                </button>
+                </Button>
               )}
             </div>
             {mode === "booking" && active.booking && (
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-[var(--tf-muted)]">
                 清除仅影响本计划的约束记录；外部预约仍需您在原平台处理。
               </p>
             )}
           </fieldset>
         </form>
       )}
+      <TripActionFeedback action={action} target="trip" />
     </div>
   );
 }

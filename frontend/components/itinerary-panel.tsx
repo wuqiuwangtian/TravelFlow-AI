@@ -144,7 +144,10 @@ export function ItineraryPanel({
     );
   }
 
-  async function mutate(work: () => Promise<VersionDetail>) {
+  async function mutate(
+    work: () => Promise<VersionDetail>,
+    localFeedback = false,
+  ) {
     setBusy(true);
     onBusy(true);
     setError(null);
@@ -155,6 +158,7 @@ export function ItineraryPanel({
       await onUpdate(result);
       return true;
     } catch (err) {
+      if (localFeedback) return false;
       setError(
         err instanceof Error ? err.message : "更新失败，当前行程已保留。",
       );
@@ -373,12 +377,12 @@ export function ItineraryPanel({
                   </div>
                 </div>
                 <OnTripControls
-                  key={`${detail.version.id}:${active.id}`}
+                  key={`${day.day}:${active.id}`}
                   day={day}
                   active={active}
                   versionId={detail.version.id}
                   disabled={!editable || disabled || busy}
-                  onCommit={mutate}
+                  onCommit={(work) => mutate(work, true)}
                 />
                 {active.progress === "not_started" &&
                   !active.booking &&
@@ -817,7 +821,7 @@ export function ItineraryPanel({
                 detail={detail}
                 day={day.day}
                 disabled={!editable || disabled || busy}
-                onCommit={mutate}
+                onCommit={(work) => mutate(work, true)}
               />
             </div>
             <details className="mt-4 rounded-xl border border-slate-100 p-4">
@@ -828,7 +832,7 @@ export function ItineraryPanel({
                 detail={detail}
                 day={day.day}
                 disabled={!editable || disabled || busy}
-                onCommit={mutate}
+                onCommit={(work) => mutate(work, true)}
               />
             </details>
             <TravelRecap

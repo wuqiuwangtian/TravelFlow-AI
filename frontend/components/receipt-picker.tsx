@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ReceiptDraft } from "@/lib/types";
 
@@ -12,11 +13,12 @@ export function ReceiptGallery({
   ids: string[];
 }) {
   return (
-    <div className="mt-2 flex flex-wrap gap-3">
+    <div className="trip-ui mt-2 flex flex-wrap gap-3">
       {ids.map((id, i) => (
         <div key={id} className="w-28">
           <a
             href={api.receiptUrl(versionId, id)}
+            className="trip-receipt-preview"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -24,12 +26,12 @@ export function ReceiptGallery({
             <img
               src={api.receiptUrl(versionId, id)}
               alt={`消费凭证${i + 1}`}
-              className="h-20 w-28 rounded-lg border border-slate-200 object-contain bg-white"
+              className="h-20 w-28 rounded-lg border border-[var(--tf-line)] object-contain bg-[var(--tf-paper)]"
             />
           </a>
           <a
             href={api.receiptUrl(versionId, id, true)}
-            className="mt-1 block text-[11px] text-teal-700"
+            className="tf-action-link mt-1"
           >
             下载原图
           </a>
@@ -74,11 +76,14 @@ export function ReceiptPicker({
     }
   }
   return (
-    <div className="rounded-xl border border-slate-100 p-3">
+    <div className="trip-ui rounded-[var(--tf-radius)] border border-[var(--tf-line)] p-3">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-xs font-medium text-slate-600">图片凭证（选填）</p>
+        <p className="text-xs font-medium text-[var(--tf-muted)]">
+          图片凭证（选填）
+        </p>
         <label
-          className={`cursor-pointer text-xs text-teal-700 ${disabled || busy || ids.length >= 6 ? "opacity-40" : ""}`}
+          className="trip-upload"
+          data-disabled={disabled || busy || ids.length >= 6 || undefined}
         >
           添加凭证图片
           <input
@@ -104,12 +109,12 @@ export function ReceiptPicker({
           />
         </label>
         {busy && (
-          <span role="status" className="text-xs text-slate-500">
+          <span role="status" className="text-xs text-[var(--tf-muted)]">
             正在处理凭证…
           </span>
         )}
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+      <p className="mt-2 text-[11px] leading-5 text-[var(--tf-muted)]">
         支持PNG、JPEG、WebP，每张4MB以内，最多6张。点击识别时，会将去除元数据后的预览发送给当前模型，原图保留在本机。
       </p>
       {ids.length > 0 && (
@@ -119,12 +124,11 @@ export function ReceiptPicker({
             {ids.map((id, index) => (
               <div
                 key={id}
-                className="flex gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px]"
+                className="flex gap-2 rounded-lg bg-[var(--tf-surface)] px-2 py-1.5 text-[11px]"
               >
-                <button
+                <Button
                   type="button"
                   disabled={disabled || busy}
-                  className="text-teal-700 disabled:opacity-40"
                   onClick={() =>
                     void run(async () => {
                       const draft = await api.recogniseReceipt(versionId, id);
@@ -139,27 +143,29 @@ export function ReceiptPicker({
                   }
                 >
                   识别第{index + 1}张凭证
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   disabled={disabled || busy}
-                  className="text-slate-500 disabled:opacity-40"
                   onClick={() => onChange(ids.filter((value) => value !== id))}
                 >
                   移除第{index + 1}张
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         </>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-red-600">
+        <p role="alert" className="mt-2 text-xs text-[var(--tf-danger)]">
           {error}
         </p>
       )}
       {notice && (
-        <p role="status" className="mt-2 text-xs leading-5 text-teal-700">
+        <p
+          role="status"
+          className="mt-2 text-xs leading-5 text-[var(--tf-accent)]"
+        >
           {notice}
         </p>
       )}
