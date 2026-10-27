@@ -349,7 +349,7 @@ export function TravelLedger({
         </Button>
       </div>
       <div className="trip-ledger-summary">
-        <div className="rounded-[var(--tf-radius)] bg-[var(--tf-paper)] p-3">
+        <div>
           <p className="text-[11px] text-[var(--tf-muted)]">
             计划已列 · 含估算
           </p>
@@ -357,7 +357,7 @@ export function TravelLedger({
             ¥{estimated.toFixed(2)}
           </p>
         </div>
-        <div className="rounded-[var(--tf-radius)] bg-[var(--tf-paper)] p-3">
+        <div>
           <p className="text-[11px] text-[var(--tf-muted)]">
             实际已记 · {entries.length} 笔
           </p>
@@ -368,7 +368,7 @@ export function TravelLedger({
             {money(actual)}
           </p>
         </div>
-        <div className="col-span-2 rounded-[var(--tf-radius)] bg-[var(--tf-paper)] p-3 sm:col-span-1">
+        <div>
           <p className="text-[11px] text-[var(--tf-muted)]">
             全团预算减已记净消费
           </p>

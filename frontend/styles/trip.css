@@ -24,9 +24,6 @@
     outline: 2px solid var(--tf-accent);
     outline-offset: 2px;
   }
-  .trip-ui fieldset:disabled {
-    cursor: progress;
-  }
   .trip-ui summary {
     min-height: 40px;
     padding: 10px 4px;
@@ -81,13 +78,21 @@
     color: var(--tf-ink);
   }
   .trip-budget-summary > [data-primary] {
-    order: -2;
     border-bottom: 1px solid var(--tf-line);
   }
-  .trip-budget-summary > div:last-child {
-    order: -1;
+  .trip-budget-summary > div:nth-child(2) {
     border-bottom: 1px solid var(--tf-line);
     color: var(--tf-accent);
+  }
+  .trip-budget-stat-label {
+    font-size: 11px;
+    color: var(--tf-muted);
+  }
+  .trip-budget-stat-value {
+    margin-top: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   .trip-budget-summary > [data-primary] p:last-child {
     font-size: 23px;

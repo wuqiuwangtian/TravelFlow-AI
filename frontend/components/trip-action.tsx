@@ -84,7 +84,10 @@ export function TripActionFeedback({
   const ref = useRef<HTMLDivElement>(null);
   const feedback = action.feedback?.target === target ? action.feedback : null;
   useEffect(() => {
-    if (feedback?.error) scrollToElement(ref.current, { block: "nearest" });
+    if (feedback?.error) {
+      ref.current?.focus({ preventScroll: true });
+      scrollToElement(ref.current, { block: "nearest" });
+    }
     if (feedback?.message) ref.current?.focus({ preventScroll: true });
   }, [feedback?.error, feedback?.message]);
   if (!feedback) return null;

@@ -234,8 +234,6 @@ export function BudgetPanel({
         )}
       <div className="trip-budget-summary" aria-label="预算推算汇总">
         {[
-          ["清单预估", money(overview.planned_cents)],
-          ["已记净消费", money(actual)],
           ["预计总支出", money(overview.projected_cents)],
           [
             balance === null
@@ -245,15 +243,16 @@ export function BudgetPanel({
                 : "预计预算余量",
             balance === null ? "待确认" : money(Math.abs(balance)),
           ],
+          ["清单预估", money(overview.planned_cents)],
+          ["已记净消费", money(actual)],
         ].map(([name, value]) => (
           <div
             key={name}
             data-primary={name === "预计总支出" || undefined}
             data-warning={name === "预计超预算" || undefined}
-            className={`rounded-[var(--tf-radius)] p-3 ${name === "预计超预算" ? "bg-[var(--tf-warning-soft)] text-[var(--tf-warning)]" : "bg-[var(--tf-surface)] text-[var(--tf-ink)]"}`}
           >
-            <p className="text-[11px] opacity-70">{name}</p>
-            <p className="mt-1 text-base font-semibold">{value}</p>
+            <p className="trip-budget-stat-label">{name}</p>
+            <p className="trip-budget-stat-value">{value}</p>
           </div>
         ))}
       </div>

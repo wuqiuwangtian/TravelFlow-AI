@@ -51,6 +51,21 @@ test("自定义项紧接入口，等待不重复提交，失败保留草稿和�
   page,
 }) => {
   await seed(page);
+  const hierarchy = await budget(page)
+    .getByLabel("预算推算汇总", { exact: true })
+    .evaluate((el) => ({
+      primary: parseFloat(
+        getComputedStyle(el.querySelector("[data-primary] p:last-child")!)
+          .fontSize,
+      ),
+      secondary: parseFloat(
+        getComputedStyle(el.querySelector("div:nth-child(3) p:last-child")!)
+          .fontSize,
+      ),
+      first: el.firstElementChild?.hasAttribute("data-primary"),
+    }));
+  expect(hierarchy.primary).toBeGreaterThan(hierarchy.secondary * 1.25);
+  expect(hierarchy.first).toBe(true);
   await budget(page)
     .getByRole("button", { name: "添加自定义项", exact: true })
     .click();
@@ -91,6 +106,7 @@ test("自定义项紧接入口，等待不重复提交，失败保留草稿和�
   expect(ids).toHaveLength(1);
   release();
   await expect(form.getByRole("alert")).toContainText("隔离服务");
+  await expect(form.locator(".trip-action-feedback")).toBeFocused();
   await expect(form.getByLabel("项目名称", { exact: true })).toHaveValue(
     "行李寄存",
   );
@@ -385,13 +401,11 @@ test("凭证上传和识别只填草稿，保存失败保留图片，实付更�
     ctx.fillText("QA receipt 26.50", 10, 30);
     return canvas.toDataURL("image/png").split(",")[1];
   });
-  await form
-    .getByLabel("添加凭证图片", { exact: true })
-    .setInputFiles({
-      name: "receipt.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(png, "base64"),
-    });
+  await form.getByLabel("添加凭证图片", { exact: true }).setInputFiles({
+    name: "receipt.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
   const image = form.getByRole("img", { name: "消费凭证1", exact: true });
   await expect(image).toBeVisible();
   await expect(form.getByRole("status")).toContainText("图片已保存在本机");
