@@ -319,7 +319,9 @@ async def create_branch(
         values = {}
         if parent_id:
             assert graph is not None
-            await recover_plan_undo(store, graph, parent_id)
+            recovered = await recover_plan_undo(store, graph, parent_id)
+            if recovered and source and source.version.id == recovered.version.id:
+                source = recovered
             source_config = thread_config(parent_id)
             if source and source.version.checkpoint_id:
                 source_config = thread_config(parent_id, checkpoint_id=source.version.checkpoint_id)

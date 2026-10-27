@@ -7,6 +7,7 @@ from move_fixtures import move_itinerary
 from app.agents.checkpoint import open_checkpointer, thread_config
 from app.agents.graph import build_graph
 from app.agents.state import initial_state
+from app.api import routes_itinerary
 from app.domain.clarification import PlaceClarification
 from app.domain.enums import PlanStatus
 from app.domain.itinerary import ScheduledActivity
@@ -407,3 +408,46 @@ async def test_recover_undo_after_real_sqlite_checkpoint_reopen(tmp_path, monkey
             assert len(await store.list_versions(branch.id)) == 3
     finally:
         await conn.close()
+
+
+@pytest.mark.parametrize("operation", ["organise", "fork"])
+async def test_partial_undo_version_cannot_replace_plan_with_empty_snapshot(
+    environment, monkeypatch, operation
+):
+    client, store, graph, _ = environment
+    session, branch, before, changed = await seed(environment)
+    save_plan = store.save_plan
+
+    async def fail(*args, **kwargs):
+        raise RuntimeError("模拟版本正文写入中断")
+
+    monkeypatch.setattr(store, "save_plan", fail)
+    with pytest.raises(RuntimeError, match="模拟版本正文写入中断"):
+        await undo(client, changed.version.id, changed.version.id)
+    monkeypatch.setattr(store, "save_plan", save_plan)
+    partial = await latest(store, branch.id)
+    assert partial.markdown == "" and partial.itinerary is None
+    if operation == "organise":
+        monkeypatch.setattr(routes_itinerary, "create_llm_provider", lambda _: FakeLLM())
+        response = await client.post(f"/api/versions/{partial.version.id}/itinerary")
+        assert response.status_code == 409, response.text
+        assert "撤销结果已恢复" in response.text
+    else:
+        response = await client.post(
+            f"/api/sessions/{session.id}/branches",
+            json={
+                "title": "恢复后分叉",
+                "parent_branch_id": branch.id,
+                "fork_version_id": partial.version.id,
+            },
+        )
+        assert response.status_code == 200, response.text
+        fork = next(b for b in response.json()["items"] if b["title"] == "恢复后分叉")
+        assert (await latest(store, fork["id"])).itinerary == before.itinerary
+    restored = await latest(store, branch.id)
+    assert restored.version.id == partial.version.id
+    assert restored.itinerary == before.itinerary
+    assert len(await store.list_versions(branch.id)) == 3
+    assert (await graph.aget_state(thread_config(branch.id))).values[
+        "itinerary"
+    ] == before.itinerary
