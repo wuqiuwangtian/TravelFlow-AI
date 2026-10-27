@@ -1,25 +1,28 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
+@import "../styles/components.css";
 
 /* ------------------------------------------------------------------
    Tailwind v4 采用 CSS-first 配置：主题变量直接写在这里。
    刻意保持精简 —— 界面以清晰易用为先，不做花哨视觉。
    ------------------------------------------------------------------ */
-@theme {
-  --color-brand-50: #f0f9ff;
-  --color-brand-100: #e0f2fe;
-  --color-brand-200: #bae6fd;
-  --color-brand-400: #38bdf8;
-  --color-brand-500: #0ea5e9;
-  --color-brand-600: #0284c7;
-  --color-brand-700: #0369a1;
-
-  --color-teal-400: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --color-teal-600: #0d9488;
+@theme inline {
+  --color-brand-50: var(--tf-accent-soft);
+  --color-brand-100: var(--tf-accent-soft);
+  --color-brand-200: var(--tf-accent-line);
+  --color-brand-400: var(--tf-accent);
+  --color-brand-500: var(--tf-accent);
+  --color-brand-600: var(--tf-accent);
+  --color-brand-700: var(--tf-accent-hover);
+  --color-teal-400: var(--tf-accent);
+  --color-teal-500: var(--tf-accent);
+  --color-teal-600: var(--tf-accent);
 }
 
 html,
 body {
+  background: var(--tf-paper);
+  color: var(--tf-ink);
   height: 100%;
 }
 
@@ -37,7 +40,7 @@ body {
 /* 细滚动条，避免在窄栏里喧宾夺主 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: var(--tf-line) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -46,7 +49,7 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--tf-line);
   border-radius: 4px;
 }
 

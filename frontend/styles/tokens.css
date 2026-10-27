@@ -1,0 +1,69 @@
+/* Approved A/B/C palettes. Theme controls follow the page migration; A is live. */
+:root {
+  color-scheme: light;
+  --tf-background: #e8e5de;
+  --tf-paper: #f8f5ee;
+  --tf-surface: #fffdf8;
+  --tf-ink: #292e29;
+  --tf-muted: #687064;
+  --tf-line: #d9dbcf;
+  --tf-accent: #355744;
+  --tf-accent-hover: #294636;
+  --tf-accent-ink: #fffdf7;
+  --tf-accent-soft: #e5ebdf;
+  --tf-accent-line: #bccab8;
+  --tf-danger: #9b3f32;
+  --tf-danger-soft: #f9e8e2;
+  --tf-danger-line: #dfbeb2;
+  --tf-warning: #79591d;
+  --tf-warning-soft: #f5eddb;
+  --tf-warning-line: #dfd0ad;
+  --tf-radius: 8px;
+  --tf-motion: 160ms;
+  --tf-press-motion: 100ms;
+  --tf-motion-curve: ease-out;
+  --tf-panel-padding: 24px;
+  --tf-content-gap: 22px;
+}
+
+html[data-theme="guide"] {
+  --tf-background: #e7ebef;
+  --tf-paper: #f7f9fb;
+  --tf-surface: #fff;
+  --tf-ink: #202d40;
+  --tf-muted: #647087;
+  --tf-line: #d9e0e8;
+  --tf-accent: #315eae;
+  --tf-accent-hover: #264b8c;
+  --tf-accent-ink: #fff;
+  --tf-accent-soft: #e8eef8;
+  --tf-accent-line: #bdcce5;
+}
+
+html[data-theme="night"] {
+  color-scheme: dark;
+  --tf-background: #161a19;
+  --tf-paper: #202625;
+  --tf-surface: #262e2c;
+  --tf-ink: #edf0e8;
+  --tf-muted: #a4b0a8;
+  --tf-line: #3f4b45;
+  --tf-accent: #c4d89c;
+  --tf-accent-hover: #d5e6b4;
+  --tf-accent-ink: #222c20;
+  --tf-accent-soft: #354332;
+  --tf-accent-line: #657d50;
+  --tf-danger: #efb5a7;
+  --tf-danger-soft: #432f2a;
+  --tf-danger-line: #765049;
+  --tf-warning: #dfc892;
+  --tf-warning-soft: #3d3627;
+  --tf-warning-line: #6a5c3b;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --tf-panel-padding: 18px;
+    --tf-content-gap: 10px;
+  }
+}

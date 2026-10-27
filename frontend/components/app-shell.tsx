@@ -9,11 +9,9 @@ import {
   GitBranch,
   LayoutGrid,
   MessageSquare,
-  Plane,
+  Route,
   Settings,
 } from "lucide-react";
-
-import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "工作台", icon: LayoutGrid },
@@ -30,18 +28,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 bg-slate-900 text-white shadow-sm">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-5">
-          <Link href="/" className="mr-5 flex items-center gap-2 font-bold">
-            <Plane className="h-5 w-5 text-brand-400" />
-            <span>
-              Travel<span className="text-brand-400">Flow</span>
-            </span>
+      <header className="tf-shell-header sticky top-0 z-50">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-5">
+          <Link href="/" className="tf-brand tf-action-link">
+            <Route aria-hidden="true" className="h-5 w-5" />
+            <span>TravelFlow</span>
           </Link>
 
           <nav
             aria-label="主导航"
-            className="flex items-center gap-1 overflow-x-auto"
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1"
           >
             {NAV.map((item) => {
               const active =
@@ -62,14 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         : "location"
                       : undefined
                   }
-                  className={cn(
-                    "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition",
-                    active
-                      ? "bg-white/15 font-semibold text-white"
-                      : "text-slate-300 hover:bg-white/10 hover:text-white",
-                  )}
+                  className="tf-nav-link tf-action-link"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon aria-hidden="true" className="h-4 w-4" />
                   {item.label}
                 </Link>
               );
@@ -80,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="py-8 text-center text-xs text-slate-400">
+      <footer className="tf-shell-footer px-5 py-8 text-center text-xs">
         TravelFlow AI · 旅行数据保存在本机，AI 功能按需调用当前模型
       </footer>
     </div>

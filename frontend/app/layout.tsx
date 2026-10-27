@@ -6,13 +6,18 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TravelFlow AI · 旅行助手",
-  description: "本地运行的 AI 旅行规划助手：多轮对话收集需求、联网检索真实信息、生成可执行路书",
+  description:
+    "本地运行的 AI 旅行规划助手：多轮对话收集需求、联网检索真实信息、生成可执行路书",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="zh-CN">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+    <html lang="zh-CN" data-theme="paper">
+      <body className="min-h-screen antialiased">
         <AppShell>{children}</AppShell>
       </body>
     </html>
