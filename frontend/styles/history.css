@@ -1,0 +1,364 @@
+/* Journals, photos and career share the established page and C1 primitives. */
+@layer components {
+  .tf-history {
+    min-width: 0;
+    color: var(--tf-ink);
+  }
+  .tf-history :is(fieldset, label, select, textarea, input) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tf-history > h1 {
+    font-size: 24px;
+    font-weight: 650;
+  }
+  .tf-history :is(summary, .history-upload) {
+    min-height: 40px;
+    border-radius: var(--tf-radius);
+    transition:
+      background-color var(--tf-motion),
+      border-color var(--tf-motion);
+  }
+  .tf-history summary {
+    cursor: pointer;
+    padding: 10px 4px;
+  }
+  .tf-history summary:focus-visible,
+  .history-upload:focus-within {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 3px;
+  }
+  .tf-history summary:active {
+    background: var(--tf-accent-soft);
+  }
+  .tf-history label:has(> input[type="checkbox"]) {
+    min-height: 44px;
+    align-items: center;
+    padding-block: 6px;
+  }
+  .tf-history input[type="checkbox"] {
+    accent-color: var(--tf-accent);
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .tf-history .tf-button[aria-pressed="true"] {
+    background: var(--tf-accent-soft);
+    border-color: var(--tf-accent);
+    color: var(--tf-accent);
+  }
+  .tf-history .tf-page-link {
+    white-space: normal;
+    text-align: start;
+  }
+  .history-editor {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--tf-line);
+  }
+  .history-save-bar {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+    max-height: 35dvh;
+    overflow: auto;
+  }
+  .history-editor :is(input, textarea, select) {
+    scroll-margin-top: 160px;
+  }
+  .history-editor h3 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .history-editor .tf-form-control {
+    width: 100%;
+  }
+  .history-archive {
+    max-width: 1100px;
+  }
+  .history-archive-list {
+    margin-top: 24px;
+  }
+  .history-archive-entry {
+    display: grid;
+    gap: 24px;
+    min-width: 0;
+    padding: 24px 0;
+    border-top: 1px solid var(--tf-line);
+  }
+  .history-archive-entry:has(> .tf-recap-image) {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+  .history-archive-entry > .tf-recap-image .history-photo-trigger {
+    height: 128px;
+  }
+  .history-reader {
+    max-width: 1000px;
+  }
+  .history-reading-paper {
+    margin-top: 24px;
+    padding: 32px;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+  }
+  .history-reading-paper :is(section, header, figure) {
+    min-width: 0;
+  }
+  .history-reading-paper > section[aria-label="回忆正文"] p {
+    font-size: 16px;
+    line-height: 2;
+  }
+  .history-career-summary {
+    margin-top: 28px;
+    padding: 24px 0;
+    border-block: 1px solid var(--tf-line);
+  }
+  .history-career-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .history-career-value {
+    margin-top: 8px;
+    font-size: 26px;
+    line-height: 1.5;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .history-career-stats > div:last-child .history-career-value {
+    font-size: 22px;
+  }
+  .history-photo-editor {
+    container-type: inline-size;
+    padding: 16px 0;
+    border-block: 1px solid var(--tf-line);
+  }
+  .history-photo-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .history-upload {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid var(--tf-line);
+    font-size: 13px;
+    background: var(--tf-surface);
+    color: var(--tf-accent);
+    transition:
+      background-color var(--tf-motion),
+      border-color var(--tf-motion),
+      scale var(--tf-press-motion);
+  }
+  .history-upload[data-disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .history-upload:not([data-disabled]):active {
+    scale: 0.975;
+  }
+  .tf-recap-image {
+    min-width: 0;
+  }
+  .history-photo-trigger {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 180px;
+    padding: 0;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-paper);
+    cursor: zoom-in;
+    transition:
+      border-color var(--tf-motion),
+      box-shadow var(--tf-motion),
+      scale var(--tf-press-motion);
+  }
+  .tf-recap-image[data-mode="contain"] .history-photo-trigger {
+    height: 240px;
+  }
+  .history-photo-editor
+    .tf-recap-image[data-mode="contain"]
+    .history-photo-trigger {
+    height: 176px;
+  }
+  .history-photo-trigger img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .tf-recap-image[data-mode="contain"] .history-photo-trigger img {
+    object-fit: contain;
+  }
+  .history-photo-trigger:disabled {
+    cursor: progress;
+  }
+  .history-photo-trigger:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: 3px;
+  }
+  .history-photo-trigger:not(:disabled):active {
+    scale: 0.975;
+    border-color: var(--tf-accent);
+    box-shadow: inset 0 0 0 2px var(--tf-accent);
+  }
+  .history-photo-zoom {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+    color: var(--tf-accent);
+    font-size: 11px;
+    pointer-events: none;
+  }
+  .history-photo-fallback {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px dashed var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-paper);
+    color: var(--tf-muted);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .history-photo-dialog {
+    position: fixed;
+    inset: 0;
+    width: min(960px, calc(100dvw - 32px));
+    max-width: calc(100dvw - 32px);
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--tf-line);
+    border-radius: var(--tf-radius);
+    background: var(--tf-surface);
+    color: var(--tf-ink);
+  }
+  .history-photo-dialog::backdrop {
+    background: rgb(20 30 24 / 0.7);
+  }
+  .history-photo-viewer {
+    min-width: 0;
+    padding: 16px;
+  }
+  .history-photo-viewer-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .history-photo-viewer-heading p {
+    min-width: 0;
+    max-height: 20dvh;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .history-photo-viewer-heading .tf-button {
+    flex-shrink: 0;
+  }
+  .history-photo-viewer > img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: min(65dvh, 640px);
+    object-fit: contain;
+  }
+  @media (hover: hover) {
+    .tf-history summary:hover {
+      background: var(--tf-paper);
+    }
+    .history-upload:not([data-disabled]):hover,
+    .history-photo-trigger:not(:disabled):hover {
+      border-color: var(--tf-accent);
+      background: var(--tf-accent-soft);
+    }
+    .history-photo-trigger:not(:disabled):hover {
+      box-shadow: 0 0 0 1px var(--tf-accent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .history-photo-trigger,
+    .history-upload {
+      scale: 1 !important;
+    }
+  }
+  @container (min-width: 620px) {
+    .history-photo-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 900px) {
+    .tf-history > h1 {
+      font-size: 22px;
+    }
+    .history-save-bar {
+      top: 76px;
+    }
+    .history-editor {
+      margin-top: 18px;
+      padding-top: 18px;
+    }
+    .history-reading-paper {
+      padding: 18px;
+    }
+    .history-career-summary {
+      padding: 18px 0;
+    }
+    .history-career-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px 16px;
+    }
+    .history-career-value,
+    .history-career-stats > div:last-child .history-career-value {
+      font-size: 22px;
+    }
+    .history-archive-entry {
+      gap: 16px;
+      padding: 18px 0;
+    }
+    .history-archive-entry:has(> .tf-recap-image) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .history-archive-entry > .tf-recap-image .history-photo-trigger {
+      height: 176px;
+    }
+    .tf-history :is(summary, .history-upload) {
+      min-height: 44px;
+    }
+    .history-photo-dialog {
+      width: calc(100dvw - 24px);
+      max-width: calc(100dvw - 24px);
+      max-height: calc(100dvh - 24px);
+    }
+    .history-photo-viewer {
+      padding: 12px;
+    }
+    .tf-history [aria-label="地图标号对应地点"] {
+      max-height: none;
+      overflow: visible;
+    }
+  }
+}

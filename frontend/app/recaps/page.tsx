@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { RecapImage } from "@/components/recap-image";
+import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { RecapArchiveItem } from "@/lib/types";
 
@@ -36,18 +38,18 @@ export default function RecapArchivePage() {
     };
   }, [page, query, retry]);
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8">
-      <h1 className="text-xl font-bold text-teal-900">旅行回顾</h1>
-      <Link href="/career" className="mt-3 inline-block text-sm text-teal-800">
+    <div className="tf-page tf-history history-archive">
+      <h1>旅行回顾</h1>
+      <Link href="/career" className="tf-action-link tf-page-link mt-3">
         查看我的旅行生涯 →
       </Link>
-      <p className="mt-2 text-sm leading-7 text-slate-500">
+      <p className="mt-2 text-sm leading-7 text-[var(--tf-muted)]">
         收录已结束的旅行方案，补记后同步更新。每个方案单独展示；会话归档不会结束旅行，重新开启后会移出此处，历史版本仍保留。
       </p>
-      <label className="mt-5 block text-xs text-slate-600">
+      <label className="mt-5 block text-xs text-[var(--tf-muted)]">
         搜索回顾
         <input
-          className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm"
+          className="tf-form-control mt-2"
           maxLength={100}
           placeholder="旅行名称、方案或城市"
           value={query}
@@ -59,90 +61,89 @@ export default function RecapArchivePage() {
         />
       </label>
       {busy && (
-        <p role="status" className="mt-5 text-sm text-slate-500">
+        <p role="status" className="mt-5 text-sm text-[var(--tf-muted)]">
           正在整理回顾…
         </p>
       )}
-      {error && (
-        <div role="alert" className="mt-5 text-sm text-red-700">
+      {!busy && error && (
+        <div role="alert" className="mt-5 text-sm text-[var(--tf-danger)]">
           {error}
-          <button
-            className="ml-3 text-teal-800"
+          <Button
+            className="ml-3"
             onClick={() => {
               setRetry(retry + 1);
               setBusy(true);
             }}
           >
             重试
-          </button>
+          </Button>
         </div>
       )}
       {!busy && !error && items.length === 0 && (
-        <p className="mt-8 rounded-xl bg-teal-50 p-5 text-sm text-teal-800">
+        <p className="mt-8 rounded-[var(--tf-radius)] bg-[var(--tf-paper)] p-5 text-sm text-[var(--tf-accent)]">
           还没有符合条件的已结束方案。可在旅行页面点击「结束旅行并收录回顾」。
         </p>
       )}
-      {!error && (
-        <div
-          aria-label="已结束旅行回顾"
-          className="mt-6 grid min-w-0 gap-5 sm:grid-cols-2"
-        >
+      {!busy && !error && (
+        <div aria-label="已结束旅行回顾" className="history-archive-list">
           {items.map((item) => (
             <article
               key={item.branch_id}
               aria-label={`回顾：${item.session_title} · ${item.branch_title}`}
-              className="min-w-0 rounded-2xl border border-teal-100 bg-white p-5"
+              className="history-archive-entry"
             >
               {item.cover_photo_id && (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={api.travelPhotoUrl(
-                      item.version_id,
-                      item.cover_photo_id,
-                    )}
-                    alt="旅行回顾封面"
-                    className="mb-4 h-44 w-full rounded-xl bg-slate-50 object-cover"
-                  />
-                </>
+                <RecapImage
+                  versionId={item.version_id}
+                  photoId={item.cover_photo_id}
+                  label="旅行回顾封面"
+                />
               )}
-              <h2 className="break-words text-lg font-semibold text-teal-900">
-                {item.title}
-              </h2>
-              <p className="mt-1 break-words text-xs text-slate-500">
-                {item.session_title} · {item.branch_title}
-                {item.session_archived ? " · 会话已归档" : ""}
-              </p>
-              <p className="mt-3 text-xs leading-6 text-slate-600">
-                结束于{new Date(item.ended_at).toLocaleDateString("zh-CN")} ·{" "}
-                {item.destination || "城市未标注"}
-                <br />
-                已完成{item.completed_count}项 · 未确认到访
-                {item.unconfirmed_count}项<br />
-                已记净消费 ¥{(item.net_expense_cents / 100).toFixed(2)} ·{" "}
-                {item.expense_count}笔<br />
-                还有{item.unsettled_count}项未结算，不代表全部开支。
-              </p>
-              {item.stale && (
-                <p className="mt-2 text-xs text-amber-800">
-                  记录已变化，原回顾文字待核对。
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-semibold text-[var(--tf-ink)]">
+                  {item.title}
+                </h2>
+                <p className="mt-1 break-words text-xs text-[var(--tf-muted)]">
+                  {item.session_title} · {item.branch_title}
+                  {item.session_archived ? " · 会话已归档" : ""}
                 </p>
-              )}
-              <div className="mt-4 flex flex-wrap gap-4 text-sm text-teal-800">
-                <Link href={`/recaps/${item.version_id}`}>阅读回顾</Link>
-                <Link
-                  href={`/chat/${item.session_id}?branch=${item.branch_id}`}
-                >
-                  补记或重新开启
-                </Link>
+                <p className="mt-3 text-xs leading-6 text-[var(--tf-muted)]">
+                  结束于{new Date(item.ended_at).toLocaleDateString("zh-CN")} ·{" "}
+                  {item.destination || "城市未标注"}
+                  <br />
+                  已完成{item.completed_count}项 · 未确认到访
+                  {item.unconfirmed_count}项<br />
+                  已记净消费 ¥{(item.net_expense_cents / 100).toFixed(2)} ·{" "}
+                  {item.expense_count}笔<br />
+                  还有{item.unsettled_count}项未结算，不代表全部开支。
+                </p>
+                {item.stale && (
+                  <p className="mt-2 text-xs text-[var(--tf-warning)]">
+                    记录已变化，原回顾文字待核对。
+                  </p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-4 text-sm text-[var(--tf-accent)]">
+                  <Link
+                    className="tf-action-link tf-page-link"
+                    href={`/recaps/${item.version_id}`}
+                  >
+                    阅读回顾
+                  </Link>
+                  <Link
+                    className="tf-action-link tf-page-link"
+                    href={`/chat/${item.session_id}?branch=${item.branch_id}`}
+                  >
+                    补记或重新开启
+                  </Link>
+                </div>
               </div>
             </article>
           ))}
         </div>
       )}
-      {!error && total > 20 && (
-        <div className="mt-6 flex items-center gap-4 text-sm text-teal-800">
-          <button
+      {!busy && !error && total > 20 && (
+        <div className="mt-6 flex items-center gap-4 text-sm text-[var(--tf-accent)]">
+          <Button
             disabled={page === 1 || busy}
             onClick={() => {
               setPage(page - 1);
@@ -150,11 +151,11 @@ export default function RecapArchivePage() {
             }}
           >
             上一页
-          </button>
+          </Button>
           <span>
             第{page}页 · 共{total}份回顾
           </span>
-          <button
+          <Button
             disabled={page * 20 >= total || busy}
             onClick={() => {
               setPage(page + 1);
@@ -162,7 +163,7 @@ export default function RecapArchivePage() {
             }}
           >
             下一页
-          </button>
+          </Button>
         </div>
       )}
     </div>

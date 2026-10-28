@@ -25,6 +25,7 @@ import { PlacePhoto } from "@/components/place-photo";
 import { PlaceNavigation } from "@/components/place-navigation";
 import { RailTicketLink } from "@/components/rail-ticket-link";
 import { TravelLedger } from "@/components/travel-ledger";
+import { useTripAction } from "@/components/trip-action";
 import { TravelRecap } from "@/components/travel-recap";
 import { OnTripControls } from "@/components/ontrip-controls";
 import { timeLabel, dayLabel } from "@/lib/travel-time";
@@ -123,6 +124,7 @@ export function ItineraryPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const recapAction = useTripAction((work) => mutate(work, true));
   const errorRef = useRef<HTMLDivElement>(null);
   const itinerary = detail.itinerary;
   const day =
@@ -182,7 +184,7 @@ export function ItineraryPanel({
       id="journey-route"
       tabIndex={-1}
       aria-label="旅行路线与执行"
-      className="journey-itinerary min-w-0 overflow-hidden"
+      className="journey-itinerary min-w-0 overflow-clip"
     >
       <div className="journey-itinerary-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -839,7 +841,7 @@ export function ItineraryPanel({
               key={detail.version.id}
               detail={detail}
               disabled={!editable || disabled || busy}
-              onCommit={mutate}
+              action={recapAction}
             />
             {advanced && (
               <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-slate-200 p-4">

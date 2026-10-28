@@ -74,6 +74,8 @@ export function useTripAction(onCommit: Commit) {
   return { feedback, run, clear: () => setFeedback(null) };
 }
 
+export type TripAction = ReturnType<typeof useTripAction>;
+
 export function TripActionFeedback({
   action,
   target,
