@@ -1,0 +1,326 @@
+/* FE-4 comparison and guide: shared paper, controls and reading rhythm. */
+@layer components {
+  .tf-compare-page {
+    max-width: 1400px;
+  }
+  .tf-compare-selection {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 480px);
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 24px;
+    scroll-margin-top: 88px;
+  }
+  .tf-compare-selection label {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tf-compare-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tf-compare-choices .tf-button {
+    max-width: 100%;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+  }
+  .tf-compare-choices .tf-button[aria-pressed="true"] {
+    border-color: var(--tf-accent);
+    background: var(--tf-accent-soft);
+    color: var(--tf-accent);
+  }
+  .tf-compare-current {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .tf-compare-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--compare-count), minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 24px;
+    align-items: start;
+  }
+  .tf-compare-column {
+    min-width: 0;
+    overflow: clip;
+  }
+  .tf-compare-column-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: start;
+    padding: 20px;
+    border-bottom: 1px solid var(--tf-line);
+  }
+  .tf-compare-column-heading h2 {
+    font-size: 16px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    scroll-margin-top: 100px;
+  }
+  .tf-compare-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    color: var(--tf-muted);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .tf-compare-feedback {
+    padding: 16px 20px 0;
+  }
+  .tf-compare-content {
+    padding: 20px;
+    max-height: 62dvh;
+    overflow: auto;
+    overflow-wrap: anywhere;
+  }
+  .tf-compare-content:focus-visible,
+  .tf-compare-column-heading h2:focus-visible,
+  .tf-help-page h2:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: -2px;
+  }
+  .tf-compare-column-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--tf-line);
+  }
+  .tf-compare-jumps,
+  .tf-compare-back {
+    display: none;
+  }
+  .tf-help-page {
+    max-width: 1180px;
+  }
+  .tf-help-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+  }
+  .tf-help-nav {
+    display: grid;
+    gap: 8px;
+    position: sticky;
+    top: 88px;
+  }
+  .tf-help-nav .tf-page-link {
+    justify-content: start;
+    text-align: left;
+    line-height: 1.7;
+    padding: 12px;
+  }
+  .tf-help-chapter {
+    padding: 4px 0 28px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--tf-line);
+  }
+  .tf-help-chapter-heading {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .tf-help-chapter-heading > span {
+    font-size: 12px;
+    color: var(--tf-muted);
+  }
+  .tf-help-chapter h2 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .tf-help-page h2,
+  .tf-help-faq details {
+    scroll-margin-top: 88px;
+  }
+  .tf-help-chapter p,
+  .tf-help-chapter ol,
+  .tf-help-answer {
+    font-size: 14px;
+    line-height: 1.9;
+    color: var(--tf-muted);
+  }
+  .tf-help-chapter ol {
+    list-style: decimal;
+    padding-left: 24px;
+    margin: 16px 0;
+  }
+  .tf-help-chapter li + li {
+    margin-top: 8px;
+  }
+  .tf-help-actions,
+  .tf-help-external {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .tf-help-questions {
+    margin-bottom: 16px;
+  }
+  .tf-help-faq details + details {
+    border-top: 1px solid var(--tf-line);
+  }
+  .tf-help-faq summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    list-style: none;
+    cursor: pointer;
+    padding: 18px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: var(--tf-radius);
+    transition:
+      background-color var(--tf-motion),
+      color var(--tf-motion),
+      scale var(--tf-press-motion);
+  }
+  .tf-help-faq summary::-webkit-details-marker {
+    display: none;
+  }
+  .tf-help-faq summary:hover {
+    background: var(--tf-accent-soft);
+    color: var(--tf-accent);
+  }
+  .tf-help-faq summary:active {
+    background: var(--tf-accent-soft);
+    scale: 0.99;
+  }
+  .tf-help-faq summary:focus-visible {
+    outline: 2px solid var(--tf-accent);
+    outline-offset: -3px;
+  }
+  .tf-help-chevron {
+    flex-shrink: 0;
+    color: var(--tf-muted);
+    transition: rotate var(--tf-motion);
+  }
+  .tf-help-faq details[open] .tf-help-chevron {
+    rotate: 180deg;
+  }
+  .tf-help-answer {
+    padding: 0 20px 20px;
+    overflow-wrap: anywhere;
+  }
+  .tf-help-answer p + p {
+    margin-top: 12px;
+  }
+  @media (max-width: 900px) {
+    .tf-compare-selection {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tf-compare-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
+      margin-top: 16px;
+    }
+    .tf-compare-content {
+      max-height: none;
+      overflow: visible;
+      padding: 18px;
+    }
+    .tf-compare-column-heading {
+      padding: 18px;
+    }
+    .tf-compare-column-footer {
+      padding: 12px 18px;
+    }
+    .tf-compare-jumps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .tf-compare-jumps .tf-page-link {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .tf-compare-back {
+      display: inline-flex;
+    }
+    .tf-help-layout {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+    }
+    .tf-help-nav {
+      position: static;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .tf-help-nav .tf-page-link {
+      padding: 10px;
+      font-size: 12px;
+    }
+    .tf-help-chapter {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+    }
+    .tf-help-faq summary {
+      padding: 16px 18px;
+      min-height: 52px;
+    }
+    .tf-help-answer {
+      padding: 0 18px 18px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tf-help-faq summary,
+    .tf-help-chevron {
+      transition: none;
+    }
+    .tf-help-faq summary:active {
+      scale: none;
+    }
+  }
+}
+/* Scoped higher specificity overrides the legacy report palette until site cleanup. */
+.tf-compare-content .prose-report {
+  color: var(--tf-ink);
+}
+.tf-compare-content .prose-report :is(p, ul, ol, td) {
+  color: var(--tf-ink);
+}
+.tf-compare-content .prose-report :is(h3, a, code) {
+  color: var(--tf-accent);
+}
+.tf-compare-content .prose-report :is(h2, a, th, td, hr) {
+  border-color: var(--tf-line);
+}
+.tf-compare-content .prose-report :is(th, code) {
+  background: var(--tf-accent-soft);
+}
+.tf-compare-content .prose-report th {
+  color: var(--tf-ink);
+}
+.tf-compare-content .prose-report blockquote {
+  background: var(--tf-warning-soft);
+  border-color: var(--tf-warning-line);
+  color: var(--tf-warning);
+  border-radius: var(--tf-radius);
+}
+.tf-compare-content .prose-report blockquote p {
+  color: var(--tf-warning);
+}
+.tf-compare-content .prose-report :is(pre, img) {
+  max-width: 100%;
+}
+.tf-compare-content .prose-report pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.tf-compare-content .prose-report h1 {
+  font-size: 20px;
+  font-weight: 650;
+  margin-bottom: 16px;
+}

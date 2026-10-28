@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { GitBranch, Star } from "lucide-react";
+import { ArrowUpRight, GitBranch, Star } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 import {
@@ -16,13 +16,147 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { BranchInfo, SessionInfo, VersionDetail } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-interface Column {
+interface PrimaryState {
+  session: string;
+  branch: string;
+  pending?: boolean;
+  error?: string;
+  message?: string;
+}
+
+/** Each selected branch owns its request, so slow or failed siblings do not block it. */
+function ComparisonColumn({
+  branch,
+  primary,
+  primaryBusy,
+  onPrimary,
+}: {
   branch: BranchInfo;
-  detail: VersionDetail | null;
-  loading: boolean;
-  error: string | null;
+  primary: PrimaryState | null;
+  primaryBusy: boolean;
+  onPrimary: (id: string) => Promise<void>;
+}) {
+  const [result, setResult] = useState<{
+    detail: VersionDetail | null;
+    loading: boolean;
+    error: string | null;
+  }>({ detail: null, loading: true, error: null });
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setResult({ detail: null, loading: true, error: null });
+    void (async () => {
+      try {
+        const versions = await api.listVersions(branch.id);
+        const latest = versions.items.at(-1);
+        const detail = latest ? await api.getVersion(latest.id) : null;
+        if (!cancelled) setResult({ detail, loading: false, error: null });
+      } catch (err) {
+        if (!cancelled)
+          setResult({
+            detail: null,
+            loading: false,
+            error: err instanceof Error ? err.message : "加载失败",
+          });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branch.id, refresh]);
+
+  return (
+    <Card
+      role="region"
+      aria-label={`对比方案：${branch.title}`}
+      className="tf-compare-column"
+    >
+      <div className="tf-compare-column-heading">
+        <div className="min-w-0">
+          <h2 id={`compare-${branch.id}`} tabIndex={-1}>
+            {branch.title}
+          </h2>
+          <div className="tf-compare-meta">
+            <Badge tone={branch.is_primary ? "brand" : "teal"}>
+              {branch.is_primary ? "当前" : "分支"}
+            </Badge>
+            {result.detail && (
+              <span>
+                版本 {result.detail.version.seq} ·{" "}
+                {result.detail.citations.length} 个来源
+              </span>
+            )}
+          </div>
+        </div>
+        {!branch.is_primary && (
+          <Button
+            size="sm"
+            loading={primary?.pending}
+            loadingLabel="正在设置…"
+            disabled={primaryBusy}
+            onClick={() => void onPrimary(branch.id)}
+          >
+            <Star aria-hidden="true" className="h-3.5 w-3.5" />
+            设为当前
+          </Button>
+        )}
+      </div>
+      {primary && (
+        <div className="tf-compare-feedback">
+          <ActionFeedback
+            pending={primary.pending ? "正在设置当前方案…" : undefined}
+            error={primary.error}
+            message={primary.message}
+            onRetry={
+              primary.error ? () => void onPrimary(branch.id) : undefined
+            }
+          />
+        </div>
+      )}
+      <div
+        className="tf-compare-content"
+        role="region"
+        aria-label={`${branch.title}的路书正文`}
+        tabIndex={0}
+        aria-busy={result.loading}
+      >
+        {result.loading ? (
+          <Spinner label="正在加载最新路书…" />
+        ) : result.error ? (
+          <ActionFeedback
+            error={result.error}
+            onRetry={() => setRefresh((value) => value + 1)}
+          />
+        ) : result.detail ? (
+          <div className="prose-report">
+            <ReactMarkdown>{result.detail.markdown}</ReactMarkdown>
+          </div>
+        ) : (
+          <EmptyState
+            title="该分支还没有路书"
+            description="可进入旅行，继续对话生成。"
+          />
+        )}
+      </div>
+      <div className="tf-compare-column-footer">
+        <Link
+          className="tf-action-link tf-page-link"
+          href={`/chat/${branch.session_id}?branch=${branch.id}`}
+          aria-label={`继续编辑：${branch.title}`}
+        >
+          继续编辑
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+        <a
+          className="tf-action-link tf-page-link tf-compare-back"
+          href="#compare-selection"
+        >
+          返回方案选择
+        </a>
+      </div>
+    </Card>
+  );
 }
 
 export default function ComparePage() {
@@ -30,19 +164,11 @@ export default function ComparePage() {
   const [sessionId, setSessionId] = useState<string>("");
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [columns, setColumns] = useState<Column[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [branchLoading, setBranchLoading] = useState(true);
   const [branchOwner, setBranchOwner] = useState("");
-  const [versionsRefresh, setVersionsRefresh] = useState(0);
-  const [primaryState, setPrimaryState] = useState<{
-    session: string;
-    branch: string;
-    pending?: boolean;
-    error?: string;
-    message?: string;
-  } | null>(null);
+  const [primaryState, setPrimaryState] = useState<PrimaryState | null>(null);
   const primaryLock = useRef(false);
   const branchRequest = useRef(0);
   const currentSession = useRef("");
@@ -68,7 +194,6 @@ export default function ComparePage() {
     setBranchLoading(true);
     setBranchError(null);
     setSelected([]);
-    setColumns([]);
     try {
       const result = await api.listBranches(id);
       if (token !== branchRequest.current || id !== currentSession.current)
@@ -91,53 +216,6 @@ export default function ComparePage() {
       branchRequest.current++;
     };
   }, [sessionId, loadBranches]);
-
-  // 拉取每个被选中分支的最新版本
-  useEffect(() => {
-    let cancelled = false;
-
-    const initial: Column[] = selected.map((id) => ({
-      branch: branches.find((b) => b.id === id) as BranchInfo,
-      detail: null,
-      loading: true,
-      error: null,
-    }));
-    setColumns(initial.filter((c) => c.branch));
-
-    void Promise.all(
-      selected.map(async (branchId) => {
-        const branch = branches.find((b) => b.id === branchId);
-        if (!branch) return null;
-        try {
-          const list = await api.listVersions(branchId);
-          const latest = list.items[list.items.length - 1];
-          if (!latest) {
-            return {
-              branch,
-              detail: null,
-              loading: false,
-              error: "该分支还没有路书",
-            } as Column;
-          }
-          const detail = await api.getVersion(latest.id);
-          return { branch, detail, loading: false, error: null } as Column;
-        } catch (err) {
-          return {
-            branch,
-            detail: null,
-            loading: false,
-            error: err instanceof Error ? err.message : "加载失败",
-          } as Column;
-        }
-      }),
-    ).then((results) => {
-      if (!cancelled) setColumns(results.filter(Boolean) as Column[]);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selected, branches, versionsRefresh]);
 
   function toggle(id: string) {
     setSelected((prev) =>
@@ -179,15 +257,13 @@ export default function ComparePage() {
     }
   }
 
-  const hasBranches = useMemo(() => branches.length > 0, [branches]);
-
   if (!sessions) {
     return (
-      <div className="mx-auto max-w-2xl px-5 py-10">
+      <div className="tf-page tf-compare-page">
         {error ? (
           <ErrorBanner message={error} onRetry={loadSessions} />
         ) : (
-          <Spinner />
+          <Spinner label="正在加载旅行…" />
         )}
       </div>
     );
@@ -195,14 +271,14 @@ export default function ComparePage() {
 
   if (sessions.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl px-5 py-10">
+      <div className="tf-page tf-compare-page">
         <EmptyState
           icon={<GitBranch className="h-9 w-9" />}
           title="还没有可对比的旅行"
           description="先在工作台创建一个旅行并生成路书"
           action={
-            <Link href="/">
-              <Button variant="primary">去工作台</Button>
+            <Link href="/" className="tf-action-link tf-page-link">
+              去工作台
             </Link>
           }
         />
@@ -211,24 +287,31 @@ export default function ComparePage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-5 py-8">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="tf-page tf-compare-page">
+      <div className="tf-page-heading">
         <div>
-          <h1 className="text-lg font-bold">分支对比</h1>
-          <p className="text-xs text-slate-400">
-            最多同时对比 3 个分支（选择后自动加载各分支最新路书）
-          </p>
+          <h1>分支对比</h1>
+          <p>选择同一次旅行的不同方案，比较各自的最新路书，再决定用哪一版。</p>
         </div>
+        <Link
+          className="tf-action-link tf-page-link"
+          href="/help#guide-branches"
+        >
+          了解分支与版本
+        </Link>
+      </div>
+      <div id="compare-selection" className="tf-compare-selection">
+        <label htmlFor="compare-trip">选择对比旅行</label>
         <select
-          aria-label="选择对比旅行"
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
+          id="compare-trip"
           value={sessionId}
           onChange={(e) => {
             if (e.target.value === sessionId) return;
             currentSession.current = e.target.value;
             branchRequest.current++;
             setSelected([]);
-            setColumns([]);
+            setBranches([]);
+            setBranchLoading(true);
             setBranchError(null);
             setSessionId(e.target.value);
           }}
@@ -240,139 +323,109 @@ export default function ComparePage() {
           ))}
         </select>
       </div>
-
-      {branchError && (
-        <div className="mb-4">
-          <ErrorBanner
-            message={branchError}
-            onRetry={() => loadBranches(sessionId)}
-          />
-        </div>
+      {primaryState?.pending && primaryState.session !== sessionId && (
+        <ActionFeedback pending="正在为上一份旅行设置当前方案，完成前请稍候。" />
       )}
-
+      {branchError && (
+        <ErrorBanner
+          message={branchError}
+          onRetry={() => loadBranches(sessionId)}
+        />
+      )}
       {branchLoading || (branchOwner !== sessionId && !branchError) ? (
         <Spinner label="正在加载方案…" />
-      ) : branchError ? null : !hasBranches ? (
+      ) : branchError ? null : branches.length === 0 ? (
         <EmptyState
-          icon={<GitBranch className="h-9 w-9" />}
+          icon={<GitBranch aria-hidden="true" className="h-9 w-9" />}
           title="该旅行还没有分支"
           description="在对话页可以从任意版本「从这里分叉」创建新分支"
         />
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div
+            className="tf-compare-choices"
+            role="group"
+            aria-label="选择对比方案"
+            aria-describedby="compare-limit"
+          >
             {branches.map((branch) => {
               const active = selected.includes(branch.id);
               return (
-                <button
+                <Button
                   key={branch.id}
-                  onClick={() => toggle(branch.id)}
                   aria-pressed={active}
-                  className={cn(
-                    "rounded-full border px-3.5 py-1.5 text-xs transition",
-                    active
-                      ? "border-transparent bg-gradient-to-r from-brand-500 to-teal-500 font-semibold text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-brand-300",
-                  )}
+                  disabled={!active && selected.length >= 3}
+                  onClick={() => toggle(branch.id)}
                 >
                   {branch.title}
-                  {branch.is_primary && " ★"}
-                  {branch.parent_branch_id && "（分叉）"}
-                </button>
+                  {branch.is_primary && (
+                    <span className="tf-compare-current">
+                      <Star aria-hidden="true" className="h-3 w-3" />
+                      当前
+                    </span>
+                  )}
+                  {branch.parent_branch_id && (
+                    <span className="text-[var(--tf-muted)]">（分叉）</span>
+                  )}
+                </Button>
               );
             })}
           </div>
-
-          <div
-            className="grid gap-3.5"
-            style={{
-              gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(0, 1fr))`,
-            }}
-          >
-            {columns
-              .filter((column) =>
-                branches.some((branch) => branch.id === column.branch.id),
-              )
-              .map((column) => (
-                <Card
-                  key={column.branch.id}
-                  role="region"
-                  aria-label={`对比方案：${column.branch.title}`}
-                  className="flex flex-col overflow-hidden"
-                >
-                  <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                        {column.branch.title}
-                        {column.branch.is_primary ? (
-                          <Badge tone="brand">当前</Badge>
-                        ) : (
-                          <Badge tone="teal">分支</Badge>
-                        )}
-                      </div>
-                      {column.detail && (
-                        <div className="mt-0.5 text-[11px] text-slate-400">
-                          {column.detail.markdown.length} 字 ·{" "}
-                          {column.detail.citations.length} 个来源
-                        </div>
-                      )}
-                    </div>
-                    {!column.branch.is_primary && (
-                      <Button
-                        size="sm"
-                        loading={
-                          primaryState?.session === sessionId &&
-                          primaryState.branch === column.branch.id &&
-                          primaryState.pending
-                        }
-                        loadingLabel="正在设置…"
-                        disabled={!!primaryState?.pending}
-                        onClick={() => setPrimary(column.branch.id)}
-                      >
-                        <Star className="h-3 w-3" />
-                        设为当前
-                      </Button>
-                    )}
-                  </div>
-
-                  {primaryState?.session === sessionId &&
-                    primaryState.branch === column.branch.id && (
-                      <div className="px-3.5 pb-2">
-                        <ActionFeedback
-                          pending={
-                            primaryState.pending
-                              ? "正在设置当前方案…"
-                              : undefined
-                          }
-                          error={primaryState.error}
-                          message={primaryState.message}
-                          onRetry={
-                            primaryState.error
-                              ? () => void setPrimary(column.branch.id)
-                              : undefined
-                          }
-                        />
-                      </div>
-                    )}
-                  <div className="max-h-[560px] overflow-y-auto p-3.5">
-                    {column.loading ? (
-                      <Spinner label="加载中…" />
-                    ) : column.error ? (
-                      <ActionFeedback
-                        error={column.error}
-                        onRetry={() => setVersionsRefresh((value) => value + 1)}
-                      />
-                    ) : (
-                      <div className="prose-report">
-                        <ReactMarkdown>
-                          {column.detail?.markdown ?? ""}
-                        </ReactMarkdown>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              ))}
-          </div>
+          <p id="compare-limit" className="tf-field-help">
+            已选 {selected.length} / 3 个方案
+            {selected.length === 3
+              ? "，取消一个后可选择其他方案。"
+              : "；点击方案名称可加入或取消。"}
+            设为当前只切换旅行的默认方案，保留各分支与历史版本。
+          </p>
+          {selected.length > 0 ? (
+            <>
+              <nav className="tf-compare-jumps" aria-label="跳转到对比方案">
+                {selected.map((id) => {
+                  const branch = branches.find((item) => item.id === id);
+                  return branch ? (
+                    <a
+                      key={id}
+                      className="tf-action-link tf-page-link"
+                      href={`#compare-${id}`}
+                    >
+                      {branch.title}
+                    </a>
+                  ) : null;
+                })}
+              </nav>
+              <div
+                className="tf-compare-grid"
+                style={
+                  { "--compare-count": selected.length } as React.CSSProperties
+                }
+              >
+                {selected.map((id) => {
+                  const branch = branches.find((item) => item.id === id);
+                  return branch ? (
+                    <ComparisonColumn
+                      key={`${sessionId}:${id}`}
+                      branch={branch}
+                      primary={
+                        primaryState?.session === sessionId &&
+                        primaryState.branch === id
+                          ? primaryState
+                          : null
+                      }
+                      primaryBusy={!!primaryState?.pending}
+                      onPrimary={setPrimary}
+                    />
+                  ) : null;
+                })}
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              icon={<GitBranch aria-hidden="true" className="h-9 w-9" />}
+              title="选择想比较的方案"
+              description="在上方选择 1 至 3 个方案，自动读取最新路书。"
+            />
+          )}
         </>
       )}
     </div>
