@@ -1,6 +1,6 @@
 # 前端视觉与交互设计约定
 
-阶段：2026-10-28。四轮选型已完成，沿用默认 A、D3／M1、C1／P1、R1／W1 与两端密度。FE-3 主要页面五批及 FE-4 入口配置、回顾／照片／生涯、比较／指南三批已交付，继续剩余控件与颜色收口、主题及全站验收。共享设计规范见 [SYSTEM.md](docs/design/SYSTEM.md)。
+阶段：2026-10-28。四轮选型已完成，沿用默认 A、D3／M1、C1／P1、R1／W1 与两端密度。FE-3 主要页面五批及 FE-4 四批已交付，三主题设置、剩余控件与颜色收口和本轮隔离回归已完成。结果与边界见 [收口记录](docs/frontend-themes.md)。共享设计规范见 [SYSTEM.md](docs/design/SYSTEM.md)。
 
 ## 用户已明确的要求
 
@@ -76,6 +76,6 @@
 
 选型确认后形成配色、字体与层级、间距、圆角、边界、图标、动效、状态和移动端规则，并用共享组件承载。新页面和新节点复用规范；确需新变体时先补规范，不在业务文件中临时拼一套视觉。
 
-FE-2 的比较样稿保留为历史记录。FE-3 已按批次将确认项应用到共享基础、应用外壳、D3／M1 正式工作区、R1 对话规划撤销、W1 高级工程及费用与旅中操作，覆盖与验证见 [共享基础](docs/frontend-foundation.md)、[正式旅行工作区](docs/frontend-workspace.md)、[正式规划撤销](docs/frontend-plan-undo.md)、[高级工程工作区](docs/frontend-studio.md)及[费用与旅中操作](docs/frontend-trip-money.md)；FE-4 的入口与配置页面见 [首批交付](docs/frontend-account-pages.md)，回顾、照片和生涯见 [第二批交付](docs/frontend-history.md)，比较与指南见 [第三批交付](docs/frontend-reference-pages.md)。不替换现有行程数据，不把样稿模拟结果当成真实业务能力。现有 emoji 和缺失动效在 FE-3/4 的组件迁移与全站收口中清理，必须列入检查，不能仅检查新首页。
+FE-2 的比较样稿保留为历史记录。FE-3 已按批次将确认项应用到共享基础、应用外壳、D3／M1 正式工作区、R1 对话规划撤销、W1 高级工程及费用与旅中操作，覆盖与验证见 [共享基础](docs/frontend-foundation.md)、[正式旅行工作区](docs/frontend-workspace.md)、[正式规划撤销](docs/frontend-plan-undo.md)、[高级工程工作区](docs/frontend-studio.md)及[费用与旅中操作](docs/frontend-trip-money.md)；FE-4 的入口与配置页面见 [首批交付](docs/frontend-account-pages.md)，回顾、照片和生涯见 [第二批交付](docs/frontend-history.md)，比较与指南见 [第三批交付](docs/frontend-reference-pages.md)，主题与全站收口见 [第四批交付](docs/frontend-themes.md)。不替换现有行程数据，不把样稿模拟结果当成真实业务能力。现有 emoji 和缺失动效在 FE-3/4 的组件迁移与全站收口中清理，必须列入检查，不能仅检查新首页。
 
 样稿入口：[第一轮视觉方向](docs/design/visual-directions.html)、[第二轮布局比较](docs/design/layout-options.html)、[第三轮组件与图文](docs/design/layout-options.html?round=components)、[第四轮完整任务](docs/design/task-flows.html)。其中地点、时刻、金额与操作结果均为界面演示；前两轮保留为比较记录，当前默认密度与布局以本文件为准。

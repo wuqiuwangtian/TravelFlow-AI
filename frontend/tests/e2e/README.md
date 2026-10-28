@@ -43,3 +43,7 @@ Linux 缺系统库时使用 `pnpm exec playwright install --with-deps chromium`�
 ## FE-4 比较与指南
 
 `reference-pages.spec.ts` 核对双端各列独立加载及重试、选择上限与正常空态、迟到正文和主方案回执隔离、真实切换主方案时版本不变、分支来源、长内容与实际视口，以及指南的章节跳转、键盘折叠、减少动画和外链说明。临时数据库与现有正式接口继续验证版本和来源；特定失败和迟到响应由测试控制。见 [交付记录](../../../docs/frontend-reference-pages.md)。
+
+## FE-4 三主题与最终收口
+
+`theme-settings.spec.ts` 覆盖首屏、默认主题、无效值、跨标签同步、存储受限、服务不可读、服务草稿保护、三主题正式页面与对比度、真实版本不变、节点坐标与模板弹窗。`npm run check:design` 与 CI 约束正式源码的语义颜色和产品 emoji；测试数据及用户原文不受清洗。最终 316 项回归与 Windows 两端核对见 [收口记录](../../../docs/frontend-themes.md)。

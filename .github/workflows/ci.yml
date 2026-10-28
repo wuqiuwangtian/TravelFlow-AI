@@ -69,6 +69,9 @@ jobs:
       - name: 代码规范检查
         run: pnpm lint
 
+      - name: 设计约定检查
+        run: pnpm check:design
+
       - name: 生产构建
         run: pnpm build
         env:
