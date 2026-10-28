@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:design": "node scripts/check-design-contract.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",

@@ -29,7 +29,7 @@ _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
 SAFE_URL_SCHEMES = {"http", "https"}
 
 DISCLAIMER_HEAD = (
-    "> ⚠️ 本路书由 AI 基于 {when} 的联网检索结果生成，**仅供参考**。\n"
+    "> 本路书由 AI 基于 {when} 的联网检索结果生成，**仅供参考**。\n"
     "> 票价、开放时间、预约政策等信息可能随时变动，出行前请通过下方【官方渠道】核实。"
 )
 

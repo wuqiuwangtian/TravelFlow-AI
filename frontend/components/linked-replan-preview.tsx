@@ -15,7 +15,7 @@ export function LinkedReplanPreview({
           <section
             key={day}
             aria-label={`第${day}天变化`}
-            className="min-w-0 rounded-lg border border-amber-100 bg-white p-3"
+            className="min-w-0 rounded-lg border border-warning-line bg-surface p-3"
           >
             <h4 className="font-semibold">第 {day} 天</h4>
             <ol className="mt-2 space-y-3">
@@ -24,23 +24,23 @@ export function LinkedReplanPreview({
                 .map((change, index) => (
                   <li
                     key={index}
-                    className="min-w-0 break-words border-l-2 border-teal-100 pl-2"
+                    className="min-w-0 break-words border-l-2 border-accent-line pl-2"
                   >
                     <p className="font-medium">{change.title}</p>
                     <p
                       className={
                         change.status === "omitted"
-                          ? "text-rose-700"
+                          ? "text-danger"
                           : change.status === "moved_in" ||
                               change.status === "moved_out"
-                            ? "text-teal-700"
-                            : "text-slate-600"
+                            ? "text-accent"
+                            : "text-muted"
                       }
                     >
                       {change.before} → {change.after}
                     </p>
                     {change.protected && (
-                      <p className="text-[11px] text-teal-700">
+                      <p className="text-[11px] text-accent">
                         {change.status === "moved_in" ||
                         change.status === "moved_out"
                           ? "地点与关联记录保留"
@@ -57,7 +57,7 @@ export function LinkedReplanPreview({
         <div
           role="alert"
           aria-label="两天调整冲突"
-          className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800"
+          className="space-y-2 rounded-lg border border-danger-line bg-danger-soft p-3 text-danger"
         >
           <p className="font-medium">有冲突，原计划尚未改变</p>
           {preview.conflicts.map((conflict) => (
@@ -66,7 +66,7 @@ export function LinkedReplanPreview({
         </div>
       )}
       {!!preview.warnings?.length && (
-        <details className="rounded-lg bg-white/70 p-2 text-slate-600">
+        <details className="rounded-lg bg-surface p-2 text-muted">
           <summary className="cursor-pointer">
             交通与资料说明（{preview.warnings.length}）
           </summary>

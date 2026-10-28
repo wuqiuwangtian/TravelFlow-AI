@@ -254,7 +254,7 @@
     color: var(--tf-ink);
   }
   .history-photo-dialog::backdrop {
-    background: rgb(20 30 24 / 0.7);
+    background: var(--tf-overlay);
   }
   .history-photo-viewer {
     min-width: 0;

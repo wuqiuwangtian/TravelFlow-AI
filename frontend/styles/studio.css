@@ -245,6 +245,7 @@
     :is(button:not(.tf-button), a, summary):not(:disabled):hover,
   .studio-dialog :is(button:not(.tf-button), a, summary):not(:disabled):hover {
     background-color: var(--tf-accent-soft);
+    color: var(--tf-ink);
     box-shadow: inset 0 0 0 1px var(--tf-accent-line);
   }
   .studio-workspace
@@ -252,76 +253,6 @@
   .studio-dialog :is(button:not(.tf-button), a):not(:disabled):hover {
     translate: 0 -1px;
   }
-}
-/* Existing structured editors and template/adoption dialogs share the same tokens. */
-:is(.studio-workspace, .studio-dialog) :is(.bg-white, .bg-slate-50) {
-  background-color: var(--tf-surface);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(.bg-teal-50, .bg-teal-100, .bg-emerald-50) {
-  background-color: var(--tf-accent-soft);
-}
-:is(.studio-workspace, .studio-dialog) :is(.bg-teal-700, .bg-slate-900) {
-  background-color: var(--tf-accent);
-  color: var(--tf-accent-ink);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(
-    .text-slate-950,
-    .text-slate-900,
-    .text-slate-800,
-    .text-slate-700,
-    .text-teal-950,
-    .text-teal-900
-  ) {
-  color: var(--tf-ink);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(.text-slate-600, .text-slate-500, .text-slate-400) {
-  color: var(--tf-muted);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(
-    .text-teal-800,
-    .text-teal-700,
-    .text-teal-600,
-    .text-teal-300,
-    .text-sky-300
-  ) {
-  color: var(--tf-accent);
-}
-:is(.studio-workspace, .studio-dialog) :is(.bg-amber-50, .bg-amber-100) {
-  background-color: var(--tf-warning-soft);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(.text-amber-300, .text-amber-700, .text-amber-800, .text-amber-950) {
-  color: var(--tf-warning);
-}
-:is(.studio-workspace, .studio-dialog) :is(.bg-red-50, .bg-red-100) {
-  background-color: var(--tf-danger-soft);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(
-    .text-red-300,
-    .text-red-600,
-    .text-red-700,
-    .text-red-800,
-    .text-red-900
-  ) {
-  color: var(--tf-danger);
-}
-:is(.studio-workspace, .studio-dialog)
-  :is(
-    .border-slate-100,
-    .border-slate-200,
-    .border-slate-300,
-    .border-teal-100,
-    .border-purple-100
-  ) {
-  border-color: var(--tf-line);
-}
-:is(.studio-workspace, .studio-dialog) :is(.rounded-2xl, .rounded-xl) {
-  border-radius: var(--tf-radius);
 }
 .studio-dialog {
   width: calc(100dvw - 24px);

@@ -124,15 +124,15 @@ export default function PlannerRerun({
     return (
       <ol className="mt-3 space-y-2 text-sm">
         {dayPlan.activities.map((activity, index) => (
-          <li key={activity.id} className="rounded-lg bg-slate-50 p-3">
-            <span className="text-slate-400">{index + 1}. </span>
+          <li key={activity.id} className="rounded-lg bg-surface p-3">
+            <span className="text-muted">{index + 1}. </span>
             {activity.start_day_offset
               ? `+${activity.start_day_offset}天 `
               : ""}
             {activity.start_time ?? "时间待核实"} ·{" "}
             {activity.place_name || activity.title}
             {after && preview?.protected_ids.includes(activity.id) && (
-              <span className="ml-2 text-xs text-teal-700">固定保留</span>
+              <span className="ml-2 text-xs text-accent">固定保留</span>
             )}
           </li>
         ))}
@@ -142,10 +142,10 @@ export default function PlannerRerun({
   return (
     <section
       aria-label="局部重跑"
-      className="mt-6 rounded-2xl border border-teal-200 bg-white p-5 sm:p-7"
+      className="mt-6 rounded-lg border border-accent-line bg-surface p-5 sm:p-7"
     >
-      <h2 className="font-semibold text-teal-950">单日路线优化</h2>
-      <p className="mt-2 text-sm leading-7 text-slate-500">
+      <h2 className="font-semibold text-ink">单日路线优化</h2>
+      <p className="mt-2 text-sm leading-7 text-muted">
         保留全部地点，只优化所选一天的活动顺序与市内默认交通。已执行活动、预约、固定时刻、车站与酒店保持位置；其他天、人工费用、消费和回顾保留。增删地点或调整整趟旅行，可回原对话直接提出。
       </p>
       {loading && (
@@ -154,18 +154,18 @@ export default function PlannerRerun({
         </p>
       )}
       {ended && (
-        <p className="mt-3 text-sm text-amber-800">
+        <p className="mt-3 text-sm text-warning">
           旅行已结束，请先在原方案重新开启旅行。
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <p role="alert" className="mt-3 text-sm text-danger">
           {error}
         </p>
       )}
       {!loading && !detail && (
         <button
-          className="mt-3 text-sm text-teal-700"
+          className="mt-3 text-sm text-accent"
           onClick={() => {
             setLoading(true);
             setRefresh(refresh + 1);
@@ -186,7 +186,7 @@ export default function PlannerRerun({
                 aria-label="优化日期"
                 value={day}
                 onChange={(e) => setDay(Number(e.target.value))}
-                className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                className="mt-2 w-full rounded-lg border border-line p-2"
               >
                 {detail.itinerary?.days.map((item) => (
                   <option key={item.day} value={item.day}>
@@ -203,7 +203,7 @@ export default function PlannerRerun({
                 onChange={(e) =>
                   setMode(e.target.value as PlannerRerunInput["travel_mode"])
                 }
-                className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                className="mt-2 w-full rounded-lg border border-line p-2"
               >
                 <option value="auto">智能选择</option>
                 <option value="walking">步行</option>
@@ -212,7 +212,7 @@ export default function PlannerRerun({
               </select>
             </label>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             单独指定的交通、铁路和航班仍沿用原安排。路线不可查或时刻冲突会在预览中提示。
           </p>
           <label className="block text-sm">
@@ -222,13 +222,13 @@ export default function PlannerRerun({
               maxLength={1000}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-3"
+              className="mt-2 min-h-20 w-full rounded-lg border border-line p-3"
             />
           </label>
           <button
             disabled={!instruction.trim()}
             onClick={generate}
-            className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-accent-ink disabled:opacity-50"
           >
             {busy === "generate" ? "正在生成预览…" : "生成优化预览"}
           </button>
@@ -237,10 +237,10 @@ export default function PlannerRerun({
       {preview && (
         <section
           aria-label="路线优化预览"
-          className="mt-6 border-t border-slate-100 pt-5"
+          className="mt-6 border-t border-line pt-5"
         >
           <h3 className="font-medium">第{preview.after.day}天 · 应用前预览</h3>
-          <p className="mt-2 text-xs leading-6 text-slate-500">
+          <p className="mt-2 text-xs leading-6 text-muted">
             建议时间与路线可能尚待核实。其他天及实际账目保持原样；这里只保存预览，应用后才新增正式版本。刷新可继续查看未过期预览。
           </p>
           <div className="mt-4 grid min-w-0 gap-5 md:grid-cols-2">
@@ -261,7 +261,7 @@ export default function PlannerRerun({
           {!!preview.after.warnings.length && (
             <ul
               aria-label="路线校验提示"
-              className="mt-3 space-y-1 text-sm text-amber-800"
+              className="mt-3 space-y-1 text-sm text-warning"
             >
               {[...new Set(preview.after.warnings)].map((warning) => (
                 <li key={warning}>{warning}</li>
@@ -269,14 +269,14 @@ export default function PlannerRerun({
             </ul>
           )}
           {changed && (
-            <p className="mt-3 text-sm text-amber-800">
+            <p className="mt-3 text-sm text-warning">
               参数已更改，请重新生成预览后再应用。
             </p>
           )}
           {!!preview.conflicts.length && (
             <div
               role="alert"
-              className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-800"
+              className="mt-4 rounded-lg bg-danger-soft p-4 text-sm text-danger"
             >
               <p className="font-medium">
                 存在固定安排或时间衔接冲突，暂不能应用。
@@ -292,14 +292,14 @@ export default function PlannerRerun({
             <button
               disabled={!!busy || !!changed || !!preview.conflicts.length}
               onClick={apply}
-              className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-2 text-sm text-accent-ink disabled:opacity-50"
             >
               {busy === "apply" ? "正在应用…" : "应用本次优化"}
             </button>
             <button
               disabled={!!busy}
               onClick={discard}
-              className="text-sm text-slate-600"
+              className="text-sm text-muted"
             >
               丢弃预览
             </button>

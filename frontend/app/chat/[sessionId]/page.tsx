@@ -398,11 +398,11 @@ export default function ChatPage() {
             </h1>
           )}
           {titleNotice && (
-            <p role="status" className="mt-2 text-sm text-teal-700">
+            <p role="status" className="mt-2 text-sm text-accent">
               {titleNotice}
             </p>
           )}
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             {detail.branches.length} 个分支 · 已保留版本历史
           </p>
         </div>
@@ -475,7 +475,7 @@ export default function ChatPage() {
               {!!detail?.session.initial_preferences?.length && (
                 <details
                   aria-label="创建时选用的偏好"
-                  className="rounded-lg bg-teal-50 px-3 py-2 text-xs leading-6 text-teal-800"
+                  className="rounded-lg bg-accent-soft px-3 py-2 text-xs leading-6 text-accent"
                 >
                   <summary className="cursor-pointer">
                     创建时选用{detail.session.initial_preferences.length}
@@ -490,7 +490,7 @@ export default function ChatPage() {
                 </details>
               )}
               {messages.length === 0 && (
-                <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
+                <div className="rounded-lg bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
                   {versionDetail ? (
                     <>
                       这份行程已经保存。想换个地方、少走一点，或调整费用，继续告诉我就好。
@@ -545,7 +545,7 @@ export default function ChatPage() {
               {notices.map((notice) => (
                 <div
                   key={notice}
-                  className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700"
+                  className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning"
                 >
                   <AlertTriangle
                     aria-hidden="true"
@@ -556,7 +556,7 @@ export default function ChatPage() {
               ))}
 
               {sending && (
-                <div className="flex items-center gap-2 text-xs text-brand-600">
+                <div className="flex items-center gap-2 text-xs text-accent">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   {progress ?? "正在处理…"}
                 </div>
@@ -568,7 +568,7 @@ export default function ChatPage() {
                 <div
                   role="alert"
                   aria-label="消息发送未完成"
-                  className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-6 text-red-800"
+                  className="mb-3 rounded-lg border border-danger-line bg-danger-soft p-3 text-xs leading-6 text-danger"
                 >
                   <p>{sendFailure.message}</p>
                   <div className="mt-1 flex flex-wrap gap-3">
@@ -596,7 +596,7 @@ export default function ChatPage() {
                 <div
                   role="status"
                   aria-label="待补充的信息"
-                  className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900"
+                  className="mb-3 rounded-lg border border-warning-line bg-warning-soft p-3 text-xs leading-6 text-warning"
                 >
                   <p className="whitespace-pre-wrap break-words">
                     {clarification.prompt}
@@ -624,7 +624,7 @@ export default function ChatPage() {
                             key={option.reply}
                             type="button"
                             disabled={sending || itineraryBusy}
-                            className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left leading-5 break-words hover:border-amber-400 disabled:opacity-40"
+                            className="rounded-lg border border-warning-line bg-surface px-3 py-2 text-left leading-5 break-words hover:border-warning-line disabled:opacity-40"
                             onClick={() => void send(option.reply)}
                           >
                             {option.label}
@@ -635,7 +635,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     disabled={sending || itineraryBusy}
-                    className="mt-1 text-amber-800 underline disabled:opacity-40"
+                    className="mt-1 text-warning underline disabled:opacity-40"
                     onClick={() => void send("取消这次操作")}
                   >
                     取消这次操作
@@ -686,10 +686,10 @@ export default function ChatPage() {
                   发送
                 </Button>
               </div>
-              <div className="mt-1.5 flex justify-between px-1 text-[11px] text-slate-400">
+              <div className="mt-1.5 flex justify-between px-1 text-[11px] text-muted">
                 <span>Enter 发送 · Shift+Enter 换行</span>
                 <span
-                  className={input.length > 4000 ? "text-red-500" : undefined}
+                  className={input.length > 4000 ? "text-danger" : undefined}
                 >
                   {input.length} / 4000
                 </span>
@@ -742,14 +742,14 @@ export default function ChatPage() {
           ) : (
             <Card className="journey-planning-help">
               <div className="flex h-full flex-col justify-center">
-                <p className="text-xs font-medium tracking-widest text-teal-600">
+                <p className="text-xs font-medium tracking-widest text-accent">
                   从一句想法开始
                 </p>
                 <h2>先聊旅行想法</h2>
-                <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">
+                <p className="mt-4 max-w-md text-sm leading-7 text-muted">
                   可以告诉我目的地、时间和偏好；还没想好去哪，也可以让我先推荐几个城市。
                 </p>
-                <p className="mt-4 text-xs text-slate-500">
+                <p className="mt-4 text-xs text-muted">
                   例如：从上海出发，周末两天，想少走路。
                 </p>
               </div>
@@ -759,51 +759,51 @@ export default function ChatPage() {
       </div>
 
       <details ref={bookRef} className="journey-book">
-        <summary className="cursor-pointer text-sm font-medium text-slate-600">
+        <summary className="cursor-pointer text-sm font-medium text-muted">
           完整计划书、导出与版本历史
         </summary>
         <div className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
           {/* ---------------- 版本树 ---------------- */}
           <Card className="overflow-hidden">
-            <div className="border-b border-slate-100 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-500">
+            <div className="border-b border-line bg-surface px-3.5 py-2.5 text-xs font-bold text-muted">
               版本历史（{versions.length}）
             </div>
             <div className="max-h-[540px] overflow-y-auto p-3">
               {versions.length === 0 ? (
-                <p className="px-1 py-3 text-xs text-slate-400">
+                <p className="px-1 py-3 text-xs text-muted">
                   还没有版本，先发一条消息吧
                 </p>
               ) : (
-                <ol className="relative ml-1.5 border-l border-slate-200">
+                <ol className="relative ml-1.5 border-l border-line">
                   {[...versions].reverse().map((version) => (
                     <li key={version.id} className="relative mb-3 pl-4">
                       <span
                         className={cn(
-                          "absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white",
+                          "absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-line",
                           version.id === versionDetail?.version.id
-                            ? "bg-brand-500"
-                            : "bg-slate-300",
+                            ? "bg-accent"
+                            : "bg-line",
                         )}
                       />
                       <button
-                        className="block w-full rounded-lg px-2 py-1 text-left transition hover:bg-slate-50"
+                        className="block w-full rounded-lg px-2 py-1 text-left transition hover:bg-surface"
                         disabled={sending || itineraryBusy}
                         onClick={() =>
                           void api.getVersion(version.id).then(setVersionDetail)
                         }
                       >
-                        <span className="text-[11px] font-bold text-brand-600">
+                        <span className="text-[11px] font-bold text-accent">
                           v{version.seq}
                         </span>
-                        <span className="mt-0.5 block text-xs text-slate-600">
+                        <span className="mt-0.5 block text-xs text-muted">
                           {version.summary}
                         </span>
-                        <span className="text-[10px] text-slate-300">
+                        <span className="text-[10px] text-muted">
                           {relativeTime(version.created_at)}
                         </span>
                       </button>
                       <button
-                        className="mt-1 ml-2 flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600"
+                        className="mt-1 ml-2 flex items-center gap-1 text-[10px] text-muted hover:text-accent"
                         disabled={sending || itineraryBusy}
                         onClick={() => forkFromVersion(version)}
                         title="从该版本新建分支"
@@ -819,18 +819,18 @@ export default function ChatPage() {
           </Card>
           {/* ---------------- 路书 ---------------- */}
           <Card className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3.5 py-2.5">
-              <span className="text-xs font-bold text-slate-500">
+            <div className="flex items-center justify-between border-b border-line bg-surface px-3.5 py-2.5">
+              <span className="text-xs font-bold text-muted">
                 路书预览
                 {versionDetail && (
-                  <span className="ml-2 font-normal text-slate-400">
+                  <span className="ml-2 font-normal text-muted">
                     v{versionDetail.version.seq} ·{" "}
                     {versionDetail.markdown.length} 字
                   </span>
                 )}
               </span>
               <select
-                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                className="rounded-lg border border-line bg-surface px-2 py-1 text-[11px]"
                 value={level}
                 onChange={(e) => setLevel(e.target.value as DetailLevel)}
               >
@@ -849,7 +849,7 @@ export default function ChatPage() {
                 // 流式生成中：先把已到达的正文显示出来，让用户看到「正在写」
                 <div className="prose-report">
                   <ReactMarkdown>{streamingPlan}</ReactMarkdown>
-                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand-400 align-text-bottom" />
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 </div>
               ) : versionDetail?.markdown ? (
                 <div className="prose-report">
@@ -884,14 +884,14 @@ export default function ChatPage() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-slate-400">
-                  <Sparkles className="h-7 w-7 text-slate-300" />
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-muted">
+                  <Sparkles className="h-7 w-7 text-muted" />
                   路书生成后显示在这里
                 </div>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50 p-3">
+            <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface p-3">
               {versionDetail ? (
                 <>
                   <a
@@ -911,15 +911,13 @@ export default function ChatPage() {
                     导出 HTML
                   </a>
                   {versionDetail.citations.length > 0 && (
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-muted">
                       {versionDetail.citations.length} 个来源
                     </span>
                   )}
                 </>
               ) : (
-                <span className="text-[11px] text-slate-400">
-                  暂无内容可导出
-                </span>
+                <span className="text-[11px] text-muted">暂无内容可导出</span>
               )}
             </div>
           </Card>{" "}
@@ -952,7 +950,7 @@ export default function ChatPage() {
               aria-current={current === item.id ? "location" : undefined}
               disabled={!available}
               onClick={() => openSection(item.id)}
-              className="journey-mobile-link"
+              className="tf-action-link journey-mobile-link"
             >
               <Icon aria-hidden="true" className="h-4 w-4" />
               <span>{item.label}</span>

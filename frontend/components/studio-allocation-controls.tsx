@@ -9,7 +9,7 @@ export default function StudioAllocationControls({
   value: StudioNode["parameters"];
   onChange: (patch: Partial<StudioNode["parameters"]>) => void;
 }) {
-  const inputClass = "mt-2 w-full rounded-lg border border-slate-200 p-2";
+  const inputClass = "mt-2 w-full rounded-lg border border-line p-2";
   return (
     <div className="space-y-4">
       <label className="block">
@@ -152,7 +152,7 @@ export default function StudioAllocationControls({
           />
         </label>
       </details>
-      <p className="leading-6 text-slate-500">
+      <p className="leading-6 text-muted">
         只分配同城候选。按位置分组需先接入候选定位，入选地点不明确时沿用时长方案；保持原入选集合与数量、时长上限，不保证全局最优。缓冲和直线分组不是已核实交通，后续仍需路线核验。
       </p>
     </div>

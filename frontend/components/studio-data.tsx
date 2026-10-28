@@ -36,9 +36,9 @@ export default function StudioData({
   return (
     <section
       aria-label="结构化节点数据"
-      className="mt-3 space-y-3 rounded-xl bg-slate-50 p-3 text-xs leading-6"
+      className="mt-3 space-y-3 rounded-lg bg-surface p-3 text-xs leading-6"
     >
-      <h4 className="font-semibold text-slate-800">结构化数据</h4>
+      <h4 className="font-semibold text-ink">结构化数据</h4>
       {candidates && (
         <div aria-label="候选景点池数据">
           <p className="font-medium">
@@ -65,13 +65,13 @@ export default function StudioData({
             {candidates.places.map((p) => (
               <li
                 key={p.id}
-                className="rounded-lg border border-purple-100 bg-white p-3"
+                className="rounded-lg border border-accent-line bg-surface p-3"
               >
                 <p className="font-medium">
                   {p.place_name} · {p.city}
                 </p>
                 <p>{p.reason}</p>
-                <p className="text-slate-500">
+                <p className="text-muted">
                   停留{p.duration_minutes ?? "待定"}分钟 ·{" "}
                   {p.cost === null
                     ? "费用待核实"
@@ -94,12 +94,12 @@ export default function StudioData({
             ))}
           </ol>
           {candidates.warnings.map((w, i) => (
-            <p key={i} className="mt-2 text-amber-800">
+            <p key={i} className="mt-2 text-warning">
               {w}
             </p>
           ))}
           {candidates.location?.warnings.map((w, i) => (
-            <p key={`location-${i}`} className="mt-2 text-amber-800">
+            <p key={`location-${i}`} className="mt-2 text-warning">
               {w}
             </p>
           ))}
@@ -117,13 +117,13 @@ export default function StudioData({
             <details
               open
               aria-label="候选分日记录"
-              className="rounded-lg border border-rose-100 bg-white p-2"
+              className="rounded-lg border border-danger-line bg-surface p-2"
             >
               <summary className="cursor-pointer font-medium">
                 候选{plan.allocation.pool_count}处 · 本次安排
                 {plan.allocation.selected_count}处
               </summary>
-              <p className="mt-2 text-slate-500">
+              <p className="mt-2 text-muted">
                 每天最多{plan.allocation.max_per_day}处／
                 {plan.allocation.minutes_per_day}分钟；段间缓冲
                 {plan.allocation.buffer_minutes}分钟，非核实交通。
@@ -132,9 +132,7 @@ export default function StudioData({
                 {plan.allocation.decisions.map((d) => (
                   <li
                     key={d.candidate_id}
-                    className={
-                      d.day == null ? "text-amber-800" : "text-slate-700"
-                    }
+                    className={d.day == null ? "text-warning" : "text-ink"}
                   >
                     <p>
                       {d.place_name} ·{" "}
@@ -150,7 +148,7 @@ export default function StudioData({
             <details
               open
               aria-label="地理分组记录"
-              className="rounded-lg border border-cyan-100 bg-white p-2"
+              className="rounded-lg border border-cyan-100 bg-surface p-2"
             >
               <summary className="cursor-pointer font-medium">
                 {plan.allocation.geography.applied
@@ -160,7 +158,7 @@ export default function StudioData({
               <p className="mt-2">{plan.allocation.geography.reason}</p>
               {plan.allocation.geography.before_spread_meters != null &&
                 plan.allocation.geography.after_spread_meters != null && (
-                  <p className="mt-2 text-slate-500">
+                  <p className="mt-2 text-muted">
                     同日分散度：
                     {(
                       plan.allocation.geography.before_spread_meters / 1000
@@ -187,14 +185,14 @@ export default function StudioData({
             <details
               aria-label="景点筛选记录"
               open
-              className="rounded-lg border border-pink-100 bg-white p-2"
+              className="rounded-lg border border-pink-100 bg-surface p-2"
             >
               <summary className="cursor-pointer font-medium">
                 {plan.selection.node_title} · {plan.selection.before_count} →{" "}
                 {plan.selection.after_count}个活动
               </summary>
               {!plan.selection.decisions.length && (
-                <p className="mt-2 text-slate-500">
+                <p className="mt-2 text-muted">
                   全部沿用上游，没有移除或改动。
                 </p>
               )}
@@ -203,9 +201,7 @@ export default function StudioData({
                   <li
                     key={`${d.activity_id}-${i}`}
                     className={
-                      d.action === "removed"
-                        ? "text-amber-800"
-                        : "text-teal-800"
+                      d.action === "removed" ? "text-warning" : "text-accent"
                     }
                   >
                     第{d.day}天 ·{" "}
@@ -226,7 +222,7 @@ export default function StudioData({
             <details
               aria-label="路线顺序核对"
               open
-              className="rounded-lg border border-blue-100 bg-white p-2"
+              className="rounded-lg border border-accent-line bg-surface p-2"
             >
               <summary className="cursor-pointer font-medium">
                 路线顺序核对
@@ -238,19 +234,19 @@ export default function StudioData({
                       第{order.day}天 ·{" "}
                       {order.changed ? "已调整顺序" : "沿用上游"}
                     </p>
-                    <p className="text-slate-500">{order.reason}</p>
+                    <p className="text-muted">{order.reason}</p>
                     <p>原：{order.before.join(" → ")}</p>
                     <p>现：{order.after.join(" → ")}</p>
                     {(order.before_travel_minutes != null ||
                       order.after_travel_minutes != null) && (
-                      <p className="text-slate-600">
+                      <p className="text-muted">
                         地图交通合计：{order.before_travel_minutes ?? "待核实"}{" "}
                         → {order.after_travel_minutes ?? "待核实"}分钟
                       </p>
                     )}
                     {order.before_meters !== null &&
                       order.after_meters !== null && (
-                        <p className="text-teal-800">
+                        <p className="text-accent">
                           地点间直线合计{" "}
                           {(order.before_meters / 1000).toFixed(1)} →{" "}
                           {(order.after_meters / 1000).toFixed(1)}
@@ -263,18 +259,18 @@ export default function StudioData({
             </details>
           )}
           {plan.days.map((day) => (
-            <details key={day.day} className="rounded-lg bg-white p-2">
+            <details key={day.day} className="rounded-lg bg-surface p-2">
               <summary className="cursor-pointer font-medium">
                 第{day.day}天 · {day.title}
               </summary>
               <ol className="mt-2 space-y-3">
                 {day.activities.map((a) => (
-                  <li key={a.id} className="border-l-2 border-blue-200 pl-2">
+                  <li key={a.id} className="border-l-2 border-accent-line pl-2">
                     <p>
                       {a.start_day_offset ? `+${a.start_day_offset}天 ` : ""}
                       {a.start_time || "时间待定"} · {a.place_name || a.title}
                     </p>
-                    <p className="text-slate-500">
+                    <p className="text-muted">
                       {a.city} · 停留{a.duration_minutes ?? "未知"}分钟 ·{" "}
                       {a.place_status === "matched"
                         ? "地图已定位"
@@ -284,17 +280,15 @@ export default function StudioData({
                             ? "未查询地图"
                             : "定位待核实"}
                     </p>
-                    {a.place && (
-                      <p className="text-slate-500">{a.place.address}</p>
-                    )}
+                    {a.place && <p className="text-muted">{a.place.address}</p>}
                     {a.match_reason && (
-                      <p className="text-amber-800">{a.match_reason}</p>
+                      <p className="text-warning">{a.match_reason}</p>
                     )}
                   </li>
                 ))}
               </ol>
               {!!day.legs.length && (
-                <ul className="mt-3 space-y-2 border-t border-slate-100 pt-2 text-slate-600">
+                <ul className="mt-3 space-y-2 border-t border-line pt-2 text-muted">
                   {day.legs.map((leg) => (
                     <li key={`${leg.from_id}-${leg.to_id}`}>
                       {
@@ -317,7 +311,7 @@ export default function StudioData({
                 </ul>
               )}
               {!!day.warnings.length && (
-                <ul className="mt-2 text-amber-800">
+                <ul className="mt-2 text-warning">
                   {day.warnings.map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
@@ -326,7 +320,7 @@ export default function StudioData({
             </details>
           ))}
           {plan.warnings.map((w, i) => (
-            <p key={i} className="text-amber-800">
+            <p key={i} className="text-warning">
               {w}
             </p>
           ))}
@@ -345,8 +339,8 @@ export default function StudioData({
             <p
               className={
                 budget.overview.planned_cents > budget.overview.budget_cents
-                  ? "text-red-700"
-                  : "text-teal-800"
+                  ? "text-danger"
+                  : "text-accent"
               }
             >
               相对预算
@@ -386,7 +380,7 @@ export default function StudioData({
             <details
               open
               aria-label="分类预算补齐"
-              className="rounded-lg border border-orange-100 bg-white p-2"
+              className="rounded-lg border border-warning-line bg-surface p-2"
             >
               <summary className="cursor-pointer font-medium">
                 按设置补齐 · {budget.supplements.length}项
@@ -397,21 +391,21 @@ export default function StudioData({
                     <p>
                       {entry.item.title} · {money(entry.item.planned_cents)}
                     </p>
-                    <p className="text-slate-500">{entry.explanation}</p>
+                    <p className="text-muted">{entry.explanation}</p>
                   </li>
                 ))}
               </ul>
             </details>
           )}
           {budget.warnings.map((w, i) => (
-            <p key={i} className="text-amber-800">
+            <p key={i} className="text-warning">
               {w}
             </p>
           ))}
         </>
       )}
       <button
-        className="text-teal-700 underline"
+        className="text-accent underline"
         onClick={() =>
           download(
             "节点结构化数据.json",

@@ -25,11 +25,11 @@ export default function StudioCandidateLocation({
   return (
     <div
       aria-label={`${p.place_name}定位`}
-      className="mt-2 space-y-2 border-t border-purple-50 pt-2"
+      className="mt-2 space-y-2 border-t border-accent-line pt-2"
     >
       <p
         className={
-          location.status === "matched" ? "text-teal-800" : "text-amber-800"
+          location.status === "matched" ? "text-accent" : "text-warning"
         }
       >
         {labels[location.status]}
@@ -41,7 +41,7 @@ export default function StudioCandidateLocation({
           {location.place.address}
         </p>
       )}
-      <p className="text-slate-500">{location.reason}</p>
+      <p className="text-muted">{location.reason}</p>
       {!!location.candidates.length && (
         <details open={location.status === "ambiguous"}>
           <summary className="cursor-pointer">
@@ -49,21 +49,18 @@ export default function StudioCandidateLocation({
           </summary>
           <ul className="mt-2 space-y-2">
             {location.candidates.map((place) => (
-              <li
-                key={place.id}
-                className="rounded border border-slate-100 p-2"
-              >
+              <li key={place.id} className="rounded border border-line p-2">
                 <p>
                   {place.name} · {place.city} {place.district}
                 </p>
-                <p className="break-words text-slate-500">{place.address}</p>
+                <p className="break-words text-muted">{place.address}</p>
                 {onChoose && (
                   <button
                     type="button"
                     aria-label={`${p.place_name}选用 ${place.address || place.name}`}
                     aria-pressed={choice === place.id}
                     onClick={() => onChoose(p.id, place.id)}
-                    className="mt-1 text-teal-700 underline"
+                    className="mt-1 text-accent underline"
                   >
                     {choice === place.id ? "已指定，运行后应用" : "选用此地点"}
                   </button>
@@ -78,13 +75,13 @@ export default function StudioCandidateLocation({
           type="button"
           aria-label={`${p.place_name}清除指定`}
           onClick={() => onChoose(p.id, null)}
-          className="text-slate-500 underline"
+          className="text-muted underline"
         >
           清除指定地点
         </button>
       )}
       {onChoose && location.status === "ambiguous" && (
-        <p className="text-slate-500">
+        <p className="text-muted">
           如需明确地点，选择后运行此节点；程序会核对本次地图结果，不直接修改正式行程。
         </p>
       )}

@@ -1,6 +1,7 @@
-/* Approved A/B/C palettes. Theme controls follow the page migration; A is live. */
+/* Approved A/B/C palettes; paper is the default. */
 :root {
   color-scheme: light;
+  --tf-overlay: rgb(20 30 24 / 0.7);
   --tf-background: #e8e5de;
   --tf-paper: #f8f5ee;
   --tf-surface: #fffdf8;
@@ -76,4 +77,21 @@ html[data-theme="night"] {
     --tf-panel-padding: 18px;
     --tf-content-gap: 10px;
   }
+}
+
+/* Fixed palette samples live here so the chooser previews all three themes. */
+[data-theme-option="paper"] {
+  --tf-preview-paper: #f8f5ee;
+  --tf-preview-ink: #292e29;
+  --tf-preview-accent: #355744;
+}
+[data-theme-option="guide"] {
+  --tf-preview-paper: #f7f9fb;
+  --tf-preview-ink: #202d40;
+  --tf-preview-accent: #315eae;
+}
+[data-theme-option="night"] {
+  --tf-preview-paper: #202625;
+  --tf-preview-ink: #edf0e8;
+  --tf-preview-accent: #c4d89c;
 }

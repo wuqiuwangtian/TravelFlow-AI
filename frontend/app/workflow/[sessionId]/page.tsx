@@ -22,12 +22,12 @@ import type {
 } from "@/lib/types";
 
 const STATES: Record<WorkflowNodeState, { label: string; color: string }> = {
-  waiting: { label: "等待前置", color: "bg-slate-700 text-slate-200" },
-  needs_input: { label: "待补充／确认", color: "bg-amber-100 text-amber-950" },
-  available: { label: "已有数据", color: "bg-teal-100 text-teal-950" },
-  ready: { label: "可继续", color: "bg-sky-100 text-sky-950" },
-  interrupted: { label: "记录中断", color: "bg-red-100 text-red-900" },
-  unknown: { label: "记录不足", color: "bg-slate-200 text-slate-700" },
+  waiting: { label: "等待前置", color: "bg-surface text-ink" },
+  needs_input: { label: "待补充／确认", color: "bg-warning-soft text-warning" },
+  available: { label: "已有数据", color: "bg-accent-soft text-ink" },
+  ready: { label: "可继续", color: "bg-accent-soft text-accent" },
+  interrupted: { label: "记录中断", color: "bg-danger-soft text-danger" },
+  unknown: { label: "记录不足", color: "bg-line text-ink" },
 };
 const ICONS = {
   collector: MapPin,
@@ -176,17 +176,17 @@ export default function WorkflowPage() {
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs tracking-widest text-teal-700">高级流程</p>
-          <h1 className="mt-2 text-2xl font-bold text-teal-950">
+          <p className="text-xs tracking-widest text-accent">高级流程</p>
+          <h1 className="mt-2 text-2xl font-bold text-ink">
             {mode === "studio" ? "旅行规划工程" : "对话流程观察"}
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted">
             {mode === "studio"
               ? "从模板开始，连接输入、资料、生成与成稿。分支尝试不同方案，汇合成你需要的旅行计划；每一步都能单独查看和重跑。"
               : "查看日常对话的固定编排与已保存数据，也可预览单日路线优化。历史版本保持只读。"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-4 text-sm text-teal-800">
+        <div className="flex flex-wrap gap-4 text-sm text-accent">
           <Link
             href={`/chat/${sessionId}${selection ? `?branch=${selection.branch}` : ""}`}
           >
@@ -204,14 +204,14 @@ export default function WorkflowPage() {
         <button
           aria-pressed={mode === "studio"}
           onClick={() => switchMode("studio")}
-          className={`rounded-lg px-4 py-2 ${mode === "studio" ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}
+          className={`rounded-lg px-4 py-2 ${mode === "studio" ? "bg-accent text-accent-ink" : "bg-surface text-muted"}`}
         >
           节点工程
         </button>
         <button
           aria-pressed={mode === "process"}
           onClick={() => switchMode("process")}
-          className={`rounded-lg px-4 py-2 ${mode === "process" ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}
+          className={`rounded-lg px-4 py-2 ${mode === "process" ? "bg-accent text-accent-ink" : "bg-surface text-muted"}`}
         >
           对话流程与单日优化
         </button>
@@ -219,7 +219,7 @@ export default function WorkflowPage() {
       {notice && (
         <p
           role="status"
-          className="mt-5 rounded-xl bg-teal-50 p-4 text-sm text-teal-800"
+          className="mt-5 rounded-lg bg-accent-soft p-4 text-sm text-accent"
         >
           {notice}
         </p>
@@ -229,11 +229,11 @@ export default function WorkflowPage() {
         <div
           className={
             mode === "studio"
-              ? "mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-teal-100 bg-white p-3"
-              : "mt-6 rounded-2xl border border-teal-100 bg-white p-5"
+              ? "mt-4 flex flex-wrap items-center gap-4 rounded-lg border border-accent-line bg-surface p-3"
+              : "mt-6 rounded-lg border border-accent-line bg-surface p-5"
           }
         >
-          <p className="break-words text-sm font-semibold text-slate-800">
+          <p className="break-words text-sm font-semibold text-ink">
             {detail.session.title}
             {detail.session.archived ? " · 会话已归档" : ""}
           </p>
@@ -244,7 +244,7 @@ export default function WorkflowPage() {
                 : "mt-4 grid gap-4 sm:grid-cols-2"
             }
           >
-            <label className="text-xs text-slate-600">
+            <label className="text-xs text-muted">
               选择方案
               <select
                 aria-label="选择方案"
@@ -253,7 +253,7 @@ export default function WorkflowPage() {
                 onChange={(e) =>
                   choose({ branch: e.target.value, version: "" })
                 }
-                className="mt-2 block w-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                className="mt-2 block w-full min-w-0 rounded-lg border border-line bg-surface p-3 text-sm"
               >
                 {!selection && <option value="">请选择有效方案</option>}
                 {detail.branches.map((branch) => (
@@ -265,7 +265,7 @@ export default function WorkflowPage() {
               </select>
             </label>
             {mode === "process" && (
-              <label className="text-xs text-slate-600">
+              <label className="text-xs text-muted">
                 查看版本
                 <select
                   aria-label="查看版本"
@@ -275,7 +275,7 @@ export default function WorkflowPage() {
                     selection &&
                     choose({ ...selection, version: e.target.value })
                   }
-                  className="mt-2 block w-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                  className="mt-2 block w-full min-w-0 rounded-lg border border-line bg-surface p-3 text-sm"
                 >
                   <option value="">当前过程</option>
                   {!!selection?.version &&
@@ -298,7 +298,7 @@ export default function WorkflowPage() {
       {(metaError || error) && (
         <div
           role="alert"
-          className="mt-5 rounded-xl bg-amber-50 p-4 text-sm leading-7 text-amber-900"
+          className="mt-5 rounded-lg bg-warning-soft p-4 text-sm leading-7 text-warning"
         >
           {metaError || error}
           <button
@@ -311,7 +311,7 @@ export default function WorkflowPage() {
         </div>
       )}
       {!metaError && !error && (metaBusy || busy) && (
-        <p role="status" className="mt-6 text-sm text-slate-500">
+        <p role="status" className="mt-6 text-sm text-muted">
           正在读取规划流程…
         </p>
       )}
@@ -337,7 +337,7 @@ export default function WorkflowPage() {
           <>
             <section
               aria-label="流程数据来源"
-              className="mt-5 rounded-xl bg-teal-50 p-4 text-xs leading-7 text-teal-900"
+              className="mt-5 rounded-lg bg-accent-soft p-4 text-xs leading-7 text-ink"
             >
               <p className="font-semibold">
                 {data.branch.title} ·{" "}
@@ -366,12 +366,12 @@ export default function WorkflowPage() {
                 “已有数据”表示内容已保留，不代表营业、价格或全部执行步骤已核实；本页不是完整运行日志。
               </p>
               {data.busy && (
-                <p className="mt-2 font-medium text-amber-800">
+                <p className="mt-2 font-medium text-warning">
                   此方案正在生成或更新，当前显示的是已取得的数据，可稍后刷新。
                 </p>
               )}
               {data.warnings.map((warning) => (
-                <p key={warning} className="mt-2 text-amber-800">
+                <p key={warning} className="mt-2 text-warning">
                   {warning}
                 </p>
               ))}
@@ -379,14 +379,14 @@ export default function WorkflowPage() {
 
             <section
               aria-label="规划流程节点"
-              className="mt-6 overflow-hidden rounded-2xl bg-slate-900 p-5 sm:p-7"
+              className="tf-process-flow mt-6 overflow-hidden rounded-lg bg-paper p-5 sm:p-7"
               style={{
                 backgroundImage:
-                  "radial-gradient(#334155 1px, transparent 1px)",
+                  "radial-gradient(var(--tf-line) 1px, transparent 1px)",
                 backgroundSize: "18px 18px",
               }}
             >
-              <p className="mb-5 text-xs leading-6 text-slate-300">
+              <p className="mb-5 text-xs leading-6 text-muted">
                 需求齐全 → 检索资料 → 生成路书；生成后等待下一轮对话确认或修改。
               </p>
               <ol className="grid gap-5 xl:grid-cols-4">
@@ -411,11 +411,11 @@ export default function WorkflowPage() {
                         aria-label={node.title}
                         aria-pressed={selectedNode === node.id}
                         onClick={() => setSelectedNode(node.id)}
-                        className={`relative w-full rounded-xl border-2 p-4 text-left text-white transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-300 ${selectedNode === node.id ? "border-teal-300 bg-slate-700" : "border-slate-600 bg-slate-800 hover:border-slate-400"}`}
+                        className={`relative w-full rounded-lg border-2 p-4 text-left text-ink transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${selectedNode === node.id ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent"}`}
                       >
                         <span className="flex items-center justify-between gap-2">
-                          <Icon className="h-5 w-5 text-teal-300" />
-                          <span className="text-xs text-slate-400">
+                          <Icon className="h-5 w-5 text-accent" />
+                          <span className="text-xs text-muted">
                             0{index + 1}
                           </span>
                         </span>
@@ -427,24 +427,24 @@ export default function WorkflowPage() {
                         >
                           {state.label}
                         </span>
-                        <span className="mt-3 block break-words text-xs leading-6 text-slate-200">
+                        <span className="mt-3 block break-words text-xs leading-6 text-ink">
                           {output
                             ? `${output.label}：${output.value}`
                             : "暂无保留输出"}
                         </span>
                         <span
                           aria-hidden
-                          className="absolute top-7 -left-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
+                          className="absolute top-7 -left-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-accent-line bg-surface xl:block"
                         />
                         <span
                           aria-hidden
-                          className="absolute top-7 -right-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-teal-300 bg-slate-900 xl:block"
+                          className="absolute top-7 -right-1.5 hidden h-2.5 w-2.5 rounded-full border-2 border-accent-line bg-surface xl:block"
                         />
                       </button>
                       {index < data.nodes.length - 1 && (
                         <span
                           aria-hidden
-                          className="mt-3 flex justify-center text-teal-300 xl:absolute xl:top-6 xl:-right-5 xl:mt-0"
+                          className="mt-3 flex justify-center text-accent xl:absolute xl:top-6 xl:-right-5 xl:mt-0"
                         >
                           <ArrowDown className="h-4 w-4 xl:hidden" />
                           <ArrowRight className="hidden h-4 w-4 xl:block" />
@@ -459,10 +459,10 @@ export default function WorkflowPage() {
             {selected && (
               <section
                 aria-label="节点详情"
-                className="mt-6 rounded-2xl border border-teal-100 bg-white p-5 sm:p-7"
+                className="mt-6 rounded-lg border border-accent-line bg-surface p-5 sm:p-7"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-teal-950">
+                  <h2 className="text-lg font-semibold text-ink">
                     {selected.title}
                   </h2>
                   <span
@@ -471,34 +471,32 @@ export default function WorkflowPage() {
                     {STATES[selected.state].label}
                   </span>
                 </div>
-                <p className="mt-3 text-sm leading-7 text-slate-500">
+                <p className="mt-3 text-sm leading-7 text-muted">
                   {selected.description}
                 </p>
                 <div className="mt-5 grid gap-6 md:grid-cols-[1fr_2fr]">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-800">
-                      输入依据
-                    </h3>
-                    <ul className="mt-3 space-y-2 text-sm leading-7 text-slate-600">
+                    <h3 className="text-sm font-semibold text-ink">输入依据</h3>
+                    <ul className="mt-3 space-y-2 text-sm leading-7 text-muted">
                       {selected.inputs.map((item) => (
-                        <li key={item} className="rounded-lg bg-slate-50 p-3">
+                        <li key={item} className="rounded-lg bg-surface p-3">
                           {item}
                         </li>
                       ))}
                     </ul>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-slate-800">
+                    <h3 className="text-sm font-semibold text-ink">
                       已有输出与记录
                     </h3>
-                    <dl className="mt-3 divide-y divide-slate-100 text-sm">
+                    <dl className="mt-3 divide-y divide-line text-sm">
                       {selected.outputs.map((item) => (
                         <div
                           key={item.label}
                           className="grid gap-1 py-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-4"
                         >
-                          <dt className="text-slate-500">{item.label}</dt>
-                          <dd className="min-w-0 break-words text-slate-800">
+                          <dt className="text-muted">{item.label}</dt>
+                          <dd className="min-w-0 break-words text-ink">
                             {item.value}
                           </dd>
                         </div>
@@ -506,15 +504,15 @@ export default function WorkflowPage() {
                     </dl>
                   </div>
                 </div>
-                <div className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-7 text-slate-600">
+                <div className="mt-5 rounded-lg bg-surface p-4 text-xs leading-7 text-muted">
                   {selected.notes.map((note) => (
                     <p key={note}>{note}</p>
                   ))}
                 </div>
-                <h3 className="mt-5 text-sm font-semibold text-slate-800">
+                <h3 className="mt-5 text-sm font-semibold text-ink">
                   如何继续
                 </h3>
-                <ul className="mt-3 space-y-2 text-xs leading-7 text-slate-600">
+                <ul className="mt-3 space-y-2 text-xs leading-7 text-muted">
                   {data.edges
                     .filter((edge) => edge.source === selected.id)
                     .map((edge) => (
@@ -532,7 +530,7 @@ export default function WorkflowPage() {
                       </li>
                     ))}
                 </ul>
-                <div className="mt-5 flex flex-wrap gap-5 text-sm text-teal-800">
+                <div className="mt-5 flex flex-wrap gap-5 text-sm text-accent">
                   <Link href={`/chat/${sessionId}?branch=${data.branch.id}`}>
                     回原对话继续
                   </Link>
@@ -549,7 +547,7 @@ export default function WorkflowPage() {
             {selectedNode === "planner" &&
               data.version &&
               (data.historical ? (
-                <p className="mt-5 text-sm text-slate-500">
+                <p className="mt-5 text-sm text-muted">
                   历史版本只读；切换“当前过程”后可优化当前方案。
                 </p>
               ) : !data.busy && data.checkpoint_status === "available" ? (

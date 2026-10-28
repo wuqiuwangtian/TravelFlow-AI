@@ -192,17 +192,17 @@ export default function StudioLibrary({
       <button
         disabled={locked || !graph.nodes.length}
         onClick={() => open(null, graph)}
-        className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs text-teal-800 disabled:opacity-40"
+        className="rounded-lg border border-accent-line bg-surface px-3 py-2 text-xs text-accent disabled:opacity-40"
       >
         保存为我的模板
       </button>
       {notice && (
-        <p role="status" className="mt-2 text-xs leading-6 text-teal-800">
+        <p role="status" className="mt-2 text-xs leading-6 text-accent">
           {notice}
         </p>
       )}
       {error && !editor && (
-        <p role="alert" className="mt-2 text-xs leading-6 text-red-700">
+        <p role="alert" className="mt-2 text-xs leading-6 text-danger">
           {error}
           <button
             disabled={!!busy}
@@ -220,13 +220,13 @@ export default function StudioLibrary({
       {visible && (
         <section
           aria-label="我的工程模板"
-          className="mt-3 rounded-xl border border-slate-200 bg-white p-4"
+          className="mt-3 rounded-lg border border-line bg-surface p-4"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">我的模板</h2>
             <button
               disabled={loading || !!busy}
-              className="text-xs text-teal-700"
+              className="text-xs text-accent"
               onClick={() => {
                 setDeleting(null);
                 reloadList();
@@ -235,7 +235,7 @@ export default function StudioLibrary({
               刷新我的模板
             </button>
           </div>
-          <p className="mt-2 text-xs leading-6 text-slate-500">
+          <p className="mt-2 text-xs leading-6 text-muted">
             模板保存在本机，可跨旅行使用。载入后先成为可编辑草稿，不会自动运行；选定的需求输入会替换为本次旅行需求，固定文字和节点指令沿用模板。
           </p>
           {loading && (
@@ -244,7 +244,7 @@ export default function StudioLibrary({
             </p>
           )}
           {listError && (
-            <p role="alert" className="mt-2 text-xs text-red-700">
+            <p role="alert" className="mt-2 text-xs text-danger">
               模板库读取失败：{listError}。当前工程和默认模板仍可使用。
             </p>
           )}
@@ -257,38 +257,38 @@ export default function StudioLibrary({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   maxLength={200}
-                  className="ml-2 max-w-full rounded border border-slate-200 p-2"
+                  className="ml-2 max-w-full rounded border border-line p-2"
                 />
               </label>
               {!items.length && (
-                <p className="mt-3 text-xs text-slate-500">
+                <p className="mt-3 text-xs text-muted">
                   还没有个人模板。调好工程后，点击“保存为我的模板”。
                 </p>
               )}
               {!!items.length && !filtered?.length && (
-                <p className="mt-3 text-xs text-slate-500">没有匹配的模板。</p>
+                <p className="mt-3 text-xs text-muted">没有匹配的模板。</p>
               )}
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {filtered?.map((item) => (
                   <article
                     aria-label={`个人模板 ${item.title}`}
                     key={item.id}
-                    className="min-w-0 rounded-lg border border-slate-200 p-3 text-xs leading-6"
+                    className="min-w-0 rounded-lg border border-line p-3 text-xs leading-6"
                   >
-                    <h3 className="break-words font-semibold text-slate-800">
+                    <h3 className="break-words font-semibold text-ink">
                       {item.title}
                     </h3>
-                    <p className="whitespace-pre-wrap break-words text-slate-500">
+                    <p className="whitespace-pre-wrap break-words text-muted">
                       {item.description || "暂无说明"}
                     </p>
-                    <p className="text-slate-500">
+                    <p className="text-muted">
                       {item.node_count}个节点 · {item.trip_input_count}
                       个旅行需求输入 · 修订{item.revision}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
                       <button
                         disabled={locked}
-                        className="text-teal-700 disabled:opacity-40"
+                        className="text-accent disabled:opacity-40"
                         onClick={async () => {
                           setError("");
                           try {
@@ -302,21 +302,21 @@ export default function StudioLibrary({
                       </button>
                       <button
                         disabled={locked}
-                        className="text-slate-600"
+                        className="text-muted"
                         onClick={() => edit(item, true)}
                       >
                         编辑名称与说明
                       </button>
                       <button
                         disabled={locked || !graph.nodes.length}
-                        className="text-slate-600"
+                        className="text-muted"
                         onClick={() => edit(item, false)}
                       >
                         用当前工程更新
                       </button>
                       <button
                         disabled={locked}
-                        className="text-red-600"
+                        className="text-danger"
                         onClick={() => {
                           setError("");
                           setDeleting({ item, id: crypto.randomUUID() });
@@ -326,7 +326,7 @@ export default function StudioLibrary({
                       </button>
                     </div>
                     {deleting?.item.id === item.id && (
-                      <div className="mt-3 rounded-lg bg-amber-50 p-3">
+                      <div className="mt-3 rounded-lg bg-warning-soft p-3">
                         <p>
                           删除“{item.title}”？已载入的旅行工程和历史记录会保留。
                         </p>
@@ -334,7 +334,7 @@ export default function StudioLibrary({
                           <button
                             disabled={locked}
                             onClick={remove}
-                            className="text-red-700"
+                            className="text-danger"
                           >
                             确认删除模板
                           </button>
@@ -363,7 +363,7 @@ export default function StudioLibrary({
               if (busy) event.preventDefault();
               else setEditor(null);
             }}
-            className="studio-dialog studio-template-dialog fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-24px)] max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl backdrop:bg-slate-950/60"
+            className="studio-dialog studio-template-dialog fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-24px)] max-w-2xl overflow-auto rounded-lg border border-line bg-surface p-5 shadow-2xl backdrop:bg-overlay"
           >
             <form
               onSubmit={(e) => {
@@ -384,17 +384,17 @@ export default function StudioLibrary({
                   type="button"
                   disabled={!!busy}
                   onClick={() => setEditor(null)}
-                  className="text-xs text-slate-500"
+                  className="text-xs text-muted"
                 >
                   关闭模板编辑
                 </button>
               </div>
-              <p className="text-xs leading-6 text-slate-500">
+              <p className="text-xs leading-6 text-muted">
                 保存{editor.graph.nodes.length}
                 个节点的结构、参数和指令，不包含运行结果、账目或照片。指令及保留的固定文字也会用于其他旅行，请核对其中的个人内容。
               </p>
               {editor.source && (
-                <p className="text-xs text-amber-800">
+                <p className="text-xs text-warning">
                   更新模板“{editor.source.title}”修订{editor.source.revision}
                   ；已载入的工程不会跟随改变。
                 </p>
@@ -402,7 +402,7 @@ export default function StudioLibrary({
               {error && (
                 <p
                   role="alert"
-                  className="rounded-lg bg-red-50 p-3 text-xs leading-6 text-red-700"
+                  className="rounded-lg bg-danger-soft p-3 text-xs leading-6 text-danger"
                 >
                   {error}
                   <button
@@ -436,7 +436,7 @@ export default function StudioLibrary({
                     maxLength={80}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                    className="mt-2 w-full rounded-lg border border-line p-2"
                   />
                 </label>
                 <label className="block text-xs">
@@ -446,20 +446,20 @@ export default function StudioLibrary({
                     maxLength={600}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-2"
+                    className="mt-2 min-h-20 w-full rounded-lg border border-line p-2"
                   />
                 </label>
                 <div className="space-y-3 text-xs leading-6">
                   <h3 className="font-medium">文本输入如何复用</h3>
                   {!editor.graph.nodes.some((n) => n.kind === "input") && (
-                    <p className="text-slate-500">
+                    <p className="text-muted">
                       此工程没有文本输入节点；提示词和检索设置按原样保留。
                     </p>
                   )}
                   {editor.graph.nodes
                     .filter((n) => n.kind === "input")
                     .map((node) => (
-                      <div key={node.id} className="rounded-lg bg-slate-50 p-3">
+                      <div key={node.id} className="rounded-lg bg-surface p-3">
                         <label className="flex items-start gap-2">
                           <input
                             aria-label={`${node.title} 使用本次旅行需求`}
@@ -480,8 +480,8 @@ export default function StudioLibrary({
                         <p
                           className={
                             tripIds.includes(node.id)
-                              ? "mt-1 text-teal-800"
-                              : "mt-1 text-amber-800"
+                              ? "mt-1 text-accent"
+                              : "mt-1 text-warning"
                           }
                         >
                           {tripIds.includes(node.id)
@@ -518,7 +518,7 @@ export default function StudioLibrary({
                         ].includes(n.kind),
                     )
                     .map((n) => (
-                      <div key={n.id} className="mt-3 rounded bg-slate-50 p-3">
+                      <div key={n.id} className="mt-3 rounded bg-surface p-3">
                         <p className="font-medium">{n.title}</p>
                         <p className="max-h-40 overflow-auto whitespace-pre-wrap break-words">
                           {n.parameters.prompt}
@@ -649,7 +649,7 @@ export default function StudioLibrary({
               <button
                 type="submit"
                 disabled={!!busy || !title.trim()}
-                className="rounded-lg bg-teal-700 px-4 py-2 text-xs text-white disabled:opacity-40"
+                className="rounded-lg bg-accent px-4 py-2 text-xs text-accent-ink disabled:opacity-40"
               >
                 {busy === "save"
                   ? "正在保存模板…"

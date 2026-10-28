@@ -45,7 +45,7 @@ export default function StudioMergeControls({
               ),
             })
           }
-          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+          className="mt-2 w-full rounded-lg border border-line p-2"
         />
       </label>
       <label className="block">
@@ -58,7 +58,7 @@ export default function StudioMergeControls({
               merge_cost_policy: e.target.value as "unknown" | "first",
             })
           }
-          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+          className="mt-2 w-full rounded-lg border border-line p-2"
         >
           <option value="unknown">保留未知，待核实</option>
           <option value="first">沿用优先来源</option>
@@ -67,11 +67,11 @@ export default function StudioMergeControls({
       <div aria-label="合并来源优先级">
         <p className="font-medium">来源优先级</p>
         {!order.length && (
-          <p className="mt-2 text-slate-500">先连接1至8份候选池。</p>
+          <p className="mt-2 text-muted">先连接1至8份候选池。</p>
         )}
         <ol className="mt-2 space-y-2">
           {order.map((id, i) => (
-            <li key={id} className="rounded border border-slate-200 p-2">
+            <li key={id} className="rounded border border-line p-2">
               <p>
                 {i + 1}. {graph.nodes.find((n) => n.id === id)?.title ?? id}
               </p>
@@ -81,7 +81,7 @@ export default function StudioMergeControls({
                   disabled={i === 0}
                   aria-label={`${id}优先级上移`}
                   onClick={() => move(i, -1)}
-                  className="text-teal-700 disabled:text-slate-300"
+                  className="text-accent disabled:text-muted"
                 >
                   上移
                 </button>
@@ -90,7 +90,7 @@ export default function StudioMergeControls({
                   disabled={i === order.length - 1}
                   aria-label={`${id}优先级下移`}
                   onClick={() => move(i, 1)}
-                  className="text-teal-700 disabled:text-slate-300"
+                  className="text-accent disabled:text-muted"
                 >
                   下移
                 </button>
@@ -99,7 +99,7 @@ export default function StudioMergeControls({
           ))}
         </ol>
       </div>
-      <p className="leading-6 text-slate-500">
+      <p className="leading-6 text-muted">
         按显示顺序取舍，调整后重跑本节点应用。保留优先来源的名称、理由、停留和引用；其他建议可在合并记录核对。明确指向不同地图地点的同名候选分别保留，超过上限的也保留取舍记录。
       </p>
     </div>

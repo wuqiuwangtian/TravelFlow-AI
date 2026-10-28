@@ -20,7 +20,7 @@ export default function StudioBudgetControls({
   const rules = { ...emptyBudgetRules, ...value };
   return (
     <div className="space-y-4">
-      <p className="leading-6 text-slate-500">
+      <p className="leading-6 text-muted">
         留空只汇总原行程。填写后补充尚未列出的分类，已有金额或待核实项目均沿用，避免重复；不生成实际消费。
       </p>
       {(
@@ -50,7 +50,7 @@ export default function StudioBudgetControls({
                     : Math.round(Number(e.target.value) * 100),
               })
             }
-            className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+            className="mt-2 w-full rounded-lg border border-line p-2"
           />
         </label>
       ))}
@@ -71,13 +71,13 @@ export default function StudioBudgetControls({
                 e.target.value === "" ? null : Number(e.target.value),
             })
           }
-          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+          className="mt-2 w-full rounded-lg border border-line p-2"
         />
       </label>
-      <p className="leading-6 text-slate-500">
+      <p className="leading-6 text-muted">
         饮食按完整旅行日，住宿按天数减一晚计算；特殊过夜安排请核对。人数或房间数未知时保留待核实，已有车站、大交通安排或自定义交通预算时不再叠加往返预留。
       </p>
-      <p className="leading-6 text-slate-500">
+      <p className="leading-6 text-muted">
         采用时会根据保留的实际记录重新核算。确认后的预留成为可编辑自定义预算，后续采用会保留现有金额。
       </p>
     </div>

@@ -309,7 +309,7 @@
     color: var(--tf-ink);
   }
   .journey-photo-dialog::backdrop {
-    background: #1118;
+    background: var(--tf-overlay);
   }
   .journey-photo-heading {
     display: flex;
@@ -363,6 +363,7 @@
   }
   .journey-workspace :where(button:not(.tf-button)):disabled {
     cursor: not-allowed;
+    opacity: 0.6;
   }
   .journey-workspace :where(button:not(.tf-button)):focus-visible,
   .journey-workspace :where([tabindex="-1"]):focus-visible {

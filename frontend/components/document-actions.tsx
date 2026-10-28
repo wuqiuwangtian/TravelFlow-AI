@@ -65,14 +65,14 @@ export default function DocumentActions({
       </div>
       <ActionFeedback error={error} message={message} />
       {manualCopy && (
-        <label className="mt-3 block text-slate-600">
+        <label className="mt-3 block text-muted">
           手动复制正文
           <textarea
             aria-label="可手动复制的节点正文"
             readOnly
             value={text}
             rows={6}
-            className="mt-1 w-full rounded-lg border border-slate-300 p-3"
+            className="mt-1 w-full rounded-lg border border-line p-3"
             onFocus={(event) => event.currentTarget.select()}
           />
         </label>

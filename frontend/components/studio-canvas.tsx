@@ -164,15 +164,12 @@ export default function StudioCanvas({
         >
           ＋
         </button>
-        <button
-          onClick={fit}
-          className="min-h-10 border-l border-slate-700 px-2"
-        >
+        <button onClick={fit} className="min-h-10 border-l border-line px-2">
           适应画布
         </button>
         {selected && (
           <button
-            className="min-h-10 border-l border-slate-700 px-2"
+            className="min-h-10 border-l border-line px-2"
             onClick={() => {
               const node = graph.nodes.find((n) => n.id === selected),
                 box = container.current?.getBoundingClientRect();
@@ -197,7 +194,7 @@ export default function StudioCanvas({
               pendingRef.current = null;
               setPending(null);
             }}
-            className="min-h-10 px-2 text-amber-300"
+            className="min-h-10 px-2 text-warning"
           >
             取消连线
           </button>
@@ -450,7 +447,7 @@ export default function StudioCanvas({
                       className="studio-port absolute -left-[11px]"
                     >
                       <span
-                        className="block h-3 w-3 rounded-full border-2 border-slate-900"
+                        className="block h-3 w-3 rounded-full border-2 border-line"
                         style={{
                           backgroundColor: PORT_COLORS[port.type],
                         }}
@@ -482,7 +479,7 @@ export default function StudioCanvas({
                       className="studio-port absolute -right-[11px]"
                     >
                       <span
-                        className="block h-3 w-3 rounded-full border-2 border-slate-900"
+                        className="block h-3 w-3 rounded-full border-2 border-line"
                         style={{
                           backgroundColor: PORT_COLORS[port.type],
                         }}
@@ -492,7 +489,7 @@ export default function StudioCanvas({
                 ))}
                 <div className="studio-node-footer">
                   <span className={state.color}>{state.label}</span>
-                  <span className="text-slate-500">{node.id.slice(0, 18)}</span>
+                  <span className="text-muted">{node.id.slice(0, 18)}</span>
                 </div>
               </article>
             );

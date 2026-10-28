@@ -52,7 +52,7 @@ const modes: Record<TravelMode, string> = {
   transfer: "接驳",
 };
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm";
 const progressLabels: Record<ActivityProgress, string> = {
   not_started: "未开始",
   in_progress: "进行中",
@@ -189,14 +189,14 @@ export function ItineraryPanel({
       <div className="journey-itinerary-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="mb-1 text-[10px] font-semibold tracking-[0.16em] text-teal-600">
+            <p className="mb-1 text-[10px] font-semibold tracking-[0.16em] text-accent">
               每日路线与旅中记录
             </p>
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <Route className="h-5 w-5 text-teal-600" />
+            <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+              <Route className="h-5 w-5 text-accent" />
               你的旅行线路
             </h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               地点、交通与时间已经串在一起。想换一种玩法，直接告诉 AI。
             </p>
           </div>
@@ -210,7 +210,7 @@ export function ItineraryPanel({
               type="button"
               onClick={() => setAdvanced(!advanced)}
               aria-expanded={advanced}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1.5 text-[11px] text-slate-500"
+              className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] text-muted"
             >
               <SlidersHorizontal className="h-3 w-3" />
               {advanced ? "收起细节" : "更多细节"}
@@ -225,7 +225,7 @@ export function ItineraryPanel({
             {needsModelSettings && (
               <Link
                 href="/settings#llm"
-                className="mt-2 inline-block text-sm text-teal-700 underline"
+                className="mt-2 inline-block text-sm text-accent underline"
               >
                 前往设置大模型并测试连接
               </Link>
@@ -233,7 +233,7 @@ export function ItineraryPanel({
           </div>
         )}
         {!day ? (
-          <div className="rounded-xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">
+          <div className="rounded-lg bg-surface p-5 text-sm leading-relaxed text-muted">
             <p>
               这份旧路书还没有连续线路。AI
               可以自动整理地点、交通和建议时间，不需要逐项填写。
@@ -301,7 +301,7 @@ export function ItineraryPanel({
                 <p className="journey-current-title">
                   {active.place?.name ?? active.place_name ?? active.title}
                 </p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                <p className="mt-1 text-xs leading-relaxed text-muted">
                   {active.place?.address || active.city}
                 </p>
                 {(day.replan_context ||
@@ -333,8 +333,8 @@ export function ItineraryPanel({
                     mode={day.legs[activeIndex - 1]?.mode ?? "transit"}
                   />
                 )}
-                <div className="mt-4 border-t border-slate-100 pt-3">
-                  <p className="text-xs text-slate-500">
+                <div className="mt-4 border-t border-line pt-3">
+                  <p className="text-xs text-muted">
                     旅中状态：
                     {progressLabels[active.progress ?? "not_started"]}
                   </p>
@@ -350,7 +350,7 @@ export function ItineraryPanel({
                           type="button"
                           key={status}
                           disabled={!editable || disabled || busy}
-                          className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                          className="rounded-lg border border-accent-line px-2.5 py-1.5 text-xs text-accent disabled:opacity-40"
                           onClick={async () => {
                             const ok = await mutate(() =>
                               api.updateProgress(
@@ -407,7 +407,7 @@ export function ItineraryPanel({
                                 `把第${day.day}天第${activeIndex + 1}站「${active.title}」移到第${target.day}天`,
                               )
                             }
-                            className="rounded-lg border border-teal-100 px-2.5 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                            className="rounded-lg border border-accent-line px-2.5 py-1.5 text-xs text-accent disabled:opacity-40"
                           >
                             移到第{target.day}天，先看预览
                           </button>
@@ -418,10 +418,10 @@ export function ItineraryPanel({
             )}
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-bold text-slate-800">
+                <h3 className="text-base font-bold text-ink">
                   {day.title || `第 ${day.day} 天的旅程`}
                 </h3>
-                <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                   <span>{day.activities.length} 个停留点</span>
                   {day.travel_minutes !== null && (
                     <span>交通约 {day.travel_minutes} 分钟</span>
@@ -437,7 +437,7 @@ export function ItineraryPanel({
                   </span>
                 </p>
               </div>
-              <span className="rounded-full bg-teal-50 px-3 py-1 text-[10px] text-teal-700">
+              <span className="rounded-full bg-accent-soft px-3 py-1 text-[10px] text-accent">
                 {day.legs.length > 0 && day.legs.every((l) => l.status === "ok")
                   ? "地图路线已校验"
                   : "建议行程 · 可直接对话调整"}
@@ -455,7 +455,7 @@ export function ItineraryPanel({
                 <div
                   role="status"
                   aria-label="途中调整说明"
-                  className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-4 text-xs leading-6 text-teal-800"
+                  className="mt-3 rounded-lg border border-accent-line bg-accent-soft p-4 text-xs leading-6 text-accent"
                 >
                   <p>
                     从
@@ -481,7 +481,7 @@ export function ItineraryPanel({
                   {day.warnings
                     .filter((w) => w.includes("交通耗时尚未查到"))
                     .map((w) => (
-                      <p key={w} className="text-amber-800">
+                      <p key={w} className="text-warning">
                         {w}
                       </p>
                     ))}
@@ -491,7 +491,7 @@ export function ItineraryPanel({
                 <p
                   role="status"
                   aria-label="两天联动说明"
-                  className="mt-3 rounded-xl bg-teal-50 px-4 py-3 text-xs leading-6 text-teal-800"
+                  className="mt-3 rounded-lg bg-accent-soft px-4 py-3 text-xs leading-6 text-accent"
                 >
                   最近联动第{day.linked_replan.first_day}—
                   {day.linked_replan.second_day}天：预留
@@ -519,7 +519,7 @@ export function ItineraryPanel({
                         `联动调整第${day.day}天和第${day.day + 1}天，预留8小时休息`,
                       )
                     }
-                    className="mt-3 rounded-lg border border-teal-200 px-3 py-2 text-xs text-teal-800 hover:bg-teal-50 disabled:opacity-40"
+                    className="mt-3 rounded-lg border border-accent-line px-3 py-2 text-xs text-accent hover:bg-accent-soft disabled:opacity-40"
                   >
                     联动调整第{day.day}天和第{day.day + 1}天
                   </button>
@@ -532,7 +532,7 @@ export function ItineraryPanel({
                   <p
                     key={index}
                     role="status"
-                    className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800"
+                    className="mt-3 rounded-lg bg-warning-soft px-4 py-3 text-xs text-warning"
                   >
                     {warning}
                   </p>
@@ -540,12 +540,10 @@ export function ItineraryPanel({
             </section>
             <div className="journey-detail-grid">
               <div className="min-w-0">
-                <p className="mb-4 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                <p className="mb-4 flex items-center gap-1.5 text-xs font-medium text-muted">
                   <Clock className="h-3.5 w-3.5" />
                   一天怎么走
-                  <span className="ml-1 font-normal text-slate-400">
-                    建议时间
-                  </span>
+                  <span className="ml-1 font-normal text-muted">建议时间</span>
                 </p>
                 <ol aria-label="当天行程" className="relative space-y-0">
                   {day.activities.map((activity, index) => (
@@ -554,14 +552,14 @@ export function ItineraryPanel({
                       className="relative grid grid-cols-[46px_minmax(0,1fr)] gap-3 pb-2 sm:grid-cols-[54px_minmax(0,1fr)]"
                     >
                       <div className="relative text-center">
-                        <time className="text-xs font-semibold text-slate-600">
+                        <time className="text-xs font-semibold text-muted">
                           {timeLabel(
                             activity.start_time,
                             activity.start_day_offset,
                           )}
                         </time>
                         {index < day.activities.length - 1 && (
-                          <span className="absolute bottom-0 left-1/2 top-8 w-px bg-teal-200" />
+                          <span className="absolute bottom-0 left-1/2 top-8 w-px bg-accent-line" />
                         )}
                       </div>
                       <div className="min-w-0">
@@ -576,14 +574,14 @@ export function ItineraryPanel({
                             className="journey-stop-select"
                           >
                             <div className="flex items-start gap-2.5">
-                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700">
+                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface text-accent">
                                 <StopIcon kind={activity.kind} />
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold leading-relaxed text-slate-800">
+                                <p className="text-sm font-semibold leading-relaxed text-ink">
                                   {activity.title}
                                 </p>
-                                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                                <p className="mt-1 text-xs leading-relaxed text-muted">
                                   {activity.place?.name ?? activity.place_name}
                                   {activity.duration_minutes
                                     ? ` · 停留约 ${activity.duration_minutes} 分钟`
@@ -591,7 +589,7 @@ export function ItineraryPanel({
                                 </p>
                                 {activity.cost !== null &&
                                   !activity.is_context_anchor && (
-                                    <p className="mt-1.5 text-[11px] text-slate-500">
+                                    <p className="mt-1.5 text-[11px] text-muted">
                                       {["estimate", "manual"].includes(
                                         activity.cost_source,
                                       )
@@ -606,7 +604,7 @@ export function ItineraryPanel({
                                     </p>
                                   )}
                               </div>
-                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-teal-600">
+                              <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] text-accent">
                                 {activity.progress &&
                                 activity.progress !== "not_started"
                                   ? progressLabels[activity.progress]
@@ -614,7 +612,7 @@ export function ItineraryPanel({
                               </span>
                             </div>
                             {activity.booking && (
-                              <p className="mt-2 text-[11px] text-amber-700">
+                              <p className="mt-2 text-[11px] text-warning">
                                 已有预约{" "}
                                 {timeLabel(
                                   activity.booking.start_time,
@@ -635,7 +633,7 @@ export function ItineraryPanel({
                             )}
                         </div>
                         {activity.notes && (
-                          <p className="px-2 pt-2 text-xs leading-relaxed text-slate-500">
+                          <p className="px-2 pt-2 text-xs leading-relaxed text-muted">
                             {activity.notes}
                           </p>
                         )}
@@ -653,7 +651,7 @@ export function ItineraryPanel({
                               type="button"
                               disabled={!editable || disabled || busy}
                               aria-label={`确认第${day.day}天第${index + 1}站的地点`}
-                              className="mt-2 mb-1 rounded-lg border border-teal-100 px-3 py-1.5 text-xs text-teal-700 disabled:opacity-40"
+                              className="mt-2 mb-1 rounded-lg border border-accent-line px-3 py-1.5 text-xs text-accent disabled:opacity-40"
                               onClick={() =>
                                 onAsk(
                                   `确认第${day.day}天第${index + 1}站的地点`,
@@ -677,7 +675,7 @@ export function ItineraryPanel({
                               手动编辑此站
                             </Button>
                             {activity.place_status !== "matched" && (
-                              <p className="mt-2 text-xs text-slate-500">
+                              <p className="mt-2 text-xs text-muted">
                                 {activity.match_reason ||
                                   "保留建议地点，可通过对话进一步指定。"}
                               </p>
@@ -709,16 +707,16 @@ export function ItineraryPanel({
                           </div>
                         )}
                         {day.legs[index] && (
-                          <div className="flex items-start gap-2 px-2 py-4 text-xs leading-relaxed text-slate-500">
-                            <span className="rounded-full bg-slate-100 p-1 text-slate-400">
+                          <div className="flex items-start gap-2 px-2 py-4 text-xs leading-relaxed text-muted">
+                            <span className="rounded-full bg-paper p-1 text-muted">
                               <ArrowDown className="h-3 w-3" />
                             </span>
                             <div>
-                              <p className="flex items-center gap-1.5 font-medium text-slate-600">
+                              <p className="flex items-center gap-1.5 font-medium text-muted">
                                 <ModeIcon mode={day.legs[index].mode} />
                                 {legText(day, index)}
                               </p>
-                              <p className="mt-1 text-[11px] text-slate-400">
+                              <p className="mt-1 text-[11px] text-muted">
                                 {day.legs[index].status === "ok"
                                   ? "路线来自高德查询"
                                   : day.legs[index].message || "按建议行程衔接"}
@@ -765,12 +763,12 @@ export function ItineraryPanel({
                   day={day}
                   configured={itinerary?.map_status !== "unconfigured"}
                 />
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <MessageCircle className="h-4 w-4 text-teal-600" />
+                <div className="rounded-lg bg-surface p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                    <MessageCircle className="h-4 w-4 text-accent" />
                     想调整，直接说
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-1 text-xs leading-relaxed text-muted">
                     AI 会一起更新后续路线、时间和费用。
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -784,18 +782,18 @@ export function ItineraryPanel({
                             `请把第${day.day}天调整为${text}，保留其他天的安排，并同步更新路线、时间和费用。`,
                           )
                         }
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-teal-300 disabled:opacity-50"
+                        className="rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-muted hover:border-accent-line disabled:opacity-50"
                       >
                         {text}
                       </button>
                     ))}
                   </div>
                 </div>
-                <details className="rounded-xl border border-slate-100 px-4 py-3">
-                  <summary className="cursor-pointer text-xs text-slate-500">
+                <details className="rounded-lg border border-line px-4 py-3">
+                  <summary className="cursor-pointer text-xs text-muted">
                     时间、费用与查询说明
                   </summary>
-                  <div className="mt-3 space-y-2 text-xs leading-relaxed text-slate-500">
+                  <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted">
                     {day.schedule_notes?.map((note, i) => (
                       <p key={`schedule-${i}`}>{note}</p>
                     ))}
@@ -826,8 +824,8 @@ export function ItineraryPanel({
                 onCommit={(work) => mutate(work, true)}
               />
             </div>
-            <details className="mt-4 rounded-xl border border-slate-100 p-4">
-              <summary className="cursor-pointer text-xs text-slate-600">
+            <details className="mt-4 rounded-lg border border-line p-4">
+              <summary className="cursor-pointer text-xs text-muted">
                 消费明细、图片凭证与退款报销
               </summary>
               <TravelLedger
@@ -844,12 +842,12 @@ export function ItineraryPanel({
               action={recapAction}
             />
             {advanced && (
-              <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-slate-200 p-4">
-                <label className="text-xs text-slate-500">
+              <div className="mt-5 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-line p-4">
+                <label className="text-xs text-muted">
                   市内交通策略
                   <select
                     aria-label="交通方式"
-                    className="ml-2 rounded-lg border border-slate-200 bg-white p-2"
+                    className="ml-2 rounded-lg border border-line bg-surface p-2"
                     value={day.travel_mode}
                     disabled={!editable || disabled || busy}
                     onChange={(e) =>
@@ -886,7 +884,7 @@ export function ItineraryPanel({
                   <RefreshCw className="h-3 w-3" />
                   重新校验此日
                 </Button>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-muted">
                   铁路、航班等城际段保持独立安排
                 </span>
               </div>
@@ -909,7 +907,7 @@ function RouteStrip({
 }) {
   return (
     <div
-      className="overflow-x-auto rounded-xl bg-slate-50 p-4"
+      className="overflow-x-auto rounded-lg bg-surface p-4"
       aria-label="连续线路图"
     >
       <div className="flex w-max min-w-full items-center gap-3">
@@ -919,24 +917,24 @@ function RouteStrip({
               type="button"
               onClick={() => onSelect(activity.id)}
               aria-pressed={selected === activity.id}
-              className={`max-w-44 rounded-lg border bg-white px-3 py-2 text-left ${selected === activity.id ? "border-teal-400 shadow-sm" : "border-slate-200"}`}
+              className={`max-w-44 rounded-lg border bg-surface px-3 py-2 text-left ${selected === activity.id ? "border-accent shadow-sm" : "border-line"}`}
             >
-              <span className="mb-1 block text-[10px] text-teal-600">
+              <span className="mb-1 block text-[10px] text-accent">
                 {activity.start_time
                   ? timeLabel(activity.start_time, activity.start_day_offset)
                   : `第 ${index + 1} 站`}
               </span>
-              <span className="block max-w-40 truncate text-xs font-semibold text-slate-700">
+              <span className="block max-w-40 truncate text-xs font-semibold text-ink">
                 {activity.place?.name ??
                   (activity.place_name || activity.title)}
               </span>
             </button>
             {index < day.activities.length - 1 && (
-              <div className="flex min-w-20 flex-col items-center gap-1 text-[10px] text-slate-400">
+              <div className="flex min-w-20 flex-col items-center gap-1 text-[10px] text-muted">
                 <span>{modes[day.legs[index]?.mode ?? "auto"]}</span>
                 <span className="flex w-full items-center">
-                  <span className="h-px flex-1 bg-teal-200" />
-                  <ArrowRight className="h-3 w-3 text-teal-500" />
+                  <span className="h-px flex-1 bg-accent-line" />
+                  <ArrowRight className="h-3 w-3 text-accent" />
                 </span>
                 {day.legs[index]?.duration_seconds != null && (
                   <span>
@@ -996,7 +994,7 @@ function DayMap({
     };
   }, [versionId, day.day, attempt, canShow]);
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+    <div className="overflow-hidden rounded-lg border border-line bg-surface">
       {canShow && state.url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -1013,14 +1011,14 @@ function DayMap({
         />
       ) : (
         <div className="p-5">
-          <p className="mb-4 flex items-center gap-2 text-xs font-medium text-slate-600">
-            <Route className="h-4 w-4 text-teal-600" />
+          <p className="mb-4 flex items-center gap-2 text-xs font-medium text-muted">
+            <Route className="h-4 w-4 text-accent" />
             当天地图
           </p>
-          <p className="text-xs leading-6 text-slate-500">
+          <p className="text-xs leading-6 text-muted">
             按时间轴顺序查看当天停留与交通；地点导航可在下方打开。
           </p>
-          <div className="mt-4 text-[11px] leading-relaxed text-slate-400">
+          <div className="mt-4 text-[11px] leading-relaxed text-muted">
             {canShow && state.loading
               ? "正在加载高德底图，线路已可查看…"
               : state.error || "具体地点定位后将自动显示高德底图。"}
@@ -1037,7 +1035,7 @@ function DayMap({
         </div>
       )}
       {state.url && (
-        <p className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">
+        <p className="border-t border-line px-3 py-2 text-[10px] text-muted">
           高德地图 · 最多展示前 10 个地点和前 4
           段道路路线；铁路/航班见时间轴，不绘制为市内道路。
         </p>
@@ -1099,13 +1097,13 @@ function ActivityEditor({
   }
   return (
     <form
-      className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3"
+      className="mt-3 space-y-3 rounded-lg bg-surface p-3"
       onSubmit={(e) => {
         e.preventDefault();
         void onSave(draft, placeId);
       }}
     >
-      <label className="block text-xs text-slate-500">
+      <label className="block text-xs text-muted">
         活动名称
         <input
           className={inputClass}
@@ -1117,7 +1115,7 @@ function ActivityEditor({
         />
       </label>
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           城市
           <input
             className={inputClass}
@@ -1131,7 +1129,7 @@ function ActivityEditor({
             }}
           />
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           地点名称
           <input
             className={inputClass}
@@ -1164,7 +1162,7 @@ function ActivityEditor({
       </Button>
       {candidates.length > 0 && (
         <fieldset className="space-y-2">
-          <legend className="text-xs text-slate-500">确认具体地点</legend>
+          <legend className="text-xs text-muted">确认具体地点</legend>
           {candidates.map((place) => (
             <label className="flex items-start gap-2 text-xs" key={place.id}>
               <input
@@ -1176,7 +1174,7 @@ function ActivityEditor({
               />
               <span>
                 {place.name}
-                <span className="block text-slate-400">
+                <span className="block text-muted">
                   {place.city} {place.address}
                 </span>
               </span>
@@ -1185,7 +1183,7 @@ function ActivityEditor({
         </fieldset>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           开始日期
           <select
             aria-label="活动开始日期"
@@ -1206,7 +1204,7 @@ function ActivityEditor({
             )}
           </select>
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           开始时间
           <input
             type="time"
@@ -1218,7 +1216,7 @@ function ActivityEditor({
             }
           />
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           停留分钟
           <input
             type="number"
@@ -1237,7 +1235,7 @@ function ActivityEditor({
             }
           />
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           费用（元，留空待核实）
           <input
             type="number"
@@ -1254,7 +1252,7 @@ function ActivityEditor({
             }
           />
         </label>
-        <label className="text-xs text-slate-500">
+        <label className="text-xs text-muted">
           费用口径
           <select
             aria-label="费用口径"
@@ -1274,7 +1272,7 @@ function ActivityEditor({
           </select>
         </label>
       </div>
-      <label className="block text-xs text-slate-500">
+      <label className="block text-xs text-muted">
         备注
         <textarea
           className={inputClass}
@@ -1285,7 +1283,7 @@ function ActivityEditor({
         />
       </label>
       {error && (
-        <p className="text-xs text-red-600" role="alert">
+        <p className="text-xs text-danger" role="alert">
           {error}
         </p>
       )}

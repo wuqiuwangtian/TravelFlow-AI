@@ -18,25 +18,25 @@ export default function StudioMergeData({
   return (
     <section
       aria-label="候选合并记录"
-      className="mt-3 space-y-3 rounded-lg border border-lime-200 bg-white p-3"
+      className="mt-3 space-y-3 rounded-lg border border-lime-200 bg-surface p-3"
     >
       <h5 className="font-medium">
         {report.input_pools}路候选 · {report.before_count} →{" "}
         {report.after_count}处
       </h5>
-      <p className="text-slate-500">
+      <p className="text-muted">
         去重{report.duplicate_count}项 · 因上限未入池{report.omitted_count}组
       </p>
       {(all ? report.decisions : report.decisions.slice(0, 12)).map((d) => (
         <details
           key={d.candidate_id}
-          className="rounded border border-slate-100 p-2"
+          className="rounded border border-line p-2"
         >
           <summary className="cursor-pointer">
             {d.place_name} · {labels[d.action]}
             {d.conflicts.length ? ` · ${d.conflicts.join("、")}` : ""}
           </summary>
-          <p className="mt-2 text-slate-600">{d.reason}</p>
+          <p className="mt-2 text-muted">{d.reason}</p>
           <ul className="mt-2 space-y-3">
             {d.variants.map((v, i) => (
               <li
@@ -54,13 +54,13 @@ export default function StudioMergeData({
                     : `¥${v.candidate.cost.toFixed(2)}/${v.candidate.cost_basis === "total" ? "全团" : v.candidate.cost_basis === "per_person" ? "人均" : "口径未知"}`}
                 </p>
                 <p>{v.candidate.reason}</p>
-                <p className="text-slate-500">
+                <p className="text-muted">
                   引用：
                   {v.candidate.source_indices.map((n) => `[${n}]`).join(" ") ||
                     "待核实"}
                 </p>
                 {v.candidate.location && (
-                  <p className="text-slate-500">
+                  <p className="text-muted">
                     原定位：
                     {v.candidate.location.place?.name ??
                       v.candidate.location.reason}
@@ -76,7 +76,7 @@ export default function StudioMergeData({
           type="button"
           onClick={() => setAll(!all)}
           aria-expanded={all}
-          className="text-teal-700 underline"
+          className="text-accent underline"
         >
           {all ? "收起其余记录" : `显示全部${report.decisions.length}组记录`}
         </button>

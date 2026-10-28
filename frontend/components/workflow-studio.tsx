@@ -299,15 +299,15 @@ export default function WorkflowStudio({
   function state(item: StudioNode) {
     const entry = activeRun?.nodes.find((result) => result.node_id === item.id);
     if (stale.has(item.id) && activeRun)
-      return { label: "输入已改 · 待更新", color: "text-amber-300" };
+      return { label: "输入已改 · 待更新", color: "text-warning" };
     return {
       label: entry ? NODE_STATES[entry.status] : "待运行",
       color:
         entry?.status === "failed"
-          ? "text-red-300"
+          ? "text-danger"
           : entry?.status === "running"
-            ? "text-sky-300"
-            : "text-teal-300",
+            ? "text-accent"
+            : "text-accent",
     };
   }
   function change(next: StudioGraph, remember = true) {
@@ -533,9 +533,9 @@ export default function WorkflowStudio({
             maxLength={80}
             disabled={disabled}
             onChange={(e) => change({ ...graph, title: e.target.value })}
-            className="w-full max-w-72 rounded border border-transparent px-2 py-1 text-sm font-semibold text-slate-800 focus:border-teal-300"
+            className="w-full max-w-72 rounded border border-transparent px-2 py-1 text-sm font-semibold text-ink focus:border-accent-line"
           />
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted">
             <span className="studio-project-state">
               {project
                 ? `修订 ${project.revision} · ${dirty ? "有未保存修改" : "已保存"}`
@@ -555,7 +555,7 @@ export default function WorkflowStudio({
                   scrollToElement(templateArea.current, { block: "start" }),
                 );
             }}
-            className="rounded-lg border border-slate-200 px-3 py-2"
+            className="rounded-lg border border-line px-3 py-2"
           >
             模板库
           </Button>
@@ -571,7 +571,7 @@ export default function WorkflowStudio({
                 setFitToken((v) => v + 1);
               }
             }}
-            className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40"
+            className="rounded-lg border border-line px-3 py-2 disabled:opacity-40"
           >
             <Undo2 size={14} aria-hidden="true" /> 撤销
           </Button>
@@ -581,7 +581,7 @@ export default function WorkflowStudio({
             loadingLabel="正在保存…"
             disabled={disabled || !dirty}
             onClick={saveClick}
-            className="rounded-lg border border-teal-600 px-3 py-2 text-teal-700 disabled:opacity-40"
+            className="rounded-lg border border-accent px-3 py-2 text-accent disabled:opacity-40"
           >
             <Save size={14} aria-hidden="true" /> 保存工程
           </Button>
@@ -592,7 +592,7 @@ export default function WorkflowStudio({
             loadingLabel="工程运行中…"
             disabled={disabled || !graph.nodes.length}
             onClick={() => execute(null)}
-            className="rounded-lg bg-teal-700 px-3 py-2 font-medium text-white disabled:opacity-40"
+            className="rounded-lg bg-accent px-3 py-2 font-medium text-accent-ink disabled:opacity-40"
           >
             <Play size={14} aria-hidden="true" /> 运行全部
           </Button>
@@ -600,7 +600,7 @@ export default function WorkflowStudio({
             <button
               disabled={!!stopState.pending}
               aria-busy={!!stopState.pending}
-              className="rounded-lg border border-red-200 px-3 py-2 text-red-700"
+              className="rounded-lg border border-danger-line px-3 py-2 text-danger"
               onClick={() => void stop()}
             >
               {stopState.pending ? "正在请求停止…" : "停止运行"}
@@ -622,7 +622,7 @@ export default function WorkflowStudio({
               role="alert"
               ref={errorArea}
               tabIndex={-1}
-              className="mt-3 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800"
+              className="mt-3 rounded-lg bg-danger-soft p-4 text-sm leading-6 text-danger"
             >
               {error}
               <button
@@ -640,7 +640,7 @@ export default function WorkflowStudio({
             </div>
           )}
           {notice && (
-            <p role="status" className="mt-3 text-sm text-teal-700">
+            <p role="status" className="mt-3 text-sm text-accent">
               {notice}
             </p>
           )}
@@ -665,15 +665,15 @@ export default function WorkflowStudio({
                 disabled={disabled}
                 key={template.id}
                 onClick={() => preset(template)}
-                className="rounded-xl border border-teal-100 bg-white p-5 text-left transition hover:border-teal-500 disabled:opacity-50"
+                className="rounded-lg border border-accent-line bg-surface p-5 text-left transition hover:border-accent disabled:opacity-50"
               >
-                <span className="text-xs tracking-widest text-teal-600">
+                <span className="text-xs tracking-widest text-accent">
                   可编辑模板 · {template.graph.nodes.length} 个节点
                 </span>
-                <span className="mt-2 block font-semibold text-slate-800">
+                <span className="mt-2 block font-semibold text-ink">
                   {template.title}
                 </span>
-                <span className="mt-2 block text-xs leading-6 text-slate-500">
+                <span className="mt-2 block text-xs leading-6 text-muted">
                   {template.description}
                 </span>
               </button>
@@ -713,9 +713,7 @@ export default function WorkflowStudio({
         id="studio-tools"
         className="studio-toolbox"
       >
-        <h2 className="px-1 text-xs font-semibold text-slate-700">
-          节点工具箱
-        </h2>
+        <h2 className="px-1 text-xs font-semibold text-ink">节点工具箱</h2>
         <div className="studio-node-palette">
           {(
             Object.entries(NODE_KINDS) as [
@@ -730,7 +728,7 @@ export default function WorkflowStudio({
               title={item.subtitle}
               className="studio-add-node"
             >
-              <span className="block text-xs font-medium text-slate-800">
+              <span className="block text-xs font-medium text-ink">
                 ＋ {item.title}
               </span>
               <span className="sr-only">{item.subtitle}</span>
@@ -824,16 +822,16 @@ export default function WorkflowStudio({
           className="studio-inspector"
         >
           <header className="studio-inspector-heading">
-            <h2 className="text-sm font-semibold text-slate-800">
+            <h2 className="text-sm font-semibold text-ink">
               {snapshot ? "运行快照 · 只读" : "节点检查"}
             </h2>
-            <label className="mt-3 block text-xs text-slate-500">
+            <label className="mt-3 block text-xs text-muted">
               当前节点
               <select
                 aria-label="当前节点"
                 value={selected ?? ""}
                 onChange={(e) => setSelected(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                className="mt-2 w-full rounded-lg border border-line p-2"
               >
                 <option value="">选择节点</option>
                 {displayGraph.nodes.map((item) => (
@@ -870,7 +868,7 @@ export default function WorkflowStudio({
                   id="studio-parameters"
                   className="studio-parameter-section"
                 >
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 text-xs text-muted">
                     {NODE_KINDS[node.kind].subtitle}
                   </p>
                   <fieldset
@@ -893,7 +891,7 @@ export default function WorkflowStudio({
                             ),
                           })
                         }
-                        className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                        className="mt-2 w-full rounded-lg border border-line p-2"
                       />
                     </label>
                     {node.kind === "input" && (
@@ -905,7 +903,7 @@ export default function WorkflowStudio({
                           value={node.parameters.text}
                           onChange={(e) => parameters({ text: e.target.value })}
                           placeholder="可以从一个自然语言需求开始，例如：上海出发，三天，预算2000元，想看博物馆…"
-                          className="mt-2 min-h-36 w-full rounded-lg border border-slate-200 p-3 leading-6"
+                          className="mt-2 min-h-36 w-full rounded-lg border border-line p-3 leading-6"
                         />
                       </label>
                     )}
@@ -923,7 +921,7 @@ export default function WorkflowStudio({
                           onChange={(e) =>
                             parameters({ prompt: e.target.value })
                           }
-                          className="mt-2 min-h-32 w-full rounded-lg border border-slate-200 p-3 leading-6"
+                          className="mt-2 min-h-32 w-full rounded-lg border border-line p-3 leading-6"
                         />
                       </label>
                     )}
@@ -961,7 +959,7 @@ export default function WorkflowStudio({
                               ),
                             })
                           }
-                          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                          className="mt-2 w-full rounded-lg border border-line p-2"
                         />
                       </label>
                     )}
@@ -982,7 +980,7 @@ export default function WorkflowStudio({
                               ),
                             })
                           }
-                          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                          className="mt-2 w-full rounded-lg border border-line p-2"
                         />
                       </label>
                     )}
@@ -1000,7 +998,7 @@ export default function WorkflowStudio({
                       />
                     )}
                     {node.kind === "locate" && (
-                      <div className="space-y-3 leading-6 text-slate-500">
+                      <div className="space-y-3 leading-6 text-muted">
                         <p>
                           自动按名称、城市和地点类型查询地图，未定位或同名歧义保留待核实；可在产物中指定地图候选，再运行本节点应用。
                         </p>
@@ -1044,7 +1042,7 @@ export default function WorkflowStudio({
                                 ),
                               });
                             }}
-                            className="text-teal-700 underline"
+                            className="text-accent underline"
                           >
                             清除所有地点指定
                           </button>
@@ -1067,7 +1065,7 @@ export default function WorkflowStudio({
                                   : null,
                               })
                             }
-                            className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                            className="mt-2 w-full rounded-lg border border-line p-2"
                           >
                             <option value="">不限制</option>
                             {Array.from({ length: 20 }, (_, i) => (
@@ -1087,7 +1085,7 @@ export default function WorkflowStudio({
                               parameters({ required_places: e.target.value })
                             }
                             placeholder="每行一个名称或关键词，最多20项"
-                            className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-2"
+                            className="mt-2 min-h-20 w-full rounded-lg border border-line p-2"
                           />
                         </label>
                         <label className="block">
@@ -1100,7 +1098,7 @@ export default function WorkflowStudio({
                               parameters({ excluded_places: e.target.value })
                             }
                             placeholder="只从上游景点中筛选，不会添加新地点"
-                            className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 p-2"
+                            className="mt-2 min-h-20 w-full rounded-lg border border-line p-2"
                           />
                         </label>
                         <label className="block">
@@ -1117,7 +1115,7 @@ export default function WorkflowStudio({
                                   : null,
                               })
                             }
-                            className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                            className="mt-2 w-full rounded-lg border border-line p-2"
                           >
                             <option value="">沿用上游</option>
                             {[30, 60, 90, 120, 180, 240].map((n) => (
@@ -1139,7 +1137,7 @@ export default function WorkflowStudio({
                               )}
                           </select>
                         </label>
-                        <p className="leading-6 text-slate-500">
+                        <p className="leading-6 text-muted">
                           必去与固定项目优先保留，可能超过数量上限。住宿、餐饮、车站及已执行记录不参与删减；找不到必去地点、规则矛盾或筛成空白日会提示修正。调整后请连接路线校验。
                         </p>
                       </div>
@@ -1157,12 +1155,12 @@ export default function WorkflowStudio({
                                 | "nearby",
                             })
                           }
-                          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                          className="mt-2 w-full rounded-lg border border-line p-2"
                         >
                           <option value="original">沿用上游顺序</option>
                           <option value="nearby">减少折返（确认坐标）</option>
                         </select>
-                        <p className="mt-2 leading-6 text-slate-500">
+                        <p className="mt-2 leading-6 text-muted">
                           每日首站及固定项目作为分段锚点，只重排中间的普通景点。依据直线距离取舍后重新核验交通；无确认坐标时保留顺序，不保证实际用时更短。
                         </p>
                       </label>
@@ -1179,14 +1177,14 @@ export default function WorkflowStudio({
                                 .value as StudioNode["parameters"]["travel_mode"],
                             })
                           }
-                          className="mt-2 w-full rounded-lg border border-slate-200 p-2"
+                          className="mt-2 w-full rounded-lg border border-line p-2"
                         >
                           <option value="auto">智能衔接</option>
                           <option value="walking">步行</option>
                           <option value="transit">公共交通</option>
                           <option value="driving">驾车／打车</option>
                         </select>
-                        <p className="mt-2 leading-6 text-slate-500">
+                        <p className="mt-2 leading-6 text-muted">
                           明确标注的铁路、航班和接驳仍沿用原安排。未配置地图或服务失败时保留建议，不冒充已校验。
                         </p>
                       </label>
@@ -1205,14 +1203,14 @@ export default function WorkflowStudio({
                       <button
                         disabled={disabled}
                         onClick={() => execute(node.id)}
-                        className="rounded bg-teal-700 px-3 py-2 text-white disabled:opacity-40"
+                        className="rounded bg-accent px-3 py-2 text-accent-ink disabled:opacity-40"
                       >
                         运行到此节点
                       </button>
                       <button
                         disabled={disabled}
                         onClick={() => execute(node.id, true)}
-                        className="text-teal-700 disabled:opacity-40"
+                        className="text-accent disabled:opacity-40"
                       >
                         强制重跑此节点
                       </button>
@@ -1230,7 +1228,7 @@ export default function WorkflowStudio({
                           setSelected(copy.id);
                           setFitToken((v) => v + 1);
                         }}
-                        className="text-slate-600"
+                        className="text-muted"
                       >
                         复制节点
                       </button>
@@ -1247,7 +1245,7 @@ export default function WorkflowStudio({
                           });
                           setSelected(null);
                         }}
-                        className="text-red-600"
+                        className="text-danger"
                       >
                         删除节点
                       </button>
@@ -1261,17 +1259,15 @@ export default function WorkflowStudio({
                   role="region"
                   aria-label="节点产物检查"
                 >
-                  <h3 className="text-xs font-semibold text-slate-700">
-                    节点产物
-                  </h3>
+                  <h3 className="text-xs font-semibold text-ink">节点产物</h3>
                   {stale.has(node.id) && activeRun && (
-                    <p className="mt-2 text-xs leading-6 text-amber-700">
+                    <p className="mt-2 text-xs leading-6 text-warning">
                       输入或上游已变化，旧产物待更新。再次运行会复用输入一致的节点，只重算必要步骤。
                     </p>
                   )}
                   {execution ? (
                     <>
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-muted">
                         {NODE_STATES[execution.status]} · {execution.elapsed_ms}
                         ms
                         {execution.produced_at
@@ -1279,7 +1275,7 @@ export default function WorkflowStudio({
                           : ""}
                       </p>
                       {execution.error && (
-                        <p className="mt-3 text-xs leading-6 text-red-700">
+                        <p className="mt-3 text-xs leading-6 text-danger">
                           {execution.error}
                         </p>
                       )}
@@ -1325,7 +1321,7 @@ export default function WorkflowStudio({
                                       href={source.url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="break-words text-teal-700"
+                                      className="break-words text-accent"
                                     >
                                       {source.title}
                                     </a>
@@ -1357,14 +1353,14 @@ export default function WorkflowStudio({
                       )}
                     </>
                   ) : (
-                    <p className="mt-2 text-xs leading-6 text-slate-400">
+                    <p className="mt-2 text-xs leading-6 text-muted">
                       本次运行未产生此节点内容。可运行到此节点，或选择其他运行记录查看。
                     </p>
                   )}
                 </div>
               </>
             ) : (
-              <p className="mt-4 text-xs leading-6 text-slate-500">
+              <p className="mt-4 text-xs leading-6 text-muted">
                 选择一个节点，编辑这一小步的输入、生成指令与参数，再查看它独立产生的内容。
               </p>
             )}
@@ -1395,7 +1391,7 @@ export default function WorkflowStudio({
                   })
                 }
                 aria-label={`移除连线 ${index + 1}`}
-                className="text-red-600"
+                className="text-danger"
               >
                 移除
               </button>
@@ -1407,7 +1403,7 @@ export default function WorkflowStudio({
             aria-label="连线输出"
             value={linkSource}
             onChange={(e) => setLinkSource(e.target.value)}
-            className="min-w-0 max-w-full rounded border border-slate-200 p-2"
+            className="min-w-0 max-w-full rounded border border-line p-2"
           >
             <option value="">选择输出端口</option>
             {graph.nodes.flatMap((n) =>
@@ -1422,7 +1418,7 @@ export default function WorkflowStudio({
             aria-label="连线输入"
             value={linkTarget}
             onChange={(e) => setLinkTarget(e.target.value)}
-            className="min-w-0 max-w-full rounded border border-slate-200 p-2"
+            className="min-w-0 max-w-full rounded border border-line p-2"
           >
             <option value="">选择输入端口</option>
             {graph.nodes.flatMap((n) =>
@@ -1445,7 +1441,7 @@ export default function WorkflowStudio({
                 target_port: target_port as StudioEdge["target_port"],
               });
             }}
-            className="rounded bg-teal-50 px-3 text-teal-800"
+            className="rounded bg-accent-soft px-3 text-accent"
           >
             连接端口
           </button>
@@ -1454,10 +1450,10 @@ export default function WorkflowStudio({
       {!!runs.length && (
         <section
           aria-label="工程运行记录"
-          className="studio-run-history mt-4 rounded-xl border border-slate-200 bg-white p-4"
+          className="studio-run-history mt-4 rounded-lg border border-line bg-surface p-4"
         >
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs text-slate-600">
+            <label className="text-xs text-muted">
               运行记录
               <select
                 aria-label="运行记录"
@@ -1466,7 +1462,7 @@ export default function WorkflowStudio({
                   setRunId(e.target.value);
                   setSnapshot(false);
                 }}
-                className="ml-2 max-w-full rounded-lg border border-slate-200 p-2"
+                className="ml-2 max-w-full rounded-lg border border-line p-2"
               >
                 {runs.map((run, index) => (
                   <option key={run.id} value={run.id}>
@@ -1484,12 +1480,12 @@ export default function WorkflowStudio({
                 setSnapshot(!snapshot);
                 setFitToken((v) => v + 1);
               }}
-              className="text-xs text-teal-700"
+              className="text-xs text-accent"
             >
               {snapshot ? "回到当前工程" : "查看运行时工程"}
             </button>
           </div>
-          <p className="mt-3 text-xs leading-6 text-slate-500">
+          <p className="mt-3 text-xs leading-6 text-muted">
             保存当时的节点、连线、参数、每步产物与错误。单节点运行会先处理必要上游；输入一致且24小时内的成功产物可复用，强制重跑会更新所选节点。最近展示20次运行。
           </p>
         </section>
