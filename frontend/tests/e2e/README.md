@@ -47,3 +47,7 @@ Linux 缺系统库时使用 `pnpm exec playwright install --with-deps chromium`�
 ## FE-4 三主题与最终收口
 
 `theme-settings.spec.ts` 覆盖首屏、默认主题、无效值、跨标签同步、存储受限、服务不可读、服务草稿保护、三主题正式页面与对比度、真实版本不变、节点坐标与模板弹窗。`npm run check:design` 与 CI 约束正式源码的语义颜色和产品 emoji；测试数据及用户原文不受清洗。最终 316 项回归与 Windows 两端核对见 [收口记录](../../../docs/frontend-themes.md)。
+
+## 普通主流程少操作
+
+`ordinary-flow.spec.ts` 从推荐城市与短选择开始，覆盖历史读取失败、草稿和原位重试、迟到响应与分支隔离，以及对话记账和修改后保存回顾、结束、阅读及导出。失败只控制对应请求，版本、实付、回顾和导出使用真实本地接口；用户原文保留。见 [走查记录](../../../docs/ordinary-flow.md)。
