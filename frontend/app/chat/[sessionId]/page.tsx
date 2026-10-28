@@ -24,7 +24,14 @@ import { LinkedReplanPreview } from "@/components/linked-replan-preview";
 import { RenameForm } from "@/components/rename-form";
 import { PlanChangeNotice } from "@/components/plan-change-notice";
 
-import { Badge, Button, Card, ErrorBanner, Spinner } from "@/components/ui";
+import {
+  ActionFeedback,
+  Badge,
+  Button,
+  Card,
+  ErrorBanner,
+  Spinner,
+} from "@/components/ui";
 import { api, ApiError, chatStream } from "@/lib/api";
 import {
   readChatDraft,
@@ -55,9 +62,23 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [versionDetail, setVersionDetail] = useState<VersionDetail | null>(
-    null,
-  );
+  const [historyRead, setHistoryRead] = useState<{
+    branch: string | null;
+    loading: boolean;
+    error: string | null;
+  }>({ branch: null, loading: true, error: null });
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const historyOwner = useRef<string | null>(null);
+  const messageRevision = useRef(0);
+  const visibleMessages = historyRead.branch === activeBranchId ? messages : [];
+  const historyLoading =
+    historyRead.branch !== activeBranchId || historyRead.loading;
+  const [storedVersionDetail, setVersionDetail] =
+    useState<VersionDetail | null>(null);
+  const versionDetail =
+    storedVersionDetail?.version.branch_id === activeBranchId
+      ? storedVersionDetail
+      : null;
   const [input, setInput] = useState("");
   const [draftBranch, setDraftBranch] = useState<string | null>(null);
   const [failedRequest, setFailedRequest] = useState<ChatAttempt | null>(null);
@@ -168,12 +189,20 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeBranchId) return;
     let cancelled = false;
-    setClarification(null);
+    const revision = messageRevision.current;
+    if (historyOwner.current !== activeBranchId) {
+      historyOwner.current = activeBranchId;
+      setMessages([]);
+      setVersionDetail(null);
+      setClarification(null);
+    }
+    setHistoryRead({ branch: activeBranchId, loading: true, error: null });
 
     void api
       .getMessages(activeBranchId)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || revision !== messageRevision.current) return;
+        setHistoryRead({ branch: activeBranchId, loading: false, error: null });
         setClarification(result.clarification ?? null);
         setMessages(
           result.messages.map((m) => ({
@@ -182,15 +211,27 @@ export default function ChatPage() {
           })),
         );
       })
-      .catch(() => {
-        if (!cancelled) setMessages([]);
+      .catch((err) => {
+        if (!cancelled && revision === messageRevision.current)
+          setHistoryRead({
+            branch: activeBranchId,
+            loading: false,
+            error:
+              err instanceof Error ? err.message : "对话历史读取失败，请重试。",
+          });
       });
 
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, activeBranchId, historyRefresh]);
+
+  useEffect(() => {
+    if (!activeBranchId) return;
+    let cancelled = false;
     const list = detail?.versions[activeBranchId] ?? [];
     const latest = list[list.length - 1];
-    if (!latest) {
-      setVersionDetail(null);
-    } else {
+    if (latest) {
       void api
         .getVersion(latest.id)
         .then((data) => {
@@ -253,8 +294,13 @@ export default function ChatPage() {
           request.request_id !== attempt.request_id &&
           request.message === remainingInput.trim(),
       ) ?? null;
+    messageRevision.current++;
+    setHistoryRead({ branch: activeBranchId, loading: false, error: null });
     if (!retry)
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setMessages((prev) => [
+        ...(historyRead.branch === activeBranchId ? prev : []),
+        { role: "user", content: text },
+      ]);
     setInput(remainingInput);
     setSendFailure(null);
     setFailedRequest(null);
@@ -467,6 +513,39 @@ export default function ChatPage() {
               )}
             </div>
 
+            {(historyLoading || historyRead.error) && (
+              <div
+                className="journey-history-feedback"
+                role="region"
+                aria-label="对话历史状态"
+              >
+                <ActionFeedback
+                  pending={
+                    historyLoading ? "正在读取这份方案的对话…" : undefined
+                  }
+                  error={
+                    historyRead.error
+                      ? `对话暂时未读出：${historyRead.error}`
+                      : null
+                  }
+                  onRetry={() => {
+                    if (historyLoading) return;
+                    setHistoryRead({
+                      branch: activeBranchId,
+                      loading: true,
+                      error: null,
+                    });
+                    setHistoryRefresh((value) => value + 1);
+                  }}
+                />
+                {historyRead.error && (
+                  <p className="mt-2 text-xs text-muted">
+                    已显示的内容和输入会保留；可重试读取，也可继续对话。
+                  </p>
+                )}
+              </div>
+            )}
+
             <div
               ref={messageViewport}
               aria-label="对话消息"
@@ -489,27 +568,29 @@ export default function ChatPage() {
                   </p>
                 </details>
               )}
-              {messages.length === 0 && (
-                <div className="rounded-lg bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-                  {versionDetail ? (
-                    <>
-                      这份行程已经保存。想换个地方、少走一点，或调整费用，继续告诉我就好。
-                      {!versionDetail.itinerary?.days.length &&
-                        "也可以先将旧路书整理成每日路线。"}
-                    </>
-                  ) : (
-                    <>
-                      告诉我你的旅行想法即可，例如：
-                      <br />
-                      「我想去重庆玩 3 天，从北京出发，预算 2000」
-                      <br />
-                      还没想好去哪，也可以让我先推荐城市。
-                    </>
-                  )}
-                </div>
-              )}
+              {visibleMessages.length === 0 &&
+                !historyLoading &&
+                !historyRead.error && (
+                  <div className="rounded-lg bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
+                    {versionDetail ? (
+                      <>
+                        这份行程已经保存。想换个地方、少走一点，或调整费用，继续告诉我就好。
+                        {!versionDetail.itinerary?.days.length &&
+                          "也可以先将旧路书整理成每日路线。"}
+                      </>
+                    ) : (
+                      <>
+                        告诉我你的旅行想法即可，例如：
+                        <br />
+                        「我想去重庆玩 3 天，从北京出发，预算 2000」
+                        <br />
+                        还没想好去哪，也可以让我先推荐城市。
+                      </>
+                    )}
+                  </div>
+                )}
 
-              {messages.map((message, index) => (
+              {visibleMessages.map((message, index) => (
                 <div
                   key={index}
                   className={cn(

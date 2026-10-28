@@ -60,6 +60,7 @@ from app.storage.session_store import SessionStore  # noqa: E402
 
 class BrowserLLM(FakeLLM):
     failed_workflow_cases: set[str] = set()
+    empty_city_cases: set[str] = set()
 
     async def chat(self, messages, **kwargs):
         if "测试失败节点" in messages[0].content:
@@ -112,11 +113,27 @@ class BrowserLLM(FakeLLM):
                 title="故宫的旅行片段", text="故宫的一段漫步，成为值得回味的旅行片段。"
             )
         if schema is DestinationOptions:
+            case = re.search(r"empty-city-([a-f0-9]{12})", messages[-1].content)
+            if case and case[1] not in self.empty_city_cases:
+                self.empty_city_cases.add(case[1])
+                return DestinationOptions(ideas=[])
             return DestinationOptions(
                 ideas=[DestinationIdea(city="北京", reason="博物馆与城市漫步")]
             )
         if schema is CollectResult:
             text = messages[-1].content
+            empty_city = re.search(r"空城市推荐验收([a-f0-9]{12})", text)
+            if empty_city:
+                return CollectResult(
+                    extracted=Requirements(
+                        origin="上海",
+                        duration_days=3,
+                        budget=2000,
+                        preferences=["empty-city-" + empty_city[1]],
+                    ),
+                    wants_destination_ideas=True,
+                    reply="准备推荐城市",
+                )
             case = re.search(r"北京流程中断验收([a-f0-9]{12})", text)
             if case:
                 return CollectResult(

@@ -14,10 +14,12 @@ from datetime import datetime
 from langchain_core.messages import AIMessage
 from pydantic import BaseModel, Field
 
+from app.agents.destination_choice import destination_choice
 from app.agents.nodes.utils import last_user_text
 from app.agents.prompt_loader import render_prompt
 from app.agents.state import PlanState
 from app.agents.streaming import emit_progress
+from app.core.errors import LLMOutputInvalid
 from app.core.logging import get_logger
 from app.domain.enums import PlanStatus
 from app.domain.models import Requirements
@@ -59,37 +61,53 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
         current = state.get("requirements") or Requirements()
         user_text = last_user_text(state)
 
-        prompt = render_prompt(
-            "collect",
-            collected_json=current.model_dump_json(exclude_none=True, exclude_defaults=True),
-        )
-        if state.get("destination_ideas"):
-            prompt += "\n【之前已给用户的城市候选，支持按序号选择】\n" + "、".join(
-                state["destination_ideas"]
-            )
+        ideas = list(state.get("destination_ideas") or [])
         requested = bool(state.get("destination_recommendation_requested"))
-        if requested:
-            prompt += "\n用户已经要求推荐目的地，继续补齐必要条件后直接推荐，不要再问是否需要推荐。"
-        history = [
-            ChatMessage(role="user" if m.type == "human" else "assistant", content=m.content[:3000])
-            for m in state.get("messages", [])[:-1][-10:]
-            if m.type in {"human", "ai"} and isinstance(m.content, str)
-        ]
-        result = await llm.structured(
-            [
-                ChatMessage(role="system", content=prompt),
-                *history,
-                ChatMessage(role="user", content=user_text or "（用户尚未输入内容）"),
-            ],
-            CollectResult,
-        )
+        choice, invalid_choice = (None, False)
+        if ideas and not current.destination and current.missing_fields() == ["destination"]:
+            choice, invalid_choice = destination_choice(user_text, ideas)
+        if choice:
+            result = CollectResult(
+                extracted=Requirements(destination=choice), reply=f"就按{choice}继续规划。"
+            )
+        elif invalid_choice:
+            result = CollectResult(
+                reply=f"刚才有 {len(ideas)} 个候选："
+                + "、".join(f"{i}. {city}" for i, city in enumerate(ideas, 1))
+                + "。回复其中的序号或城市名即可，也可以告诉我想换一种玩法。"
+            )
+        else:
+            prompt = render_prompt(
+                "collect",
+                collected_json=current.model_dump_json(exclude_none=True, exclude_defaults=True),
+            )
+            if ideas:
+                prompt += "\n【之前已给用户的城市候选，支持按序号选择】\n" + "、".join(ideas)
+            if requested:
+                prompt += (
+                    "\n用户已经要求推荐目的地，继续补齐必要条件后直接推荐，不要再问是否需要推荐。"
+                )
+            history = [
+                ChatMessage(
+                    role="user" if m.type == "human" else "assistant", content=m.content[:3000]
+                )
+                for m in state.get("messages", [])[:-1][-10:]
+                if m.type in {"human", "ai"} and isinstance(m.content, str)
+            ]
+            result = await llm.structured(
+                [
+                    ChatMessage(role="system", content=prompt),
+                    *history,
+                    ChatMessage(role="user", content=user_text or "（用户尚未输入内容）"),
+                ],
+                CollectResult,
+            )
 
         merged = current.merged_with(result.extracted, clear_preferences=result.clear_preferences)
         missing = merged.missing_fields()
         ready = not missing  # ★ 由程序判定，不依赖模型自述
 
         reply = result.reply.strip() or "请告诉我更多出行信息。"
-        ideas = list(state.get("destination_ideas") or [])
         requested = (
             requested
             or result.wants_destination_ideas
@@ -104,6 +122,7 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
                 reply = "我会结合你的偏好推荐合适的目的地。还需要知道：" + "、".join(needed) + "。"
         if (
             not merged.destination
+            and not invalid_choice
             and requested
             and not any(name in missing for name in ("origin", "duration_days", "budget"))
         ):
@@ -131,11 +150,22 @@ def make_collector_node(llm: LLMProvider, search: SearchProvider | None = None):
                 ],
                 DestinationOptions,
             )
-            ideas = [idea.city for idea in options.ideas]
+            usable: list[DestinationIdea] = []
+            seen: set[str] = set()
+            for idea in options.ideas:
+                city, reason = idea.city.strip(), idea.reason.strip()
+                if city and reason and city.casefold() not in seen:
+                    usable.append(DestinationIdea(city=city, reason=reason))
+                    seen.add(city.casefold())
+            if not usable:
+                raise LLMOutputInvalid(
+                    "本次没有生成可用的推荐城市，请重试；已有出行条件会继续沿用。"
+                )
+            ideas = [idea.city for idea in usable]
             reply = (
                 "可以先从这几个方向选：\n\n"
                 + "\n\n".join(
-                    f"{i}. {idea.city}：{idea.reason}" for i, idea in enumerate(options.ideas, 1)
+                    f"{i}. {idea.city}：{idea.reason}" for i, idea in enumerate(usable, 1)
                 )
                 + "\n\n告诉我更喜欢哪个，或说说想换一种什么玩法，我来继续规划。"
             )
