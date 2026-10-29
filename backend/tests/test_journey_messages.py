@@ -195,3 +195,135 @@ async def test_error_after_earlier_items_keeps_graph_and_export_unchanged(enviro
     latest = (await client.get(f"/api/versions/{response.json()['version_id']}")).json()
     assert latest["itinerary"] == before["itinerary"]
     assert latest["markdown"] == before["markdown"]
+
+
+@pytest.mark.parametrize("verb", ["实付", "实付了"])
+def test_actual_payment_word_records_amount_and_cleans_expense_title(verb):
+    result = prepare_journey_message(f"第1天午餐{verb}86.35元", plan(), Requirements(travelers=2))
+    assert result.itinerary is not None, result.reply
+    expense = result.itinerary.expenses[0]
+    assert (expense.title, expense.amount_cents, expense.day) == ("午餐", 8635, 1)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "午餐尚未实付86元",
+        "午餐待实付86元",
+        "午餐应实付86元",
+        "午餐预计实付86元",
+        "午餐实付86元吗？",
+        "午餐实付金额待核实86元",
+    ],
+)
+def test_unconfirmed_actual_payment_does_not_partially_apply_batch(text):
+    original = plan()
+    result = prepare_journey_message(f"第1天第1站已完成，{text}", original, Requirements())
+    assert result.itinerary is None
+    assert "没有保存任何操作" in result.reply
+    assert not original.expenses
+    assert original.days[0].activities[0].progress == "not_started"
+
+
+async def test_actual_payment_with_completion_and_booking_is_atomic_and_replayable(
+    environment, monkeypatch
+):
+    client, store, _, _ = environment
+    sid, bid, _ = await generate(client)
+
+    async def offline(*args, **kwargs):
+        raise AssertionError("明确的实付、完成与预约不应交给模型")
+
+    monkeypatch.setattr(FakeLLM, "structured", offline)
+    payload = {
+        "session_id": sid,
+        "branch_id": bid,
+        "request_id": "actual-payment-batch-once",
+        "message": "第1天第1站已完成，第1天午餐实付86.35元，第2天第1站已预约09:00，停留90分钟",
+    }
+    response = await client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["version_id"]
+    latest = (await client.get(f"/api/versions/{result['version_id']}")).json()
+    assert latest["itinerary"]["expenses"][0]["amount_cents"] == 8635
+    assert latest["itinerary"]["expenses"][0]["title"] == "午餐"
+    assert latest["itinerary"]["days"][0]["activities"][0]["progress"] == "completed"
+    assert latest["itinerary"]["days"][1]["activities"][0]["booking"]["start_time"] == "09:00"
+    replay = (await client.post("/api/chat", json=payload)).json()
+    assert replay["version_id"] == result["version_id"]
+    assert len(await store.list_versions(bid)) == 2
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "第二天轻松一点，原来的实付和人工预算都保持。",
+        "第二天轻松一点，保留已有实付、账目和人工预算。",
+        "第二天轻松一点，其他天的安排、留园09:00的预约、已经完成的活动、实付和人工预算都保持。",
+    ],
+)
+def test_replanning_financial_preservation_is_not_a_new_expense(message):
+    assert prepare_journey_message(message, plan(), Requirements()) is None
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "午餐实付86元",
+        "午餐实付86",
+        "午餐实付金额86",
+        "标记第1天第1站已完成",
+    ],
+)
+def test_preservation_cannot_silently_discard_a_new_record(operation):
+    original = plan()
+    result = prepare_journey_message(f"保留实付记录同时{operation}", original, Requirements())
+    assert result is not None
+    assert result.itinerary is None
+    assert not original.expenses
+
+
+@pytest.mark.parametrize("operation", ["午餐退款到账10元", "午餐消费改成80元"])
+def test_station_prefixed_expense_can_be_found_without_repeating_ordinal(operation):
+    original = plan()
+    recorded = prepare_journey_message("第1天第1站午餐实付86.35元", original, Requirements())
+    assert recorded.itinerary is not None
+    expense = recorded.itinerary.expenses[0]
+    assert expense.title == "第1站午餐"
+    result = prepare_journey_message(f"第1天{operation}", recorded.itinerary, Requirements())
+    assert result.itinerary is not None, result.reply
+    assert result.itinerary.expenses[0].id == expense.id
+    assert result.itinerary.expenses[0].title == "第1站午餐"
+    if "退款" in operation:
+        assert result.itinerary.adjustments[0].expense_id == expense.id
+        assert result.itinerary.ledger_summary.net_expense_cents == 7635
+    else:
+        assert result.itinerary.expenses[0].amount_cents == 8000
+    assert expense.amount_cents == 8635  # 原快照不受原位操作影响。
+
+
+def test_same_named_station_expenses_still_require_selection_and_respect_explicit_station():
+    recorded = prepare_journey_message(
+        "第1天第1站午餐实付86元，第1天第2站午餐实付50元", plan(), Requirements()
+    )
+    assert recorded.itinerary is not None
+    result = prepare_journey_message("第1天午餐退款到账10元", recorded.itinerary, Requirements())
+    assert result.itinerary is None
+    assert result.clarification.kind == "expense"
+    assert len(result.clarification.expense_options) == 2
+    result = prepare_journey_message(
+        "第1天第3站午餐退款到账10元", recorded.itinerary, Requirements()
+    )
+    assert result.itinerary is None
+    assert not recorded.itinerary.adjustments
+
+
+@pytest.mark.parametrize("title,other", [("车", "停车费"), ("票", "门票")])
+def test_single_character_station_title_does_not_match_unrelated_expense(title, other):
+    recorded = prepare_journey_message(f"第1天第1站{title}实付86元", plan(), Requirements())
+    result = prepare_journey_message(
+        f"第1天{other}退款到账10元", recorded.itinerary, Requirements()
+    )
+    assert result.itinerary is None
+    assert not recorded.itinerary.adjustments

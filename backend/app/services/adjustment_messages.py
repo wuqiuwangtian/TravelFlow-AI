@@ -10,7 +10,7 @@ from app.domain.clarification import ExpenseTarget
 from app.domain.itinerary import AdjustmentCreate, AdjustmentInput, Itinerary
 from app.services.adjustment_service import add_adjustment, edit_adjustment, remove_adjustment
 from app.services.expense_dates import expense_matches_day
-from app.services.expense_selection import selected_expense
+from app.services.expense_selection import expense_matches_text, selected_expense
 from app.services.travel_messages import AMOUNT_PATTERN, TravelReply, _number
 
 
@@ -34,7 +34,7 @@ def handle_adjustment_message(
     expenses = [
         e
         for e in itinerary.expenses
-        if e.title in text and expense_matches_day(e, day, text, itinerary)
+        if expense_matches_text(e, text) and expense_matches_day(e, day, text, itinerary)
     ]
     if expense_target:
         expense = selected_expense(expense_target, expenses, itinerary)

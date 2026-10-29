@@ -230,7 +230,7 @@ for (const interrupted of [false, true]) {
     await test.step("一次对话记录完成、实付和预约，未知费用由用户补估价", async () => {
       await send(
         page,
-        "第1天第2站已完成，午餐花了86.35元，第2天第2站已预约14:00，停留60分钟",
+        "第1天第2站已完成，第1天第3站午餐实付86.35元，第2天第2站已预约14:00，停留60分钟",
       );
       state = await latest(page, sid);
       expect(state.detail!.itinerary!.expenses).toHaveLength(1);

@@ -12,10 +12,15 @@ from app.services.adjustment_messages import handle_adjustment_message
 from app.services.booking_messages import handle_booking_message
 from app.services.expense_selection import expense_targets
 from app.services.replan_service import explicit_day
-from app.services.travel_messages import TravelReply, handle_travel_message
+from app.services.travel_messages import (
+    AMOUNT_PATTERN,
+    MONEY_ACTIONS,
+    TravelReply,
+    handle_travel_message,
+)
 
 _RECORD = re.compile(
-    r"记账|记一笔|花了|付了|支付了|消费了|支出|记错|实付|消费.*(?:改成|改为|删除|移除)|"
+    rf"{MONEY_ACTIONS}|记错|消费.*(?:改成|改为|删除|移除)|"
     r"(?:删除|移除|撤销)[^，,；;。\n]*消费|"
     r"退款|退了|退回|报销|已预约|已经预约|预约好了|已经订好|已订好|记录已有预约|"
     r"(?:清除|取消|删除)预约记录|恢复未开始|跳过|不去这站|"
@@ -24,13 +29,32 @@ _RECORD = re.compile(
 _REFINEMENT = re.compile(r"调整|安排|重排|替换|换成|换一家|轻松|少走|规划|保留|保持|不要改|别改")
 _DAY_ONLY = re.compile(r"第\s*(?:\d+|[一二三四五六七八九十两]+)\s*天")
 _NOT_ACTUAL = re.compile(r"如果|假如|预计|预算|估计|打算|计划|明天|能不能|能否|不要|是否|吗|[?？]")
+_DIRECT_RECORD = re.compile(
+    r"标记[^，,；;。\n]*(?:已完成|完成|进行中|跳过)|"
+    r"记一笔|花了|付了|支付了|消费了|支出|退款|退了|退回|报销"
+)
 
 
 def itinerary_fingerprint(itinerary: Itinerary) -> str:
     return hashlib.sha256(itinerary.model_dump_json().encode()).hexdigest()
 
 
+def _preserves_financial_records(text: str) -> bool:
+    """无新金额的保留要求是重排约束；混有金额时仍走操作校验，不能静默漏记。"""
+    return bool(
+        re.search(r"实付|账目|账本|消费记录|费用记录|人工预算", text)
+        and re.search(r"保留|保持|不改动|不要改动|不改|别改|不要改|别动", text)
+        and not _DIRECT_RECORD.search(text)
+        and not re.search(AMOUNT_PATTERN, text, re.I)
+        and not re.search(rf"(?:{MONEY_ACTIONS})\s*(?:金额(?:是|为)?\s*)?[￥¥]?\s*[+-]?\d", text)
+    )
+
+
 def _record_hint(text: str) -> bool:
+    if _DIRECT_RECORD.search(text):
+        return bool(_RECORD.search(text))
+    if _preserves_financial_records(text):
+        return False
     # “保留已经预约的演出”是重排约束，不是新增预约；同样保护已完成的历史。
     text = re.sub(
         r"(?:保留|保持|不改动|不要改动|不改|别改)[^，,；;。\n]*"
@@ -70,6 +94,9 @@ def _clauses(text: str) -> list[str]:
     parts = re.split(r"[，,；;。\n]+", text)
     result: list[str] = []
     for part in parts:
+        if _preserves_financial_records(part):
+            result.append(part.strip())
+            continue
         # 「咖啡和甜点花了30元」仍是一笔，「午餐花了30元并且地铁花了5元」分两笔。
         pieces = re.split(r"(并且|然后|接着|同时|以及|并|和|再)", part)
         accumulated = pieces[0]

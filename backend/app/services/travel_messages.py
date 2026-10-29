@@ -20,10 +20,11 @@ from app.domain.itinerary import (
 )
 from app.domain.models import Requirements
 from app.services.expense_dates import expense_matches_day
-from app.services.expense_selection import selected_expense
+from app.services.expense_selection import expense_matches_text, selected_expense
 from app.services.travel_service import add_expense, edit_expense, remove_expense, set_progress
 
 AMOUNT_PATTERN = r"(?<![0-9A-Za-z.,，+\-])([+-]?\d+(?:\.\d+)?)\s*(?:元|块钱?|RMB|CNY)"
+MONEY_ACTIONS = r"记账|记一笔|花了|付了|支付了|消费了|支出|记错了|实付(?:了)?"
 
 
 @dataclass
@@ -60,7 +61,13 @@ def handle_travel_message(
         r"如果|假如|预计|预算|估计|打算|计划|明天|能不能|能否|不要|不是|是否|吗|[?？]", text
     ):
         return None
-    money_intent = bool(re.search(r"记账|记一笔|花了|付了|支付了|消费了|支出|记错了", text))
+    if re.search(
+        r"(?:尚未|还未|未|没有|还没|没|待|应|需|将|准备|不用|无需|不再|要)\s*实付|"
+        r"实付[^，,；;。\n]*(?:待确认|待核实|未确认|未核实|不确定)",
+        text,
+    ):
+        return None
+    money_intent = bool(re.search(MONEY_ACTIONS, text))
     if re.search(r"小时|分钟|公里", text) and not re.search(
         r"元|块|RMB|CNY|记账|记一笔", text, re.I
     ):
@@ -107,7 +114,7 @@ def handle_travel_message(
             candidates = [
                 e
                 for e in result.expenses
-                if e.title in text and expense_matches_day(e, day, text, result)
+                if expense_matches_text(e, text) and expense_matches_day(e, day, text, result)
             ]
             if expense_target:
                 entry = selected_expense(expense_target, candidates, result)
@@ -156,7 +163,7 @@ def handle_travel_message(
         name = re.sub(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", "", text)
         name = re.sub(AMOUNT_PATTERN, "", name, flags=re.I)
         name = re.sub(
-            r"帮我|请|今天|刚才|刚刚|实际|一共|总共|记账|记一笔|花了|支付了|付了|消费了|支出|每人|人均",
+            rf"帮我|请|今天|刚才|刚刚|实际|一共|总共|{MONEY_ACTIONS}|每人|人均",
             "",
             name,
         )

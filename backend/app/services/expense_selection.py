@@ -1,11 +1,28 @@
 """选择精确消费；不通过把内部 ID 拼进自然语言来改变解析结果。"""
 
 import hashlib
+import re
 
 from app.core.errors import InvalidRequest
 from app.domain.clarification import ExpenseTarget
 from app.domain.itinerary import Expense, Itinerary
 from app.services.expense_dates import planned_expense_day
+
+_STATION = r"第\s*(?:\d+|[一二三四五六七八九十两]+)\s*(?:站|个(?:停留)?点)"
+
+
+def expense_matches_text(expense: Expense, text: str) -> bool:
+    if expense.title in text:
+        return True
+    # 口语创建的标题可能保留「第4站午餐」。未再指定站序时允许按「午餐」查找，
+    # 同名仍由候选选择处理；明确提到其他站序时不能跨站套用。
+    title = re.sub(rf"^{_STATION}\s*", "", expense.title, count=1)
+    return bool(
+        title != expense.title
+        and len(title) >= 2
+        and title in text
+        and not re.search(_STATION, text)
+    )
 
 
 def expense_fingerprint(expense: Expense) -> str:
