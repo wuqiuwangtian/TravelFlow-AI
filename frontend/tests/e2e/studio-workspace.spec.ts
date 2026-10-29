@@ -166,6 +166,8 @@ test("独立产物可直接查看，桌面检查保持画布视角，运行不�
   const camera = await page
     .locator('[aria-label="自由节点画布"] > div')
     .getAttribute("style");
+  // 检查区可能仅露出标题和按钮；点击产物仍须把正文带入视口。
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await inspector(page)
     .getByRole("navigation", { name: "检查区定位" })
     .getByRole("button", { name: "产物", exact: true })

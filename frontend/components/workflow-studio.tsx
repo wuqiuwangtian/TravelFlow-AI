@@ -159,6 +159,9 @@ export default function WorkflowStudio({
       const viewport = inspectorScroll.current;
       if (!target || !viewport) return;
       if (window.matchMedia("(min-width: 901px)").matches) {
+        // 显式点击检查入口时，先让整块面板进入视口；选择/拖动节点仍只滚动内部。
+        if (navigate)
+          scrollToElement(viewport.parentElement, { block: "start" });
         viewport.scrollTo({
           top:
             viewport.scrollTop +
