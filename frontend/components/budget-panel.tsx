@@ -42,6 +42,7 @@ export function BudgetPanel({
     title: string;
     category: ExpenseCategory;
     amount: string;
+    day: number;
     requestId: string;
   } | null>(null);
   const [error, setError] = useState("");
@@ -113,6 +114,7 @@ export function BudgetPanel({
               title: "",
               category: "other",
               amount: "",
+              day,
               requestId: crypto.randomUUID(),
             });
             action.clear();
@@ -141,7 +143,7 @@ export function BudgetPanel({
                   title: custom.title,
                   category: custom.category,
                   amount: custom.amount || null,
-                  day,
+                  day: custom.day,
                   request_id: custom.requestId,
                 }),
               )
@@ -151,6 +153,7 @@ export function BudgetPanel({
           }}
         >
           <fieldset disabled={disabled} className="space-y-3">
+            <p className="text-xs text-muted">此项目保存到第{custom.day}天。</p>
             <label className="block text-xs">
               项目名称
               <input
@@ -288,6 +291,8 @@ export function BudgetPanel({
                 {rows.map((row) => (
                   <div
                     key={row.id}
+                    id={`journey-budget-row-${row.id}`}
+                    tabIndex={-1}
                     aria-label={`费用项目：${row.title}`}
                     className="rounded-lg bg-[var(--tf-surface)] p-3"
                   >

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Button, Card, ErrorBanner } from "@/components/ui";
 import { BudgetPanel } from "@/components/budget-panel";
+import { JourneyAttention } from "@/components/journey-attention";
 import { PlacePhoto } from "@/components/place-photo";
 import { PlaceNavigation } from "@/components/place-navigation";
 import { RailTicketLink } from "@/components/rail-ticket-link";
@@ -146,6 +147,32 @@ export function ItineraryPanel({
     );
   }
 
+  function showAttention(
+    target: "place" | "budget" | "note",
+    number?: number,
+    id?: string,
+  ) {
+    if (number !== undefined) setDayNumber(number);
+    if (target === "place") setSelected(id ?? null);
+    requestAnimationFrame(() => {
+      const element = document.getElementById(
+        target === "place"
+          ? "journey-current-stop"
+          : target === "budget"
+            ? `journey-budget-row-${id}`
+            : "journey-query-notes",
+      );
+      if (!element) return;
+      const disclosure =
+        element instanceof HTMLDetailsElement
+          ? element
+          : element.closest("details");
+      if (disclosure) disclosure.open = true;
+      scrollToElement(element, { block: "center" });
+      element.focus({ preventScroll: true });
+    });
+  }
+
   async function mutate(
     work: () => Promise<VersionDetail>,
     localFeedback = false,
@@ -251,6 +278,13 @@ export function ItineraryPanel({
           </div>
         ) : (
           <>
+            <JourneyAttention
+              detail={detail}
+              busy={busy}
+              onPlace={(number, id) => showAttention("place", number, id)}
+              onBudget={(id) => showAttention("budget", undefined, id)}
+              onNote={(number) => showAttention("note", number)}
+            />
             <div
               className="mb-5 flex gap-2 overflow-x-auto pb-1"
               role="group"
@@ -276,6 +310,7 @@ export function ItineraryPanel({
             {active && (
               <section
                 id="journey-current-stop"
+                tabIndex={-1}
                 className="journey-current-stop"
                 aria-label="当前站点"
               >
@@ -789,7 +824,11 @@ export function ItineraryPanel({
                     ))}
                   </div>
                 </div>
-                <details className="rounded-lg border border-line px-4 py-3">
+                <details
+                  id="journey-query-notes"
+                  tabIndex={-1}
+                  className="rounded-lg border border-line px-4 py-3"
+                >
                   <summary className="cursor-pointer text-xs text-muted">
                     时间、费用与查询说明
                   </summary>

@@ -46,14 +46,17 @@ from app.core.errors import (
     register_exception_handlers,  # noqa: E402
 )
 from app.domain.enums import PlanStatus  # noqa: E402
+from app.domain.itinerary import Booking, BudgetItem, ExpenseCreate, RouteLeg, ScheduledActivity  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.domain.studio_adoption import StudioPlanDraft  # noqa: E402
 from app.domain.studio_candidates import CandidateDraft  # noqa: E402
 from app.domain.workflow import DayOrder  # noqa: E402
 from app.services import studio_adoption, studio_location, studio_tools  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
-from app.services.itinerary_service import sync_markdown  # noqa: E402
+from app.services.itinerary_service import schedule_day, summarise_day, sync_markdown  # noqa: E402
 from app.services.recap_writing import RecapWriting  # noqa: E402
+from app.services.replan_service import check_overnight_links  # noqa: E402
+from app.services.travel_service import add_expense  # noqa: E402
 from app.storage.database import create_connection  # noqa: E402
 from app.storage.session_store import SessionStore  # noqa: E402
 
@@ -237,12 +240,79 @@ async def legacy():
 
 
 @app.post("/test/places")
-async def place_trip():
+async def place_trip(attention: bool = False):
     store = app.state.store
     session = await store.create_session("地点候选验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     itinerary = place_itinerary()
     req = requirements().model_copy(update={"duration_days": 2})
+    if attention:
+        req.travelers, req.budget_basis = None, None
+        first, second = itinerary.days
+        first.activities[0].start_time = "23:30"
+        first.activities[0].duration_minutes = 120
+        first.activities[0].time_is_suggested = False
+        first.activities[1].booking = Booking(
+            start_time="00:15", start_day_offset=1, duration_minutes=30
+        )
+        first.legs = [
+            RouteLeg(
+                from_id="lunch",
+                to_id="hotel",
+                mode="transit",
+                status="planned",
+                duration_seconds=3600,
+                message="使用建议交通，尚未完成地图核验。",
+            )
+        ]
+        second.activities[0].start_time = "00:30"
+        for activity_id, progress, kind in [
+            ("already-done", "completed", "attraction"),
+            ("already-skipped", "skipped", "attraction"),
+            ("free-time", "not_started", "free_time"),
+            ("transfer", "not_started", "transport"),
+        ]:
+            second.activities.append(
+                ScheduledActivity(
+                    id=activity_id,
+                    title=activity_id,
+                    kind=kind,
+                    progress=progress,
+                    cost=0,
+                    cost_basis="total",
+                )
+            )
+        second.legs = [
+            RouteLeg(
+                from_id="dinner",
+                to_id="transfer",
+                mode="transit",
+                status="unavailable",
+            )
+        ]
+        itinerary.budget_items.append(
+            BudgetItem(
+                id="custom-settled",
+                title="已结算未估价项目",
+                category="other",
+                source="custom",
+            )
+        )
+        add_expense(
+            itinerary,
+            ExpenseCreate(
+                title="已结算未估价项目",
+                amount="8.60",
+                category="other",
+                budget_item_id="custom-settled",
+                settles_budget=True,
+                request_id="attention-settled-fixture",
+            ),
+        )
+        for day in itinerary.days:
+            schedule_day(day)
+            summarise_day(day, req)
+        check_overnight_links(itinerary)
     values = {
         **initial_state(),
         "requirements": req,
