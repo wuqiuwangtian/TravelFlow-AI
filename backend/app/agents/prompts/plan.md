@@ -41,7 +41,7 @@ $numbered_sources
 10. 必须返回完整结构化 days，覆盖全部天数，按真实顺序串成一条旅程；每站是具体地点，含 kind、city、place_name，可用 address_hint 消除歧义。不要用“九寨沟”“午餐”“成都”这类泛称替代具体景区、餐厅、车站或酒店。住宿仅查到区域时可明确给出住宿区域建议，不伪造已订酒店。
 11. 每站的 start_time 是建议游玩时间，duration_minutes 是停留时间。抵达这一站的交通单独写入 transport_mode、transport_minutes、transport_cost、transport_cost_basis、transport_source_indices。跨城高铁/动车用 rail，飞机用 flight，接驳用 transfer；不要把乘车时长算成站内停留。
 12. 每天从实际出发点串到当晚停留点，餐饮和住宿有明确安排；同一个地点不要连续重复列出。市内交通 transport_mode=auto 即可，由程序选择步行、公交或接驳。不要输出经纬度或地图路线。
-13. 费用区分 per_person/total，已核实资料用 reference，建议估算用 estimate；不要把交通费重复放入景点费用。
+13. 费用区分 per_person/total；生成的活动及交通费用均为规划估算，cost_source=estimate。引用只是供查阅的资料，不代表已核实价格；不得用交通资料支持景点、餐饮或住宿费用。没有合理估算依据时金额留 null，不能用 0 代替未知。不要把交通费重复放入景点费用。
 
 【详细程度】$detail_name
 【目标篇幅】$target_length 字

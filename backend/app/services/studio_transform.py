@@ -88,11 +88,7 @@ def clear_changed_transport(day: DayPlan, original: DayPlan) -> None:
                     else None,
                     cost=target.transport_cost,
                     cost_basis=target.transport_cost_basis,
-                    cost_source="reference"
-                    if target.transport_source_indices
-                    else "estimate"
-                    if target.transport_cost is not None
-                    else "unknown",
+                    cost_source="estimate" if target.transport_cost is not None else "unknown",
                     source_indices=target.transport_source_indices[:],
                 )
             )

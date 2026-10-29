@@ -99,14 +99,13 @@ async def prepare_itinerary(
             activity.transport_source_indices = [
                 i for i in activity.transport_source_indices if 1 <= i <= source_count
             ]
-            if activity.source_indices and activity.cost is not None:
-                activity.cost_source = "reference" if activity.cost_source != "manual" else "manual"
-            elif not activity.source_indices:
-                if old and "费用为手动估算" in activity.notes and "费用为手动估算" in old.notes:
-                    activity.cost, activity.cost_basis = old.cost, old.cost_basis
-                    activity.cost_source = "manual"
-                elif activity.cost is not None:
-                    activity.cost_source = "estimate"
+            # 引用编号只证明资料存在，不能证明其中支持该费用。
+            # 模型产出的金额（包括零元）统一作为规划估算；人工覆盖稍后另行恢复。
+            if old and "费用为手动估算" in activity.notes and "费用为手动估算" in old.notes:
+                activity.cost, activity.cost_basis = old.cost, old.cost_basis
+                activity.cost_source = "manual"
+            else:
+                activity.cost_source = "estimate" if activity.cost is not None else "unknown"
     if previous:
         preserve_travel_records(previous, itinerary)
         if scope_day is not None:

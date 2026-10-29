@@ -150,3 +150,89 @@ async def test_refine_keeps_verified_place_and_explicit_manual_cost():
     assert current.cost == 30
     assert itinerary.days[0].known_cost == 60
     assert itinerary.days[0].travel_mode == "walking"
+
+
+@pytest.mark.parametrize("claimed_source", ["reference", "estimate", "manual", "unknown"])
+async def test_generated_prices_with_valid_citations_remain_estimates(claimed_source):
+    """有效引用不能把模型给出的票价、免费判断或交通费变成已核实金额。"""
+    details = PlanDetails(
+        days=[
+            DayDraft(
+                day=1,
+                activities=[
+                    Activity(
+                        title="出发站",
+                        place_name="出发站",
+                        kind="station",
+                        cost=0,
+                        cost_basis="total",
+                        cost_source=claimed_source,
+                        source_indices=[1, 999],
+                    ),
+                    Activity(
+                        title="游园",
+                        place_name="拙政园",
+                        kind="attraction",
+                        cost=160,
+                        cost_basis="total",
+                        cost_source=claimed_source,
+                        source_indices=[1],
+                        transport_mode="rail",
+                        transport_minutes=30,
+                        transport_cost=80,
+                        transport_cost_basis="total",
+                        transport_source_indices=[1, 999],
+                    ),
+                    Activity(
+                        title="餐饮待定",
+                        kind="meal",
+                        cost_source=claimed_source,
+                        source_indices=[1],
+                    ),
+                ],
+            )
+        ]
+    )
+    itinerary, markdown = await prepare_itinerary(
+        details,
+        "原始路书",
+        Requirements(travelers=2),
+        Settings(_env_file=None, amap_api_key=None),
+        1,
+    )
+    day = itinerary.days[0]
+    assert [a.cost_source for a in day.activities] == ["estimate", "estimate", "unknown"]
+    assert [a.cost for a in day.activities] == [0, 160, None]
+    assert day.activities[0].source_indices == [1]
+    assert day.legs[0].cost_source == "estimate"
+    assert day.legs[0].cost == 80
+    assert day.legs[0].source_indices == [1]
+    assert day.estimated_cost == day.known_cost == 240
+    assert day.unknown_cost_count >= 1
+    assert "估算 160 元" in markdown
+    assert "费用未计入" in markdown
+
+
+async def test_map_prices_are_preserved_but_model_fallback_is_estimated():
+    class PricedMaps(Maps):
+        async def route(self, origin, destination, mode):
+            leg = await super().route(origin, destination, mode)
+            leg.cost, leg.cost_basis, leg.cost_source = 4, "per_person", "reference"
+            return leg
+
+    day = DayPlan(
+        day=1,
+        travel_mode="transit",
+        activities=[
+            activity("a"),
+            activity(
+                "b", transport_cost=20, transport_cost_basis="total", transport_source_indices=[1]
+            ),
+        ],
+    )
+    quoted = await check_day(day, Requirements(travelers=2), PricedMaps())
+    assert quoted.legs[0].cost == 4
+    assert quoted.legs[0].cost_source == "reference"
+    fallback = await check_day(day, Requirements(travelers=2), Maps(failure=True))
+    assert fallback.legs[0].cost == 20
+    assert fallback.legs[0].cost_source == "estimate"

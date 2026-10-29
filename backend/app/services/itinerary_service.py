@@ -263,11 +263,7 @@ def _planned_leg(
         walking_meters=0 if mode in {"rail", "flight", "transfer"} else None,
         cost=destination.transport_cost,
         cost_basis=destination.transport_cost_basis,
-        cost_source="reference"
-        if destination.transport_source_indices
-        else "estimate"
-        if destination.transport_cost is not None
-        else "unknown",
+        cost_source="estimate" if destination.transport_cost is not None else "unknown",
         source_indices=destination.transport_source_indices,
         message="按行程资料衔接，出发时间以实际票面/预约为准。"
         if mode in {"rail", "flight"}
@@ -402,7 +398,7 @@ async def check_day(
             leg.message = "保留建议安排，地图恢复后可自动校验。"
         if leg.cost is None and destination.transport_cost is not None:
             leg.cost, leg.cost_basis = destination.transport_cost, destination.transport_cost_basis
-            leg.cost_source = "reference" if destination.transport_source_indices else "estimate"
+            leg.cost_source = "estimate"
         day.legs.append(leg)
     if provider and any(a.place is None and a.place_name for a in day.activities):
         day.warnings.append("少数地点定位尚待确认，行程已保留；可直接告诉 AI 希望调整哪里。")
