@@ -436,10 +436,12 @@
     .journey-desktop-tools {
       display: none;
     }
-    .journey-workspace[data-has-itinerary="true"] .journey-chat-column {
+    .journey-workspace[data-has-itinerary="true"] .journey-chat-column,
+    .journey-workspace[data-book-unavailable="true"] .journey-chat-column {
       order: 1;
     }
-    .journey-workspace[data-has-itinerary="true"] .journey-route-column {
+    .journey-workspace[data-has-itinerary="true"] .journey-route-column,
+    .journey-workspace[data-book-unavailable="true"] .journey-route-column {
       order: 0;
     }
     .journey-chat-shell {

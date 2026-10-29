@@ -19,7 +19,7 @@
 .venv/bin/python -m pytest tests -q
 ```
 
-本机完整基线为 564 项、mypy 115 个源文件。默认沙箱曾使异步测试停在早期用例；本地允许的执行环境中完整测试约 17 秒。遇此情况先确认运行环境和进程，不改生产异步逻辑来绕过测试。
+上一轮完整基线为564项、mypy 115个源文件；2026-10-29新增6项条件摘要测试，相关专项37项及mypy 116个源文件通过，未重跑全量。默认沙箱曾使异步测试停在早期用例；本地允许的执行环境中上轮完整测试约17秒。遇此情况先确认运行环境和进程，不改生产异步逻辑来绕过测试。
 
 ## 前端检查与浏览器回归
 
@@ -33,7 +33,9 @@ pnpm build
 PLAYWRIGHT_BROWSERS_PATH=/tmp/travelflow-browser pnpm exec playwright test --workers=1
 ```
 
-`/tmp/travelflow-browser` 是本机已有浏览器缓存，缺失时按 Playwright 常规安装；不把此缓存当作交接材料。全套当前 330 项；专项可指定 `tests/e2e/ordinary-flow.spec.ts`、`journey.spec.ts`、`recovery.spec.ts` 或 `theme-settings.spec.ts`。
+`/tmp/travelflow-browser` 是本机已有浏览器缓存，缺失时按 Playwright 常规安装；不把此缓存当作交接材料。上一轮全量330项通过，2026-10-29另增16项条件与路书恢复测试，最终相关80项通过；专项可指定 `tests/e2e/planning-recovery.spec.ts`、`ordinary-flow.spec.ts`、`journey.spec.ts`、`recovery.spec.ts` 或 `theme-settings.spec.ts`。
+
+2026-10-29本环境Turbopack因创建本地端口权限失败，申请本机执行后仍失败；使用内置 `pnpm exec next build --webpack` 完成生产构建及上述浏览器验证，没有改动默认脚本或依赖。新环境以实际权限与构建结果为准。
 
 - 配置自动启动临时后端 8137 和生产前端 3137，`reuseExistingServer:false`；运行前确认没有同端口其他服务，不杀不属于本任务的进程。
 - 使用 1 worker，避免临时 SQLite 并发锁。先完成 build，再运行浏览器；期间冻结业务源码，不重写 `.next`。

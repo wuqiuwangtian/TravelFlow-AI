@@ -99,6 +99,14 @@ export interface ChatClarification {
   warnings?: string[];
 }
 
+export interface PlanningContext {
+  requirements: TravelRequirements;
+  missing_fields: string[];
+  status: string | null;
+  destination_ideas: string[];
+  destination_recommendation_requested: boolean;
+}
+
 export interface ChatResponse {
   session_id: string;
   branch_id: string;
@@ -108,6 +116,7 @@ export interface ChatResponse {
   plan: string;
   missing_fields: string[];
   clarification?: ChatClarification | null;
+  planning_context?: PlanningContext | null;
 }
 
 export interface SessionDetail {

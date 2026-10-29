@@ -18,6 +18,7 @@ import type {
   BranchInfo,
   ChatResponse,
   ChatClarification,
+  PlanningContext,
   ConfigCheck,
   ConnectionTest,
   DetailLevel,
@@ -570,6 +571,7 @@ export const api = {
     request<{
       messages: { role: string; content: string }[];
       clarification?: ChatClarification | null;
+      planning_context?: PlanningContext | null;
     }>(`/api/branches/${branchId}/messages`),
   addAdjustment: (
     versionId: string,

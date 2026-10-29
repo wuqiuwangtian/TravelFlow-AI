@@ -39,6 +39,7 @@ from app.search.base import SearchResult
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
 from app.services.plan_undo import recover_plan_undo
+from app.services.planning_context import planning_context
 from app.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api", tags=["session"])
@@ -471,6 +472,7 @@ async def get_branch_messages(
 
     return ChatHistoryResponse(
         messages=items,
+        planning_context=planning_context((snapshot.values or {}) if snapshot else {}),
         clarification=clarification_prompt(
             (snapshot.values or {}).get("pending_journey")
             or (snapshot.values or {}).get("pending_place")

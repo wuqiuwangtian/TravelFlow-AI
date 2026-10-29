@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.domain.enums import DetailLevel
-from app.domain.models import BranchInfo, SessionInfo, VersionInfo
+from app.domain.enums import DetailLevel, PlanStatus
+from app.domain.models import BranchInfo, Requirements, SessionInfo, VersionInfo
 
 
 # ---------------------------------------------------------------- 系统
@@ -233,11 +233,22 @@ class ChatMessageItem(BaseModel):
     content: str
 
 
+class PlanningContext(BaseModel):
+    """当前分支的只读需求摘要，不包含内部过程或请求回执。"""
+
+    requirements: Requirements = Field(default_factory=Requirements)
+    missing_fields: list[str] = Field(default_factory=list)
+    status: PlanStatus | None = None
+    destination_ideas: list[str] = Field(default_factory=list)
+    destination_recommendation_requested: bool = False
+
+
 class ChatHistoryResponse(BaseModel):
     """对话历史（存在 LangGraph checkpoint 里）。"""
 
     messages: list[ChatMessageItem] = Field(default_factory=list)
     clarification: dict | None = None
+    planning_context: PlanningContext | None = None
 
 
 # ---------------------------------------------------------------- 对话
@@ -260,3 +271,4 @@ class ChatResponse(BaseModel):
     plan: str = ""
     missing_fields: list[str] = Field(default_factory=list)
     clarification: dict | None = None
+    planning_context: PlanningContext | None = None

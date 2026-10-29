@@ -24,6 +24,7 @@ from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.models import Requirements
 from app.services.branch_lock import branch_guard
 from app.services.plan_undo import recover_plan_undo
+from app.services.planning_context import planning_context
 from app.storage.session_store import SessionStore
 
 logger = get_logger(__name__)
@@ -40,6 +41,7 @@ class ChatOutcome:
     version_id: str | None = None
     missing_fields: list[str] | None = None
     clarification: dict | None = None
+    planning_context: dict | None = None
 
 
 def _last_ai_text(values: dict) -> str:
@@ -263,6 +265,7 @@ class ChatService:
         await self._store.touch_session(session_id)
         outcome = ChatOutcome(
             branch_id=branch_id,
+            planning_context=planning_context(values).model_dump(mode="json"),
             status=str(values.get("status") or PlanStatus.COLLECTING),
             reply=_last_ai_text(values) or "（无回复内容）",
             plan_markdown=values.get("plan_markdown") or "",

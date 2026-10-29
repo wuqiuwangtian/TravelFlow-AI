@@ -23,6 +23,7 @@ import { ItineraryPanel } from "@/components/itinerary-panel";
 import { LinkedReplanPreview } from "@/components/linked-replan-preview";
 import { RenameForm } from "@/components/rename-form";
 import { PlanChangeNotice } from "@/components/plan-change-notice";
+import { PlanningContextPanel } from "@/components/planning-context";
 
 import {
   ActionFeedback,
@@ -33,6 +34,7 @@ import {
   Spinner,
 } from "@/components/ui";
 import { api, ApiError, chatStream } from "@/lib/api";
+import { useVersionRead } from "@/lib/use-version-read";
 import {
   readChatDraft,
   saveChatDraft,
@@ -42,8 +44,8 @@ import type {
   BranchInfo,
   ChatClarification,
   DetailLevel,
+  PlanningContext,
   SessionDetail,
-  VersionDetail,
   VersionInfo,
 } from "@/lib/types";
 import { DETAIL_LEVEL_LABELS } from "@/lib/types";
@@ -68,17 +70,15 @@ export default function ChatPage() {
     error: string | null;
   }>({ branch: null, loading: true, error: null });
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [planning, setPlanning] = useState<{
+    branch: string;
+    context: PlanningContext | null;
+  } | null>(null);
   const historyOwner = useRef<string | null>(null);
   const messageRevision = useRef(0);
   const visibleMessages = historyRead.branch === activeBranchId ? messages : [];
   const historyLoading =
     historyRead.branch !== activeBranchId || historyRead.loading;
-  const [storedVersionDetail, setVersionDetail] =
-    useState<VersionDetail | null>(null);
-  const versionDetail =
-    storedVersionDetail?.version.branch_id === activeBranchId
-      ? storedVersionDetail
-      : null;
   const [input, setInput] = useState("");
   const [draftBranch, setDraftBranch] = useState<string | null>(null);
   const [failedRequest, setFailedRequest] = useState<ChatAttempt | null>(null);
@@ -126,6 +126,12 @@ export default function ChatPage() {
     () => (activeBranchId ? (detail?.versions[activeBranchId] ?? []) : []),
     [detail, activeBranchId],
   );
+  const versionRead = useVersionRead(
+    activeBranchId,
+    versions.at(-1)?.id ?? null,
+    detail,
+  );
+  const versionDetail = versionRead.detail;
 
   const load = useCallback(async () => {
     setError(null);
@@ -193,7 +199,6 @@ export default function ChatPage() {
     if (historyOwner.current !== activeBranchId) {
       historyOwner.current = activeBranchId;
       setMessages([]);
-      setVersionDetail(null);
       setClarification(null);
     }
     setHistoryRead({ branch: activeBranchId, loading: true, error: null });
@@ -204,6 +209,10 @@ export default function ChatPage() {
         if (cancelled || revision !== messageRevision.current) return;
         setHistoryRead({ branch: activeBranchId, loading: false, error: null });
         setClarification(result.clarification ?? null);
+        setPlanning({
+          branch: activeBranchId,
+          context: result.planning_context ?? null,
+        });
         setMessages(
           result.messages.map((m) => ({
             role: m.role === "user" ? "user" : "assistant",
@@ -225,27 +234,6 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [detail, activeBranchId, historyRefresh]);
-
-  useEffect(() => {
-    if (!activeBranchId) return;
-    let cancelled = false;
-    const list = detail?.versions[activeBranchId] ?? [];
-    const latest = list[list.length - 1];
-    if (latest) {
-      void api
-        .getVersion(latest.id)
-        .then((data) => {
-          if (!cancelled) setVersionDetail(data);
-        })
-        .catch(() => {
-          if (!cancelled) setVersionDetail(null);
-        });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [detail, activeBranchId]);
 
   useEffect(() => {
     scrollToLatest(messageViewport.current);
@@ -338,6 +326,10 @@ export default function ChatPage() {
           },
           onDone: (result) => {
             setClarification(result.clarification ?? null);
+            setPlanning({
+              branch: activeBranchId,
+              context: result.planning_context ?? null,
+            });
             reply = result.reply;
             finalPlan = result.plan || finalPlan;
           },
@@ -413,6 +405,7 @@ export default function ChatPage() {
     <div
       className="journey-workspace"
       data-has-itinerary={!!versionDetail?.itinerary?.days.length}
+      data-book-unavailable={versions.length > 0 && !versionDetail}
     >
       {/* 顶部：会话标题 + 分支切换 */}
       <div className="journey-workspace-heading">
@@ -572,10 +565,11 @@ export default function ChatPage() {
                 !historyLoading &&
                 !historyRead.error && (
                   <div className="rounded-lg bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-                    {versionDetail ? (
+                    {versions.length > 0 ? (
                       <>
                         这份行程已经保存。想换个地方、少走一点，或调整费用，继续告诉我就好。
-                        {!versionDetail.itinerary?.days.length &&
+                        {versionDetail &&
+                          !versionDetail.itinerary?.days.length &&
                           "也可以先将旧路书整理成每日路线。"}
                       </>
                     ) : (
@@ -779,6 +773,30 @@ export default function ChatPage() {
           </Card>
         </section>
         <div className="journey-route-column">
+          {(versionRead.loading || versionRead.error) && (
+            <Card
+              id={!versionDetail ? "journey-route" : undefined}
+              tabIndex={-1}
+              className="p-4"
+              role="region"
+              aria-label="路书读取状态"
+            >
+              <ActionFeedback
+                pending={versionRead.loading ? "正在读取所选路书…" : undefined}
+                error={
+                  versionRead.error
+                    ? `路书暂时未读出：${versionRead.error}`
+                    : null
+                }
+                onRetry={versionRead.retry}
+              />
+              <p className="mt-2 text-xs leading-6 text-muted">
+                {versionDetail
+                  ? `仍显示已读取的 v${versionDetail.version.seq}，编辑草稿会保留。`
+                  : "已保存的计划仍在，无需重新生成；可重试读取或继续对话。"}
+              </p>
+            </Card>
+          )}
           {versionDetail?.itinerary?.days.length ? (
             <nav className="journey-desktop-tools" aria-label="行程工具">
               <Button
@@ -809,33 +827,35 @@ export default function ChatPage() {
               key={versionDetail.version.branch_id}
               detail={versionDetail}
               editable={
-                versions[versions.length - 1]?.id === versionDetail.version.id
+                versions.at(-1)?.id === versionDetail.version.id &&
+                versionRead.target === versionDetail.version.id
               }
-              disabled={sending || itineraryBusy}
+              disabled={
+                sending ||
+                itineraryBusy ||
+                versionRead.loading ||
+                !!versionRead.error
+              }
               onBusy={setItineraryBusy}
               onUpdate={async (updated) => {
+                versionRead.accept(updated);
                 await load();
-                setVersionDetail(updated);
               }}
               onFork={() => forkFromVersion(versionDetail.version)}
               onAsk={askFromRoute}
             />
-          ) : (
-            <Card className="journey-planning-help">
-              <div className="flex h-full flex-col justify-center">
-                <p className="text-xs font-medium tracking-widest text-accent">
-                  从一句想法开始
-                </p>
-                <h2>先聊旅行想法</h2>
-                <p className="mt-4 max-w-md text-sm leading-7 text-muted">
-                  可以告诉我目的地、时间和偏好；还没想好去哪，也可以让我先推荐几个城市。
-                </p>
-                <p className="mt-4 text-xs text-muted">
-                  例如：从上海出发，周末两天，想少走路。
-                </p>
-              </div>
-            </Card>
-          )}{" "}
+          ) : versions.length === 0 ? (
+            <PlanningContextPanel
+              context={
+                planning?.branch === activeBranchId ? planning.context : null
+              }
+              pending={historyLoading || sending}
+              error={
+                historyRead.branch === activeBranchId ? historyRead.error : null
+              }
+              onRetry={() => setHistoryRefresh((value) => value + 1)}
+            />
+          ) : null}{" "}
         </div>
       </div>
 
@@ -869,9 +889,7 @@ export default function ChatPage() {
                       <button
                         className="block w-full rounded-lg px-2 py-1 text-left transition hover:bg-surface"
                         disabled={sending || itineraryBusy}
-                        onClick={() =>
-                          void api.getVersion(version.id).then(setVersionDetail)
-                        }
+                        onClick={() => versionRead.select(version.id)}
                       >
                         <span className="text-[11px] font-bold text-accent">
                           v{version.seq}
@@ -964,6 +982,12 @@ export default function ChatPage() {
                     {versionDetail.markdown}
                   </ReactMarkdown>
                 </div>
+              ) : versions.length > 0 ? (
+                <p className="text-sm leading-7 text-muted">
+                  {versionRead.loading
+                    ? "正在读取所选路书…"
+                    : "路书尚未读出，请在上方重试读取。"}
+                </p>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-muted">
                   <Sparkles className="h-7 w-7 text-muted" />
@@ -1018,11 +1042,14 @@ export default function ChatPage() {
           const available =
             item.id === "chat" ||
             (item.id === "route"
-              ? !!versionDetail
+              ? versions.length > 0 || !!versionDetail
               : !!versionDetail?.itinerary?.days.length);
           const current =
             mobileSection ??
-            (versionDetail?.itinerary?.days.length ? "route" : "chat");
+            (versionDetail?.itinerary?.days.length ||
+            (versions.length > 0 && !versionDetail)
+              ? "route"
+              : "chat");
           return (
             <Button
               type="button"
