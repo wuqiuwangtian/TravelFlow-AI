@@ -169,7 +169,7 @@ export default function ReadRecapPage() {
             </details>
           )}
           <div className="flex flex-wrap gap-4 text-sm text-[var(--tf-accent)]">
-            {(["markdown", "html"] as const).map((format) => (
+            {(["md", "html"] as const).map((format) => (
               <a
                 className="tf-action-link tf-page-link"
                 key={format}

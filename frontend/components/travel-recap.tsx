@@ -362,7 +362,7 @@ export function TravelRecap({
             导出不附带票据图片、消费备注和订单资料；回忆正文会包含在回顾导出中；朋友圈文案单独复制发布。
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-[var(--tf-accent)]">
-            {(["markdown", "html"] as const).map((format) => (
+            {(["md", "html"] as const).map((format) => (
               <a
                 key={format}
                 href={`${API_BASE}/api/versions/${detail.version.id}/recap/export?format=${format}`}

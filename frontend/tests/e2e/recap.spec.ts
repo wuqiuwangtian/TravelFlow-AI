@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "playwright/test";
 const proxy = "/api/backend";
 async function latest(page: Page) {
@@ -73,6 +74,43 @@ test("事实模板可编辑保存，刷新保留，重复保存不增加版本�
       () => document.documentElement.scrollWidth > innerWidth,
     ),
   ).toBe(false);
+});
+test("编辑区与只读回顾页的 Markdown 链接下载已保存的回顾", async ({ page }) => {
+  const recap = page.getByRole("region", { name: "旅行回顾", exact: true });
+  const memory = "这是已保存的导出验收回忆。";
+  await recap
+    .getByRole("textbox", { name: "回顾标题", exact: true })
+    .fill("回顾导出验收");
+  await recap
+    .getByRole("textbox", { name: "我的回忆", exact: true })
+    .fill(memory);
+  await recap
+    .getByRole("button", { name: "保存旅行回顾", exact: true })
+    .click();
+  await expect(recap).toContainText("回顾已随当前版本保存");
+  const saved = await latest(page);
+  for (const view of ["editor", "reader"]) {
+    if (view === "reader") {
+      await page.goto(`/recaps/${saved.detail.version.id}`);
+      await expect(
+        page.getByRole("heading", { name: "回顾导出验收", exact: true }),
+      ).toBeVisible();
+    }
+    const link = page.getByRole("link", {
+      name: "导出回顾 Markdown",
+      exact: true,
+    });
+    const response = await page.request.get((await link.getAttribute("href"))!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("text/markdown");
+    const downloadPromise = page.waitForEvent("download");
+    await link.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("travel-recap.md");
+    const markdown = await readFile((await download.path())!, "utf8");
+    expect(markdown).toContain("回顾导出验收");
+    expect(markdown).toContain(memory);
+  }
 });
 test("修改真实活动后回顾保留原文字并提示核对，旧版本不变", async ({ page }) => {
   const recap = page.getByRole("region", { name: "旅行回顾", exact: true });
