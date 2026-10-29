@@ -60,9 +60,16 @@ class DuckDuckGoProvider(SearchProvider):
 
     def _search_sync(self, query: str, max_results: int) -> list[dict]:
         from ddgs import DDGS
+        from ddgs.exceptions import DDGSException
 
-        with DDGS(timeout=self._timeout) as client:
-            return list(client.text(query, region=self._region, max_results=max_results))
+        try:
+            with DDGS(timeout=self._timeout) as client:
+                return list(client.text(query, region=self._region, max_results=max_results))
+        except DDGSException as exc:
+            # ddgs 用异常表示正常的零命中；其他异常仍交给上层报告服务失败。
+            if type(exc) is DDGSException and str(exc) == "No results found.":
+                return []
+            raise
 
     def _fail(self, reason: str):
         from app.core.errors import SearchUnavailable

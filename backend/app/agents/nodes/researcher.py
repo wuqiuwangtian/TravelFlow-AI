@@ -87,9 +87,18 @@ def make_researcher_node(search: SearchProvider, *, max_results: int = 5, focus:
                 detail=f"provider={search.name} 三路检索全部失败",
             )
 
-        if failures:
-            # 部分失败不阻断，但要如实告知 —— 否则用户会以为信息是全的
-            emit_notice(f"有 {failures} 路检索未成功，路书会基于其余结果生成，可能不够全面。")
+        missing = sum(not results for results in buckets.values())
+        if missing == len(bucket_names):
+            raise SearchUnavailable(
+                "暂未检索到可用的旅行资料，请调整目的地或稍后重试；"
+                "也可在「设置」中检查或更换检索服务。",
+                detail=f"provider={search.name} empty={missing - failures} failed={failures}",
+            )
+        if missing:
+            # 零命中和服务失败都可能造成资料缺口，不能把空结果当成完整调研。
+            emit_notice(
+                f"有 {missing} 路检索未取得可用资料，路书会基于其余结果生成，可能不够全面。"
+            )
 
         bundle = ResearchBundle(
             transport=buckets["transport"],

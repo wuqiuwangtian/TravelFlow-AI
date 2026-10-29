@@ -403,3 +403,17 @@ async def test_destination_request_survives_budget_followup(environment, monkeyp
     )
     assert second.status_code == 200
     assert "武隆" in second.json()["reply"] and "需不需要" not in second.json()["reply"]
+
+
+def test_hotel_and_meal_do_not_resolve_to_same_named_street_or_scenic_area():
+    for kind, name, wrong_type in [
+        ("hotel", "观前街", "190301"),
+        ("meal", "平江路历史街区", "110000"),
+    ]:
+        stop = ScheduledActivity(id="a", title=name, place_name=name, city="苏州", kind=kind)
+        area = point("area", name, city="苏州", typecode=wrong_type)
+        assert choose_place(stop, [area])[0] is None
+        valid = point(
+            "venue", name, city="苏州", typecode="100100" if kind == "hotel" else "050100"
+        )
+        assert choose_place(stop, [area, valid])[0].id == "venue"

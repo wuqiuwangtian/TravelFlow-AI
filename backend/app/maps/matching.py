@@ -55,6 +55,10 @@ def _same_destination(activity: ScheduledActivity, first: Place, second: Place) 
 
 
 def _score(activity: ScheduledActivity, place: Place) -> float:
+    # 区域名称相同也不能把街道、商圈或景区当作已定位的酒店/餐厅。
+    required_type = {"hotel": "10", "meal": "05"}.get(activity.kind)
+    if required_type and place.typecode and not place.typecode.startswith(required_type):
+        return 0
     query, name = normal_name(activity.place_name), normal_name(place.name)
     if not query:
         return 0
