@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 from geo_fixtures import GeoMaps  # noqa: E402
 from linked_fixtures import linked_itinerary  # noqa: E402
 from move_fixtures import move_itinerary  # noqa: E402
+from ordinary_journey_fixtures import FLOW_MARKER, JourneyMaps, journey_drafts  # noqa: E402
 from place_fixtures import place_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
@@ -30,7 +31,7 @@ from app.agents.nodes.collector import (  # noqa: E402
     DestinationOptions,
 )
 from app.agents.nodes.planner import PlanOutput  # noqa: E402
-from app.agents.nodes.refiner import RefineIntent  # noqa: E402
+from app.agents.nodes.refiner import OnTripUpdate, RefineIntent  # noqa: E402
 from app.agents.state import initial_state  # noqa: E402
 from app.api import (  # noqa: E402
     routes_chat,
@@ -51,7 +52,7 @@ from app.domain.models import Requirements  # noqa: E402
 from app.domain.studio_adoption import StudioPlanDraft  # noqa: E402
 from app.domain.studio_candidates import CandidateDraft  # noqa: E402
 from app.domain.workflow import DayOrder  # noqa: E402
-from app.services import studio_adoption, studio_location, studio_tools  # noqa: E402
+from app.services import itinerary_service, studio_adoption, studio_location, studio_tools  # noqa: E402
 from app.services.chat_service import ChatService  # noqa: E402
 from app.services.itinerary_service import schedule_day, summarise_day, sync_markdown  # noqa: E402
 from app.services.recap_writing import RecapWriting  # noqa: E402
@@ -78,6 +79,39 @@ class BrowserLLM(FakeLLM):
         return await super().chat(messages, **kwargs)
 
     async def structured(self, messages, schema, **kwargs):
+        flow = any(FLOW_MARKER in message.content for message in messages)
+        if flow and schema is PlanOutput:
+            failure = re.search(r"flow-error-([a-f0-9]{12})", messages[0].content)
+            if failure and failure[0] not in self.failed_workflow_cases:
+                self.failed_workflow_cases.add(failure[0])
+                raise LLMAuthenticationFailed("贯通验收：模型暂时无法鉴权，原条件保留。")
+            return PlanOutput(markdown=MARKDOWN, days=journey_drafts())
+        if flow and schema is RefineIntent and "23:50" in messages[0].content:
+            return RefineIntent(
+                intent="modify",
+                on_trip=OnTripUpdate(
+                    day=1,
+                    location_name="北京站",
+                    time="23:50",
+                    end_time="03:00",
+                    end_day_offset=1,
+                    end_location_name="示例酒店",
+                ),
+            )
+        if flow and schema is CollectResult:
+            text = messages[-1].content
+            failure = re.search(r"flow-error-[a-f0-9]{12}", text)
+            return CollectResult(
+                extracted=Requirements(budget=2000, budget_basis="total", travelers=2)
+                if "预算" in text
+                else Requirements(
+                    origin="上海",
+                    duration_days=3,
+                    preferences=[FLOW_MARKER, "少走路"] + ([failure[0]] if failure else []),
+                ),
+                reply="继续补充必要条件",
+                wants_destination_ideas=True,
+            )
         if schema is CandidateDraft:
             result = candidate_draft()
             if "户外与公园" in messages[0].content:
@@ -179,6 +213,16 @@ async def lifespan(app):
 
     app.dependency_overrides[get_settings] = browser_settings
 
+    original_check_day = itinerary_service.check_day
+
+    async def journey_check_day(day, requirements, provider, **kwargs):
+        # 仅本场景向正式 check_day 注入离线 provider，不替换编排、匹配或持久化。
+        if FLOW_MARKER in requirements.preferences:
+            provider = JourneyMaps()
+        return await original_check_day(day, requirements, provider, **kwargs)
+
+    itinerary_service.check_day = journey_check_day
+
     def geo_maps(client, key):
         bid, mode = key.removeprefix("isolated-geo-").split(":", 1)
         return GeoMaps(mode, app.state.geo_calls[bid])
@@ -201,6 +245,7 @@ async def lifespan(app):
                 )
                 yield
         finally:
+            itinerary_service.check_day = original_check_day
             await conn.close()
 
 

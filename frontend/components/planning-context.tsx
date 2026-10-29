@@ -9,8 +9,8 @@ const fields: Record<string, string> = {
 };
 const stages: Record<string, string> = {
   collecting: "正在了解这趟旅行",
-  researching: "正在检索旅行资料",
-  planning: "正在生成行程",
+  researching: "资料检索阶段",
+  planning: "行程生成阶段",
   reviewing: "行程待确认",
   finished: "计划已确认",
 };
