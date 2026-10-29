@@ -43,7 +43,7 @@ export function JourneyAttention({
             <AlertTriangle aria-hidden="true" className="h-4 w-4" />
             出发前需留意
           </span>
-          <span className="mt-1 block text-xs leading-6 text-muted">
+          <span className="mt-1 block text-xs leading-6 text-warning">
             {[
               places.length ? `地点 ${places.length} 处待明确` : null,
               unknownCount === null
@@ -59,7 +59,7 @@ export function JourneyAttention({
           </span>
         </summary>
         <div className="space-y-5 border-t border-warning-line px-4 py-4 text-ink">
-          <p className="text-xs leading-6 text-muted">
+          <p className="text-xs leading-6 text-warning">
             汇总整趟旅行，按当前查看版本展示。展开和查看只定位已有内容，不会重新规划。
           </p>
           {places.length > 0 && (
@@ -79,6 +79,7 @@ export function JourneyAttention({
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="text-warning"
                       disabled={busy}
                       onClick={() => onPlace(day, activity.id)}
                       aria-label={`查看第${day}天第${stop}站待明确地点`}
@@ -95,7 +96,7 @@ export function JourneyAttention({
             budgetScopeUnknown) && (
             <section aria-label="待明确费用">
               <h3 className="font-medium">费用与预算口径</h3>
-              <p className="mt-2 text-xs leading-6 text-muted">
+              <p className="mt-2 text-xs leading-6 text-warning">
                 未定费用不等于零，已列预估也不代表最终价格。
               </p>
               {unknownCount === null && (
@@ -118,6 +119,7 @@ export function JourneyAttention({
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="text-warning"
                       disabled={busy}
                       onClick={() => onBudget(row.id)}
                       aria-label={`查看待明确费用：${row.title}`}
@@ -144,6 +146,7 @@ export function JourneyAttention({
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="text-warning"
                       disabled={busy}
                       onClick={() => onNote(note.day)}
                       aria-label={`查看第${note.day}天提醒：${note.message}`}
