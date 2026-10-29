@@ -477,6 +477,14 @@ function ServiceSettings() {
                   }
                   disabled={searchKeyOptional}
                 />
+                {form.search_provider === "deepseek" && (
+                  <Hint>
+                    优先使用已保存的检索 Key；未单独配置时，可复用 DeepSeek
+                    官方模型接口的
+                    Key。使用其他模型或第三方兼容地址时，需要单独填写 DeepSeek
+                    官方 Key。网页搜索按次计费。
+                  </Hint>
+                )}
               </Field>
             )}
 

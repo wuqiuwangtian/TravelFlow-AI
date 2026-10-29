@@ -103,6 +103,13 @@ LLM_PROVIDERS: tuple[ProviderInfo, ...] = (
 # --------------------------------------------------------------------------
 SEARCH_PROVIDERS: tuple[ProviderInfo, ...] = (
     ProviderInfo(
+        "deepseek",
+        "DeepSeek 网页搜索",
+        "https://api-docs.deepseek.com/zh-cn/guides/search/",
+        default_base_url="https://api.deepseek.com/v1",
+        note="独立网页搜索接口，可复用 DeepSeek 官方模型 Key；按次计费",
+    ),
+    ProviderInfo(
         "tavily",
         "Tavily",
         "https://docs.tavily.com/",

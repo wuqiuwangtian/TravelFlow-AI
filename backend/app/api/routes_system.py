@@ -75,7 +75,7 @@ async def config_check(settings: Settings = Depends(get_settings)) -> ConfigChec
         ),
         search=SearchConfigCheck(
             provider=settings.search_provider,
-            has_key=bool(settings.search_api_key),
+            has_key=bool(settings.resolved_search_api_key),
             ready=settings.search_ready,
         ),
         default_detail_level=settings.default_detail_level,
@@ -144,7 +144,7 @@ async def read_settings(settings: Settings = Depends(get_settings)) -> dict:
         "llm_has_key": bool(settings.llm_api_key),
         "search_provider": settings.search_provider,
         "searxng_base_url": settings.searxng_base_url or "",
-        "search_has_key": bool(settings.search_api_key),
+        "search_has_key": bool(settings.resolved_search_api_key),
         "amap_has_key": bool(settings.amap_api_key),
         "default_detail_level": settings.default_detail_level,
         "cors_strict": settings.app_cors_strict,

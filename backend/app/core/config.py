@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -114,6 +115,26 @@ class Settings(BaseSettings):
         return bool(self.llm_api_key)
 
     @property
+    def resolved_search_api_key(self) -> str | None:
+        """检索专用 Key 优先；仅允许复用 DeepSeek 官方接口的模型 Key。"""
+        if self.search_api_key:
+            return self.search_api_key
+        if self.search_provider != "deepseek" or self.llm_provider != "deepseek":
+            return None
+        try:
+            url = urlsplit(self.resolved_llm_base_url or "")
+            official = (
+                url.scheme == "https"
+                and url.hostname == "api.deepseek.com"
+                and url.port in {None, 443}
+                and not url.username
+                and not url.password
+            )
+        except ValueError:
+            return None
+        return self.llm_api_key if official else None
+
+    @property
     def search_ready(self) -> bool:
         """检索服务是否已具备调用条件。"""
         provider = find_search_provider(self.search_provider)
@@ -123,7 +144,7 @@ class Settings(BaseSettings):
             return True  # 例如 DuckDuckGo、自建 SearXNG
         if self.search_provider == "searxng":
             return bool(self.searxng_base_url)
-        return bool(self.search_api_key)
+        return bool(self.resolved_search_api_key)
 
     def startup_warnings(self) -> list[str]:
         """启动自检警告 —— 面向用户，必须是「人话 + 可操作」。"""
@@ -143,6 +164,11 @@ class Settings(BaseSettings):
         elif not self.search_ready:
             if self.search_provider == "searxng":
                 warnings.append("未配置 SEARXNG_BASE_URL，自建 SearXNG 需要填写其地址")
+            elif self.search_provider == "deepseek":
+                warnings.append(
+                    "DeepSeek 网页搜索需要 SEARCH_API_KEY，"
+                    "或已配置 DeepSeek 官方模型接口的 LLM_API_KEY"
+                )
             else:
                 warnings.append(
                     f"未配置 SEARCH_API_KEY（检索服务：{self.search_provider}），"

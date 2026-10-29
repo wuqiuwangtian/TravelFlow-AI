@@ -8,6 +8,7 @@ from app.core.providers import SEARCH_PROVIDERS, find_search_provider
 from app.search.base import SearchProvider
 from app.search.bocha_provider import BochaProvider
 from app.search.ddg_provider import DuckDuckGoProvider
+from app.search.deepseek_provider import DeepSeekSearchProvider
 from app.search.qianfan_provider import QianfanProvider
 from app.search.searxng_provider import SearXNGProvider
 from app.search.tavily_provider import TavilyProvider
@@ -22,6 +23,15 @@ def create_search_provider(settings: Settings) -> SearchProvider:
         raise ConfigError(f"未知的检索服务「{provider_id}」，可选：{known}")
 
     timeout = settings.search_timeout_seconds
+
+    if provider_id == "deepseek":
+        key = settings.resolved_search_api_key
+        if not key:
+            raise ConfigError(
+                "DeepSeek 网页搜索需要 SEARCH_API_KEY；"
+                "也可留空以复用已配置的 DeepSeek 官方模型接口 LLM_API_KEY。"
+            )
+        return DeepSeekSearchProvider(key, timeout=timeout)
 
     if provider_id == "tavily":
         _require_key(settings, "Tavily", "SEARCH_API_KEY")

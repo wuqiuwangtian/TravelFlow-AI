@@ -78,12 +78,18 @@ def make_researcher_node(search: SearchProvider, *, max_results: int = 5, focus:
                 buckets[name] = list(outcome)
 
         if failures == len(bucket_names):
-            # 三路全挂才算整体失败，并给出**可操作**的提示：
-            # 只说「检索不可用」用户无从下手，必须点明是哪个源、以及能换什么。
+            # 保留 Provider 已整理的安全提示（鉴权、余额、限速等），不误报为网络故障。
+            messages = list(
+                dict.fromkeys(
+                    outcome.message
+                    for outcome in outcomes
+                    if isinstance(outcome, SearchUnavailable)
+                )
+            )
             raise SearchUnavailable(
-                f"检索服务（{search.name}）连不上，无法生成路书。"
-                "国内网络下 DuckDuckGo 等国外检索源通常需要代理；"
-                "可在「设置」中改用百度千帆 / 博查，或自建 SearXNG。",
+                "；".join(messages)
+                if messages
+                else f"检索服务（{search.name}）暂时不可用，请稍后重试或在「设置」中检查检索服务。",
                 detail=f"provider={search.name} 三路检索全部失败",
             )
 

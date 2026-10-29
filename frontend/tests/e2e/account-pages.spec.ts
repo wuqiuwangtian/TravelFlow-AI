@@ -377,3 +377,76 @@ test("旅行管理长名称与筛选适配手机，列表操作链接具备焦�
   }
   await noOverflow(page);
 });
+
+test("DeepSeek 检索可留空复用官方模型 Key，保存与测试保留现有流程", async ({
+  page,
+}) => {
+  await mockSettings(page);
+  await page.route("**/api/backend/api/system/providers", (route) =>
+    route.fulfill({
+      json: {
+        ...providers,
+        search: [
+          ...providers.search,
+          {
+            id: "deepseek",
+            name: "DeepSeek 网页搜索",
+            requires_api_key: true,
+            docs_url: "https://api-docs.deepseek.com/zh-cn/guides/search/",
+            default_base_url: null,
+            note: "独立网页搜索接口，可复用 DeepSeek 官方模型 Key；按次计费",
+          },
+        ],
+      },
+    }),
+  );
+  let current = { ...stored };
+  const writes: SettingsUpdate[] = [];
+  await page.route(settingsUrl, async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ json: current });
+    const update = route.request().postDataJSON() as SettingsUpdate;
+    writes.push(update);
+    current = { ...current, search_provider: update.search_provider! };
+    return route.fulfill({
+      json: {
+        saved: true,
+        changed: ["SEARCH_PROVIDER"],
+        message: "检索配置已保存",
+        reloaded: true,
+      },
+    });
+  });
+  await page.route("**/api/backend/api/system/test-search", (route) =>
+    route.fulfill({
+      json: {
+        ok: true,
+        provider: "deepseek",
+        message: "连接正常，返回 1 条结果",
+      },
+    }),
+  );
+  await page.goto("/settings");
+  const search = page.getByRole("region", { name: "信息检索", exact: true });
+  await search.getByLabel("检索服务", { exact: true }).selectOption("deepseek");
+  await expect(search).toContainText("未单独配置时，可复用 DeepSeek");
+  await expect(search).toContainText("网页搜索按次计费");
+  await expect(search.getByLabel("API Key", { exact: true })).toHaveValue("");
+  await page.getByRole("button", { name: "保存设置", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "设置保存操作", exact: true })
+      .getByRole("status"),
+  ).toContainText("检索配置已保存");
+  expect(writes).toHaveLength(1);
+  expect(writes[0].search_provider).toBe("deepseek");
+  expect(writes[0]).not.toHaveProperty("llm_api_key");
+  expect(writes[0]).not.toHaveProperty("search_api_key");
+  await search.getByRole("button", { name: "测试连接", exact: true }).click();
+  await expect(search).toContainText("连接正常，返回 1 条结果");
+  await page.reload();
+  await expect(search.getByLabel("检索服务", { exact: true })).toHaveValue(
+    "deepseek",
+  );
+  await noOverflow(page);
+});
