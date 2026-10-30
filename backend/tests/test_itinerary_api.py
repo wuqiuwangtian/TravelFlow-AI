@@ -68,6 +68,20 @@ async def test_edit_preserves_other_days_updates_graph_and_exports(environment):
     assert rejected.status_code == 409
 
 
+async def test_activity_edit_cannot_turn_a_real_stop_into_a_planning_origin(environment):
+    client, store, _, _ = environment
+    _, bid, before = await generate(client)
+    old = before["itinerary"]["days"][0]["activities"][0]
+    rejected = await client.put(
+        f"/api/versions/{before['version']['id']}/days/1/activities/{old['id']}",
+        json={"activity": {**old, "is_planning_origin": True}},
+    )
+    assert rejected.status_code == 400
+    assert "规划起点" in rejected.text
+    assert len(await store.list_versions(bid)) == 1
+    assert (await client.get(f"/api/versions/{before['version']['id']}")).json() == before
+
+
 async def test_fork_copies_historical_structured_state(environment):
     client, store, graph, _ = environment
     sid, bid, original = await generate(client)

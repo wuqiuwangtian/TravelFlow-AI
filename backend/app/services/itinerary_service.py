@@ -11,7 +11,7 @@ from uuid import uuid4
 import httpx
 
 from app.core.config import Settings
-from app.core.errors import ProviderError
+from app.core.errors import LLMOutputInvalid, ProviderError
 from app.domain.itinerary import (
     DayDraft,
     DayPlan,
@@ -101,6 +101,17 @@ def build_itinerary(drafts: list[DayDraft], requirements: Requirements) -> Itine
         for item in draft.activities:
             activity = ScheduledActivity(id=uuid4().hex[:12], **item.model_dump())
             _kind(activity)
+            if activity.is_planning_origin:
+                if activities or (activity.cost or 0) > 0 or (activity.transport_cost or 0) > 0:
+                    raise LLMOutputInvalid(
+                        "规划起点只能放在当天首项，不能同时作为消费或无起点的交通费用；原计划已保留。"
+                    )
+                activity.is_context_anchor = True
+                activity.duration_minutes = 0
+                activity.cost, activity.cost_basis, activity.cost_source = 0, "total", "estimate"
+                activity.transport_mode = "auto"
+                activity.transport_minutes, activity.transport_cost = None, None
+                activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
             if activities:
                 last = activities[-1]
                 same_place = bool(activity.place_name) and normal_name(
@@ -111,6 +122,7 @@ def build_itinerary(drafts: list[DayDraft], requirements: Requirements) -> Itine
                 if (
                     same_place
                     and last.city == activity.city
+                    and last.is_planning_origin == activity.is_planning_origin
                     and (last.title == activity.title or generic and last_generic)
                 ):
                     last.notes = "；".join(
@@ -139,6 +151,30 @@ def build_itinerary(drafts: list[DayDraft], requirements: Requirements) -> Itine
         if number not in seen:
             days.append(DayPlan(day=number, title="安排待补充"))
     return Itinerary(days=sorted(days, key=lambda day: day.day))
+
+
+def refresh_planning_origin_routes(itinerary: Itinerary, previous: Itinerary | None) -> None:
+    """新规划起点下的首段重新查路，不把原先悬空或旧起点的估算复制过来。"""
+    old_days = {day.day: day for day in previous.days} if previous else {}
+    for day in itinerary.days:
+        if len(day.activities) < 2 or not day.activities[0].is_planning_origin:
+            continue
+        origin, target = day.activities[:2]
+        old_day = old_days.get(day.day)
+        old_origin = old_day.activities[0] if old_day and old_day.activities else None
+        if (
+            old_origin
+            and old_origin.is_planning_origin
+            and (
+                old_origin.place_name,
+                old_origin.city,
+                old_origin.place.id if old_origin.place else None,
+            )
+            == (origin.place_name, origin.city, origin.place.id if origin.place else None)
+        ):
+            continue
+        target.transport_minutes, target.transport_cost = None, None
+        target.transport_cost_basis, target.transport_source_indices = "unknown", []
 
 
 def schedule_day(day: DayPlan) -> None:

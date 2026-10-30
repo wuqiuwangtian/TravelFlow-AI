@@ -17,7 +17,7 @@ export function journeyAttention(detail: VersionDetail) {
   for (const day of detail.itinerary?.days ?? []) {
     day.activities.forEach((activity, index) => {
       if (
-        !activity.is_context_anchor &&
+        (!activity.is_context_anchor || activity.is_planning_origin) &&
         !["completed", "skipped"].includes(activity.progress) &&
         !["free_time", "transport"].includes(activity.kind) &&
         (activity.place_status !== "matched" || !activity.place)

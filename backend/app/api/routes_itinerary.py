@@ -656,6 +656,8 @@ async def update_activity(
         if index is None:
             raise InvalidRequest("活动不存在")
         old = day.activities[index]
+        if old.is_planning_origin or payload.activity.is_planning_origin:
+            raise InvalidRequest("规划起点请通过对话调整或确认地点，不能按游览活动编辑。")
         activity = ScheduledActivity(id=activity_id, **payload.activity.model_dump())
         activity.progress, activity.progress_updated_at = old.progress, old.progress_updated_at
         activity.booking = old.booking

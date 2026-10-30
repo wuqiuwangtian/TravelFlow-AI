@@ -35,6 +35,10 @@ class Place(BaseModel):
 
 
 class Activity(BaseModel):
+    is_planning_origin: bool = Field(
+        default=False,
+        description="仅当每日第一项是尚未出发的规划起点时为true；不代表游览、住宿、消费或实际到访，停留及费用由程序置零。",
+    )
     title: str = Field(min_length=1, max_length=100)
     place_name: str = Field(default="", max_length=100)
     city: str = Field(default="", max_length=50)

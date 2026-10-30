@@ -13,7 +13,7 @@ from app.domain.itinerary import Itinerary, Place, ScheduledActivity
 from app.domain.models import Requirements
 from app.maps.amap import AmapProvider
 from app.maps.matching import choose_place
-from app.services.itinerary_service import enrich_itinerary
+from app.services.itinerary_service import enrich_itinerary, refresh_planning_origin_routes
 from app.services.journey_messages import itinerary_fingerprint
 from app.services.replan_service import explicit_day
 from app.services.travel_messages import _number
@@ -100,7 +100,7 @@ def _protected_ids(itinerary: Itinerary) -> set[str]:
             if (
                 activity.booking
                 or activity.progress != "not_started"
-                or activity.is_context_anchor
+                or (activity.is_context_anchor and not activity.is_planning_origin)
                 or index <= anchor
             ):
                 protected.add(activity.id)
@@ -157,7 +157,13 @@ async def _apply(
     activity.candidates = [p.model_copy(deep=True) for p in pending.candidates]
     activity.match_reason = "已按你的选择确认具体地点。"
     activity.source_indices = []
-    if pending.replacement:
+    if activity.is_planning_origin:
+        if pending.replacement:
+            activity.title = (selected.name + "（规划起点）")[:100]
+        activity.cost, activity.cost_basis, activity.cost_source = 0, "total", "estimate"
+        activity.duration_minutes = 0
+        activity.notes = (activity.notes + "；已确认规划起点，未记录到访或新增消费。")[-2000:]
+    elif pending.replacement:
         activity.title = selected.name[:100]
         activity.cost, activity.cost_basis, activity.cost_source = None, "unknown", "unknown"
         activity.notes = "已按你的要求更换地点，未核实的新费用保留未知。"
@@ -167,6 +173,7 @@ async def _apply(
     if pending.replacement or moved:
         activity.transport_minutes, activity.transport_cost = None, None
         activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
+    refresh_planning_origin_routes(working, itinerary)
     updated = await enrich_itinerary(working, requirements, settings, day_number=pending.day)
     if not any(a.id == pending.activity_id for d in updated.days for a in d.activities):
         return _prompt(

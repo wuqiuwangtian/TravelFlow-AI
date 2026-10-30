@@ -9,7 +9,12 @@ from app.core.logging import get_logger
 from app.domain.itinerary import DayDraft, Itinerary, ScheduledActivity
 from app.domain.models import Requirements, TodoItem
 from app.llm.base import ChatMessage, LLMProvider
-from app.services.itinerary_service import build_itinerary, enrich_itinerary, sync_markdown
+from app.services.itinerary_service import (
+    build_itinerary,
+    enrich_itinerary,
+    refresh_planning_origin_routes,
+    sync_markdown,
+)
 from app.services.replan_service import preserve_replan_scope
 from app.services.travel_service import preserve_travel_records
 
@@ -101,6 +106,22 @@ async def prepare_itinerary(
             candidates = existing.get((day.day, activity.title, activity.place_name), [])
             old = next((item for item in candidates if item.id not in used_ids), None)
             if old and (not activity.city or activity.city == old.city):
+                if (
+                    activity.is_planning_origin
+                    and not old.is_planning_origin
+                    and (
+                        old.booking
+                        or old.progress != "not_started"
+                        or old.cost_source == "manual"
+                        or previous
+                        and any(e.activity_id == old.id for e in previous.expenses)
+                        or previous
+                        and any(b.activity_id == old.id for b in previous.budget_items)
+                    )
+                ):
+                    raise LLMOutputInvalid(
+                        "该站已有预约、执行或费用记录，不能改作规划起点；请补充独立的出发位置。"
+                    )
                 used_ids.add(old.id)
                 activity.id, activity.place = old.id, old.place
                 activity.place_status, activity.candidates = old.place_status, old.candidates
@@ -122,6 +143,7 @@ async def prepare_itinerary(
         elif scope_day is not None:
             preserve_replan_scope(previous, itinerary, scope_day)
     emit_progress("routes", "正在匹配地点并校验每日路线…")
+    refresh_planning_origin_routes(itinerary, previous)
     if scope_days is None:
         itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=scope_day)
     else:

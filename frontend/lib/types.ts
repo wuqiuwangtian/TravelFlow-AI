@@ -191,6 +191,7 @@ export interface Place {
 }
 
 export interface Activity {
+  is_planning_origin?: boolean;
   title: string;
   place_name: string;
   city: string;

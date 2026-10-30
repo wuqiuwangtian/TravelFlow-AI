@@ -370,47 +370,49 @@ export function ItineraryPanel({
                 )}
                 <div className="mt-4 border-t border-line pt-3">
                   <p className="text-xs text-muted">
-                    旅中状态：
-                    {progressLabels[active.progress ?? "not_started"]}
+                    {active.is_planning_origin
+                      ? "规划起点 · 尚未出发，不计作游览或住宿消费。"
+                      : `旅中状态：${progressLabels[active.progress ?? "not_started"]}`}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(active.progress === "completed" ||
-                    active.progress === "skipped"
-                      ? (["not_started"] as const)
-                      : (["in_progress", "completed", "skipped"] as const)
-                    )
-                      .filter((status) => status !== active.progress)
-                      .map((status) => (
-                        <button
-                          type="button"
-                          key={status}
-                          disabled={!editable || disabled || busy}
-                          className="rounded-lg border border-accent-line px-2.5 py-1.5 text-xs text-accent disabled:opacity-40"
-                          onClick={async () => {
-                            const ok = await mutate(() =>
-                              api.updateProgress(
-                                detail.version.id,
-                                day.day,
-                                active.id,
-                                status,
-                              ),
-                            );
-                            if (
-                              ok &&
-                              (status === "completed" || status === "skipped")
-                            )
-                              setSelected(null);
-                          }}
-                        >
-                          {status === "not_started"
-                            ? "恢复未开始"
-                            : status === "in_progress"
-                              ? "开始这一站"
-                              : status === "completed"
-                                ? "标记完成"
-                                : "跳过这一站"}
-                        </button>
-                      ))}
+                    {!active.is_planning_origin &&
+                      (active.progress === "completed" ||
+                      active.progress === "skipped"
+                        ? (["not_started"] as const)
+                        : (["in_progress", "completed", "skipped"] as const)
+                      )
+                        .filter((status) => status !== active.progress)
+                        .map((status) => (
+                          <button
+                            type="button"
+                            key={status}
+                            disabled={!editable || disabled || busy}
+                            className="rounded-lg border border-accent-line px-2.5 py-1.5 text-xs text-accent disabled:opacity-40"
+                            onClick={async () => {
+                              const ok = await mutate(() =>
+                                api.updateProgress(
+                                  detail.version.id,
+                                  day.day,
+                                  active.id,
+                                  status,
+                                ),
+                              );
+                              if (
+                                ok &&
+                                (status === "completed" || status === "skipped")
+                              )
+                                setSelected(null);
+                            }}
+                          >
+                            {status === "not_started"
+                              ? "恢复未开始"
+                              : status === "in_progress"
+                                ? "开始这一站"
+                                : status === "completed"
+                                  ? "标记完成"
+                                  : "跳过这一站"}
+                          </button>
+                        ))}
                   </div>
                 </div>
                 <OnTripControls
@@ -674,7 +676,8 @@ export function ItineraryPanel({
                         )}
                         {activity.place_status !== "matched" &&
                           activity.kind !== "free_time" &&
-                          !activity.is_context_anchor &&
+                          (!activity.is_context_anchor ||
+                            activity.is_planning_origin) &&
                           !activity.booking &&
                           (!day.replan_context ||
                             index >

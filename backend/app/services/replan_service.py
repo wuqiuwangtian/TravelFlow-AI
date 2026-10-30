@@ -133,6 +133,10 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
         anchor_index = next(i for i, a in enumerate(day.activities) if a.id == anchor.id)
         if end_index <= anchor_index:
             raise InvalidRequest("结束地点需位于出发地点之后")
+    if anchor.is_planning_origin:
+        anchor.is_planning_origin = False
+        anchor.title = f"当前位置：{anchor.place_name}"
+        anchor.progress, anchor.progress_updated_at = "in_progress", datetime.now()
     day.replan_context = ReplanContext(
         activity_id=anchor.id,
         time=data.time,

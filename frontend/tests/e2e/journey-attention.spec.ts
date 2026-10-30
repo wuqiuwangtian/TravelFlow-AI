@@ -36,6 +36,96 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("规划起点可刷新后确认地点，不新增住宿费用或到访记录，预约与账目保留", async ({
+  page,
+}) => {
+  const trip = await (
+    await page.request.post(`${proxy}/test/places?planning_origin=true`)
+  ).json();
+  const original = await saved(page, trip.session_id);
+  const version = original.versions[trip.branch_id].at(-1).id;
+  const baseline = await (
+    await page.request.get(`${proxy}/api/versions/${version}`)
+  ).json();
+  const planned = baseline.itinerary.days[1].activities[0];
+  const endpoint = `${proxy}/api/versions/${version}/days/2/activities/${planned.id}`;
+  expect(
+    (
+      await page.request.patch(`${endpoint}/progress`, {
+        data: { progress: "completed" },
+      })
+    ).status(),
+  ).toBe(400);
+  expect(
+    (
+      await page.request.put(endpoint, {
+        data: {
+          activity: { ...planned, is_planning_origin: false, cost: 300 },
+        },
+      })
+    ).status(),
+  ).toBe(400);
+  await page.goto(`/chat/${trip.session_id}`);
+  await attention(page).locator("summary").click();
+  await attention(page)
+    .getByRole("button", { name: "查看第2天第1站待明确地点", exact: true })
+    .click();
+  const active = page.getByRole("region", { name: "当前站点", exact: true });
+  await expect(active).toContainText("规划起点 · 尚未出发");
+  await expect(
+    active.getByRole("button", { name: "标记完成", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    active.getByRole("button", { name: "记录已有预约", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "确认第2天第1站的地点", exact: true })
+    .click();
+  const prompt = page.getByLabel("待补充的信息", { exact: true });
+  await expect(
+    prompt.getByRole("button", { name: /西单店.*西单路2号/ }),
+  ).toBeVisible();
+  expect(
+    (await saved(page, trip.session_id)).versions[trip.branch_id],
+  ).toHaveLength(1);
+  await page.reload();
+  await expect(
+    prompt.getByRole("button", { name: /西单店.*西单路2号/ }),
+  ).toBeVisible();
+  await prompt.getByRole("button", { name: /西单店.*西单路2号/ }).click();
+  await expect(prompt).toHaveCount(0);
+  const current = await saved(page, trip.session_id);
+  expect(current.versions[trip.branch_id]).toHaveLength(2);
+  const detail = await (
+    await page.request.get(
+      `${proxy}/api/versions/${current.versions[trip.branch_id].at(-1).id}`,
+    )
+  ).json();
+  const origin = detail.itinerary.days[1].activities[0];
+  expect(origin).toMatchObject({
+    is_planning_origin: true,
+    is_context_anchor: true,
+    duration_minutes: 0,
+    cost: 0,
+    progress: "not_started",
+    place: { id: "west" },
+  });
+  expect(detail.itinerary.days[1].activities[1].booking).toEqual(
+    baseline.itinerary.days[1].activities[1].booking,
+  );
+  expect(detail.itinerary.days[0]).toEqual(baseline.itinerary.days[0]);
+  expect(detail.itinerary.expenses).toEqual(baseline.itinerary.expenses);
+  expect(detail.itinerary.budget_items).toEqual(
+    baseline.itinerary.budget_items,
+  );
+  expect(
+    detail.budget_overview.rows.some(
+      (row: { activity_id: string }) => row.activity_id === origin.id,
+    ),
+  ).toBe(false);
+  await noOverflow(page);
+});
+
 for (const theme of ["paper", "guide", "night"]) {
   test(`整趟旅行集中展示待定位、未定价及时间冲突，只读查看不写版本（${theme}）`, async ({
     page,

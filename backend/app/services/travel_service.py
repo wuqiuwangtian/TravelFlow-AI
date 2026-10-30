@@ -107,6 +107,10 @@ def set_progress(
     activity = next((a for a in day.activities if a.id == activity_id), None) if day else None
     if not activity:
         raise InvalidRequest("活动不存在")
+    if activity.is_planning_origin and progress != "not_started":
+        raise InvalidRequest(
+            "规划起点不作为游览记录；实际出发请使用「从这里调整后续」说明当前时间。"
+        )
     activity.progress, activity.progress_updated_at = progress, datetime.now()
 
 
@@ -142,6 +146,7 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
                         i
                         for i, a in enumerate(day.activities)
                         if a.id not in restored
+                        and not a.is_planning_origin
                         and a.place_name == old.place_name
                         and a.city == old.city
                         and bool(old.place_name)
@@ -149,10 +154,28 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
                     None,
                 )
             if index is not None:
-                day.activities[index] = old.model_copy(deep=True)
+                kept = old.model_copy(deep=True)
+                old_index = old_day.activities.index(old)
+                old_from = old_day.activities[old_index - 1] if old_index else None
+                new_from = day.activities[index - 1] if index else None
+                old_key = (old_from.id, old_from.is_planning_origin) if old_from else None
+                new_key = (new_from.id, new_from.is_planning_origin) if new_from else None
+                if old.booking and old.progress == "not_started" and old_key != new_key:
+                    # 预约的地点、时刻和停留保留；改变起点后的到达交通仍须重算。
+                    for field in (
+                        "transport_mode",
+                        "transport_minutes",
+                        "transport_cost",
+                        "transport_cost_basis",
+                        "transport_source_indices",
+                    ):
+                        setattr(kept, field, getattr(day.activities[index], field))
+                day.activities[index] = kept
             else:
                 # 缺失的历史站点按原相对次序保留在后续安排之前。
                 position = sum(a.progress != "not_started" for a in day.activities)
+                if old.booking and day.activities and day.activities[0].is_planning_origin:
+                    position = max(position, 1)
                 day.activities.insert(position, old.model_copy(deep=True))
             restored.add(old.id)
     current.days.sort(key=lambda d: d.day)

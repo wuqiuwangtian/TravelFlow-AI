@@ -285,12 +285,38 @@ async def legacy():
 
 
 @app.post("/test/places")
-async def place_trip(attention: bool = False):
+async def place_trip(attention: bool = False, planning_origin: bool = False):
     store = app.state.store
     session = await store.create_session("地点候选验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     itinerary = place_itinerary()
     req = requirements().model_copy(update={"duration_days": 2})
+    if planning_origin:
+        first, second = itinerary.days
+        second.activities[0].booking = Booking(start_time="10:00", duration_minutes=60)
+        second.activities.insert(
+            0,
+            ScheduledActivity(
+                id="planned-origin",
+                title="规划出发点",
+                place_name="示例餐厅",
+                city="北京",
+                kind="other",
+                is_planning_origin=True,
+                is_context_anchor=True,
+                duration_minutes=0,
+                cost=0,
+                cost_basis="total",
+                cost_source="estimate",
+                start_time="09:00",
+                candidates=first.activities[0].candidates,
+                place_status="ambiguous",
+            ),
+        )
+        second.legs = [RouteLeg(from_id="planned-origin", to_id="dinner", mode="transit")]
+        for day in itinerary.days:
+            schedule_day(day)
+            summarise_day(day, req)
     if attention:
         req.travelers, req.budget_basis = None, None
         first, second = itinerary.days
