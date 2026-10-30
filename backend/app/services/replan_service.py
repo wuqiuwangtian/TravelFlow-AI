@@ -137,6 +137,7 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
         anchor.is_planning_origin = False
         anchor.title = f"当前位置：{anchor.place_name}"
         anchor.progress, anchor.progress_updated_at = "in_progress", datetime.now()
+        anchor.start_time, anchor.start_day_offset = data.time, data.start_day_offset
     day.replan_context = ReplanContext(
         activity_id=anchor.id,
         time=data.time,

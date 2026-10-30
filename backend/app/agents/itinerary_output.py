@@ -16,7 +16,7 @@ from app.services.itinerary_service import (
     sync_markdown,
 )
 from app.services.replan_service import preserve_replan_scope
-from app.services.travel_service import preserve_travel_records
+from app.services.travel_service import detach_missing_activity_links, preserve_travel_records
 
 logger = get_logger(__name__)
 
@@ -137,7 +137,7 @@ async def prepare_itinerary(
             else:
                 activity.cost_source = "estimate" if activity.cost is not None else "unknown"
     if previous:
-        preserve_travel_records(previous, itinerary)
+        preserve_travel_records(previous, itinerary, detach_missing=False)
         if scope_days is not None:
             preserve_replan_scope(previous, itinerary, scope_days)
         elif scope_day is not None:
@@ -149,6 +149,7 @@ async def prepare_itinerary(
     else:
         for number in sorted(scope_days):
             itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=number)
+    detach_missing_activity_links(itinerary)
     return itinerary, sync_markdown(markdown, itinerary, requirements)
 
 

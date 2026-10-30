@@ -21,7 +21,7 @@ from geo_fixtures import GeoMaps  # noqa: E402
 from linked_fixtures import linked_itinerary  # noqa: E402
 from move_fixtures import move_itinerary  # noqa: E402
 from ordinary_journey_fixtures import FLOW_MARKER, JourneyMaps, journey_drafts  # noqa: E402
-from place_fixtures import connected_place_itinerary, place_itinerary  # noqa: E402
+from place_fixtures import connected_place_itinerary, place_itinerary, replan_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
 from app.agents.graph import build_graph  # noqa: E402
@@ -31,7 +31,7 @@ from app.agents.nodes.collector import (  # noqa: E402
     DestinationOptions,
 )
 from app.agents.nodes.planner import PlanOutput  # noqa: E402
-from app.agents.nodes.refiner import OnTripUpdate, RefineIntent  # noqa: E402
+from app.agents.nodes.refiner import OnTripUpdate, RefineIntent, RevisionOutput  # noqa: E402
 from app.agents.state import initial_state  # noqa: E402
 from app.api import (  # noqa: E402
     routes_chat,
@@ -47,7 +47,14 @@ from app.core.errors import (
     register_exception_handlers,  # noqa: E402
 )
 from app.domain.enums import PlanStatus  # noqa: E402
-from app.domain.itinerary import Booking, BudgetItem, ExpenseCreate, RouteLeg, ScheduledActivity  # noqa: E402
+from app.domain.itinerary import (
+    Booking,
+    BudgetItem,
+    DayDraft,
+    ExpenseCreate,
+    RouteLeg,
+    ScheduledActivity,
+)  # noqa: E402
 from app.domain.models import Requirements  # noqa: E402
 from app.domain.studio_adoption import StudioPlanDraft  # noqa: E402
 from app.domain.studio_candidates import CandidateDraft  # noqa: E402
@@ -79,6 +86,24 @@ class BrowserLLM(FakeLLM):
         return await super().chat(messages, **kwargs)
 
     async def structured(self, messages, schema, **kwargs):
+        if schema is RefineIntent and "现在09:45我在示例酒店" in messages[0].content:
+            return RefineIntent(
+                intent="modify",
+                on_trip=OnTripUpdate(location_name="示例酒店", time="09:45", end_time="18:00"),
+            )
+        if schema is RevisionOutput and "示例展馆" in messages[0].content:
+            failure = re.search(r"replan-error-[a-f0-9]{12}", messages[0].content)
+            if failure and failure[0] not in self.failed_workflow_cases:
+                self.failed_workflow_cases.add(failure[0])
+                raise LLMAuthenticationFailed("测试旅中调整模型暂不可用，原行程与待补日期保留。")
+            return RevisionOutput(
+                markdown=MARKDOWN,
+                days=[
+                    DayDraft(
+                        day=2, activities=[replan_itinerary().days[1].activities[1].model_dump()]
+                    )
+                ],
+            )
         flow = any(FLOW_MARKER in message.content for message in messages)
         if flow and schema is PlanOutput:
             failure = re.search(r"flow-error-([a-f0-9]{12})", messages[0].content)
@@ -286,14 +311,23 @@ async def legacy():
 
 @app.post("/test/places")
 async def place_trip(
-    attention: bool = False, planning_origin: bool = False, connected: bool = False
+    attention: bool = False,
+    planning_origin: bool = False,
+    connected: bool = False,
+    replan: bool = False,
 ):
     store = app.state.store
     session = await store.create_session("地点候选验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
-    itinerary = connected_place_itinerary(matched=False) if connected else place_itinerary()
+    itinerary = (
+        replan_itinerary()
+        if replan
+        else connected_place_itinerary(matched=False)
+        if connected
+        else place_itinerary()
+    )
     req = requirements().model_copy(update={"duration_days": 2})
-    if connected:
+    if connected or replan:
         itinerary = await itinerary_service.enrich_itinerary(
             itinerary, req, Settings(_env_file=None, amap_api_key=None)
         )

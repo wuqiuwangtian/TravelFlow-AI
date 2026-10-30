@@ -97,7 +97,13 @@ def _nodes(values: dict, citations: int, version_count: int) -> list[WorkflowNod
         plan_facts.append(fact("结构化行程", "尚未整理，文字与结构化数据分开展示"))
     pending = any(
         values.get(key)
-        for key in ("pending_journey", "pending_place", "pending_linked", "pending_move")
+        for key in (
+            "pending_journey",
+            "pending_place",
+            "pending_linked",
+            "pending_move",
+            "pending_replan",
+        )
     )
     edit_facts = [
         fact("本方案保存版本", f"{version_count}份"),

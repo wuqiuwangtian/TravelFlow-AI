@@ -30,7 +30,13 @@ def ensure_available(detail: VersionDetail, snapshot) -> None:
         raise ConflictError("旅行已结束，请先在原方案重新开启旅行。")
     if any(
         snapshot.values.get(key)
-        for key in ("pending_journey", "pending_place", "pending_linked", "pending_move")
+        for key in (
+            "pending_journey",
+            "pending_place",
+            "pending_linked",
+            "pending_move",
+            "pending_replan",
+        )
     ):
         raise ConflictError("原对话还有待确认操作，请先确认或取消，再重跑节点。")
     if snapshot.next or any(task.error or task.interrupts for task in snapshot.tasks):

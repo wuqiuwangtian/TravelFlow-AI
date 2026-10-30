@@ -166,3 +166,31 @@ def connected_place_itinerary(*, matched=True):
         )
     )
     return plan
+
+
+def replan_itinerary():
+    plan = place_itinerary()
+    hotel = plan.days[0].activities[1].place
+    origin = ScheduledActivity(
+        id="departure",
+        title="规划酒店出发点",
+        place_name="示例酒店",
+        city="北京",
+        place=hotel,
+        place_status="matched",
+        start_time="09:00",
+        duration_minutes=0,
+        cost=0,
+        cost_basis="total",
+        is_context_anchor=True,
+        is_planning_origin=True,
+    )
+    booked = plan.days[1].activities[0]
+    booked.title, booked.place_name, booked.kind = "预约展馆", "示例展馆", "attraction"
+    booked.place = candidates()[0].model_copy(update={"id": "museum", "name": "示例展馆"})
+    booked.place_status = "matched"
+    booked.booking = Booking(start_time="10:00", duration_minutes=120)
+    booked.transport_mode, booked.transport_minutes = "transit", 45
+    booked.transport_cost, booked.transport_cost_basis = 8, "total"
+    plan.days[1].activities.insert(0, origin)
+    return plan

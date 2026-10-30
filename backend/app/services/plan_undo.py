@@ -246,7 +246,13 @@ async def undo_plan(store: SessionStore, graph, version_id: str, payload: UndoPl
     values = dict(snapshot.values or {})
     if snapshot.next or any(
         values.get(key)
-        for key in ("pending_journey", "pending_place", "pending_linked", "pending_move")
+        for key in (
+            "pending_journey",
+            "pending_place",
+            "pending_linked",
+            "pending_move",
+            "pending_replan",
+        )
     ):
         raise ConflictError("请先完成或取消对话中的待确认操作，再撤销规划。")
     if (

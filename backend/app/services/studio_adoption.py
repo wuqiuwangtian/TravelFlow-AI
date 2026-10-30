@@ -83,7 +83,13 @@ async def adoption_base(store: SessionStore, graph, branch_id: str) -> AdoptionB
         blocker = "旅行已结束，请先在原方案重新开启旅行，再采用新成稿。"
     elif any(
         values.get(key)
-        for key in ("pending_journey", "pending_place", "pending_linked", "pending_move")
+        for key in (
+            "pending_journey",
+            "pending_place",
+            "pending_linked",
+            "pending_move",
+            "pending_replan",
+        )
     ):
         blocker = "原对话还有待确认操作，请先确认或取消，再采用工程成稿。"
     elif snapshot.next or any(task.error or task.interrupts for task in snapshot.tasks):
@@ -712,6 +718,7 @@ async def commit_preview(store: SessionStore, graph, preview: AdoptionPreview) -
         "revision": int(base.snapshot.values.get("revision", 0)) + 1,
         "pending_journey": None,
         "pending_place": None,
+        "pending_replan": None,
         "pending_linked": None,
         "pending_move": None,
         "updated_at": datetime.now(UTC),

@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Literal
 
 from langchain_core.messages import AIMessage
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.agents.detail_levels import detail_name, target_length_text
 from app.agents.itinerary_output import PlanDetails, prepare_itinerary
@@ -30,8 +29,9 @@ from app.core.config import Settings
 from app.core.errors import AppError, InvalidRequest, SearchUnavailable
 from app.core.logging import get_logger
 from app.domain.enums import DetailLevel, PlanStatus
-from app.domain.itinerary import ClockTime, Itinerary, ReplanInput
-from app.domain.models import Requirements
+from app.domain.itinerary import Itinerary, ReplanInput
+from app.domain.refinement import OnTripUpdate as OnTripUpdate
+from app.domain.refinement import RefineIntent
 from app.llm.base import ChatMessage, LLMProvider
 from app.search.base import SearchProvider
 from app.services.activity_move_messages import handle_move_message
@@ -47,6 +47,7 @@ from app.services.linked_replan_messages import (
 )
 from app.services.linked_replan_service import preview_linked_replan
 from app.services.place_messages import handle_place_message
+from app.services.replan_clarification import ask_replan_day, resume_replan_day
 from app.services.replan_service import explicit_day, explicit_days, set_replan_context
 from app.services.travel_time import time_label
 
@@ -54,45 +55,6 @@ logger = get_logger(__name__)
 
 APPROVE_REPLY = "太好了！计划已确认。你可以在右侧导出 Markdown 或 HTML 保存下来。"
 UNCLEAR_REPLY = "请问您想调整哪一部分？例如「第二天轻松一点」「换一家酒店」「预算降到 1500」。"
-
-
-class OnTripUpdate(BaseModel):
-    day: int | None = Field(default=None, ge=1, le=60)
-    location_name: str = Field(default="", max_length=100)
-    city: str = Field(default="", max_length=50)
-    time: ClockTime
-    start_day_offset: int = Field(
-        default=0, ge=0, le=60, description="出发时刻相对该行程日的天数偏移，当日0、次日1"
-    )
-    end_time: ClockTime | None = None
-    end_day_offset: int = Field(
-        default=0,
-        ge=0,
-        le=60,
-        description="结束时刻相对该行程日的天数偏移，当日0、次日1；不擅自推断跨日",
-    )
-    end_location_name: str = Field(default="", max_length=100)
-
-
-class RefineIntent(BaseModel):
-    """意图判定结果 —— 用枚举替代字符串包含判断，消除误判。"""
-
-    intent: Literal["approve", "modify", "unclear"]
-    summary: str = Field(default="", description="一句话概括用户想要什么")
-    clear_preferences: bool = Field(
-        default=False, description="用户明确要求清空或不沿用本次偏好时为true"
-    )
-    requirements: Requirements = Field(
-        default_factory=Requirements, description="只提取本次明确改变的出行需求"
-    )
-    needs_research: bool = Field(
-        default=False,
-        description="新增景点、酒店、修改目的地或日期等需要新资料时为 true，改措辞、顺序则为 false",
-    )
-    on_trip: OnTripUpdate | None = Field(
-        default=None,
-        description="用户明确描述旅途中起点和出发时间时提取，未提及则为空；不猜测时间或地点。",
-    )
 
 
 class RevisionOutput(PlanDetails):
@@ -119,14 +81,33 @@ def make_refiner_node(
         pending_place = state.get("pending_place")
         pending_linked = state.get("pending_linked")
         pending_move = state.get("pending_move")
+        pending_replan = state.get("pending_replan")
+        resumed_verdict = None
         human_messages = [m for m in state.get("messages", []) if m.type == "human"]
-        if (pending or pending_place or pending_linked or pending_move) and CANCEL.fullmatch(
-            user_text.strip()
-        ):
+        if (
+            pending or pending_place or pending_linked or pending_move or pending_replan
+        ) and CANCEL.fullmatch(user_text.strip()):
             return {
                 "messages": [AIMessage(content="已取消这次待确认操作，行程和账目没有改变。")],
                 "updated_at": datetime.now(),
             }
+        if (
+            pending_replan
+            and current
+            and len(human_messages) >= 2
+            and human_messages[-2].id == pending_replan.after_message_id
+        ):
+            resumed = resume_replan_day(
+                user_text, pending_replan, current, human_messages[-1].id or ""
+            )
+            if resumed:
+                if resumed.reply:
+                    return {
+                        "pending_replan": resumed.pending,
+                        "messages": [AIMessage(content=resumed.reply)],
+                        "updated_at": datetime.now(),
+                    }
+                user_text, resumed_verdict = resumed.message, resumed.verdict
         apply_text = re.sub(r"^(?:好的?[，,、\s]*|请|帮我)\s*", "", user_text.strip()).rstrip(
             "。！! "
         )
@@ -326,7 +307,7 @@ def make_refiner_node(
             plan_markdown = sync_markdown(plan_markdown, current, requirements)
 
         # ---- 1. 意图判定 ----
-        verdict = await llm.structured(
+        verdict = resumed_verdict or await llm.structured(
             [
                 ChatMessage(
                     role="system",
@@ -426,14 +407,17 @@ def make_refiner_node(
                     update.day or scope_day or (active_days[0] if len(active_days) == 1 else None)
                 )
                 if scope_day is None:
+                    assert original_itinerary is not None
+                    question = ask_replan_day(
+                        batch.request_text if batch else last_user_text(state),
+                        verdict,
+                        original_itinerary,
+                        human_messages[-1].id or "",
+                        refinement=batch.refinement if batch else "",
+                    )
                     return {
-                        "messages": [
-                            AIMessage(
-                                content=("本次没有保存任何操作。" if batch else "")
-                                + "请说明现在是旅程第几天，"
-                                "例如「第2天14:00，我在景山，18:00前结束」。"
-                            )
-                        ],
+                        "pending_replan": question,
+                        "messages": [AIMessage(content=question.prompt)],
                         "updated_at": datetime.now(),
                     }
                 working = current.model_copy(deep=True)
@@ -625,6 +609,7 @@ def make_refiner_node(
         result.setdefault("pending_place", None)
         result.setdefault("pending_linked", None)
         result.setdefault("pending_move", None)
+        result.setdefault("pending_replan", None)
         return result
 
     return refiner

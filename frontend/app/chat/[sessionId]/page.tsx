@@ -690,7 +690,9 @@ export default function ChatPage() {
                               ? "搬移景点选择"
                               : clarification.kind === "linked_replan"
                                 ? "两天调整操作"
-                                : "地点候选选择"
+                                : clarification.kind === "replan_day"
+                                  ? "旅中调整日期选择"
+                                  : "地点候选选择"
                         }
                         className="my-2 grid max-h-64 min-w-0 gap-2 overflow-y-auto"
                       >

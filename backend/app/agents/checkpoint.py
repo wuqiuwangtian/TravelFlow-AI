@@ -28,6 +28,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 _ALLOWED_JSON_MODULES: list[tuple[str, ...]] = [
     ("app.domain.linked_replan",),
     ("app.domain.clarification",),
+    ("app.domain.refinement",),
     ("app.domain.models",),
     ("app.domain.itinerary",),
     ("app.domain.enums",),
@@ -45,6 +46,9 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, ...]] = [
     ("app.domain.itinerary", "LinkedReplanNote"),
     ("app.domain.clarification", "JourneyClarification"),
     ("app.domain.clarification", "PlaceClarification"),
+    ("app.domain.clarification", "ReplanClarification"),
+    ("app.domain.refinement", "RefineIntent"),
+    ("app.domain.refinement", "OnTripUpdate"),
     ("app.domain.clarification", "PlaceTarget"),
     ("app.domain.clarification", "ExpenseTarget"),
     ("app.domain.itinerary", "Itinerary"),

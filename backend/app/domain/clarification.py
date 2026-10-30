@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.itinerary import Place
 from app.domain.linked_replan import LinkedReplanPreview, MoveClarification
+from app.domain.refinement import RefineIntent
 
 ClarificationKind = Literal["day", "amount", "activity", "expense"]
 
@@ -54,16 +55,32 @@ class PlaceClarification(BaseModel):
     after_message_id: str = ""
 
 
+class ReplanClarification(BaseModel):
+    kind: Literal["replan_day"] = "replan_day"
+    message: str = Field(max_length=8000)
+    refinement: str = Field(default="", max_length=8000)
+    verdict: RefineIntent
+    days: list[int] = Field(max_length=60)
+    prompt: str
+    itinerary_fingerprint: str
+    after_message_id: str = ""
+
+
 def clarification_prompt(
     pending: JourneyClarification
     | PlaceClarification
     | LinkedReplanPreview
     | MoveClarification
+    | ReplanClarification
     | None,
 ) -> dict[str, Any] | None:
     if not pending:
         return None
     result: dict[str, Any] = {"kind": pending.kind, "prompt": pending.prompt}
+    if isinstance(pending, ReplanClarification):
+        result["options"] = [
+            {"label": f"第{day}天", "reply": f"第{day}天"} for day in pending.days[:12]
+        ]
     if isinstance(pending, MoveClarification):
         result["options"] = [
             {"label": f"{i}. {c.label}", "reply": f"选第{i}个"}

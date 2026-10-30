@@ -114,7 +114,9 @@ def set_progress(
     activity.progress, activity.progress_updated_at = progress, datetime.now()
 
 
-def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
+def preserve_travel_records(
+    previous: Itinerary, current: Itinerary, *, detach_missing: bool = True
+) -> None:
     """模型只能改未来安排；旅中历史由用户的明确操作修改。"""
     current.expenses = [entry.model_copy(deep=True) for entry in previous.expenses]
     current.adjustments = [entry.model_copy(deep=True) for entry in previous.adjustments]
@@ -179,9 +181,14 @@ def preserve_travel_records(previous: Itinerary, current: Itinerary) -> None:
                 day.activities.insert(position, old.model_copy(deep=True))
             restored.add(old.id)
     current.days.sort(key=lambda d: d.day)
-    # 未来站点被替换后，保留实际消费，解除过期活动链接。
-    ids = {a.id for d in current.days for a in d.activities}
-    for entry in current.expenses:
+    if detach_missing:
+        detach_missing_activity_links(current)
+
+
+def detach_missing_activity_links(itinerary: Itinerary) -> None:
+    """完整日程恢复及裁剪之后，才解除确实已移除活动的消费链接。"""
+    ids = {a.id for d in itinerary.days for a in d.activities}
+    for entry in itinerary.expenses:
         if entry.activity_id not in ids:
             entry.activity_id = None
         if (

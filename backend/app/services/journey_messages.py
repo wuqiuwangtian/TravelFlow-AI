@@ -76,6 +76,7 @@ class JourneyMessage:
     itinerary: Itinerary | None = None
     replies: list[str] = field(default_factory=list)
     refinement: str = ""
+    request_text: str = ""
     booking_days: set[int] = field(default_factory=set)
     clarification: JourneyClarification | None = None
 
@@ -210,6 +211,11 @@ def prepare_journey_message(
                 result.refinement = (
                     f"第{day}天，{tail}" if day and explicit_day(tail) is None else tail
                 )
+                recorded = [
+                    f"第{scope}天，{clause}" if scope and explicit_day(clause) is None else clause
+                    for clause, scope in zip(clauses[:index], day_scopes[:index], strict=True)
+                ]
+                result.request_text = "；".join([*recorded, result.refinement])
                 return result
             return fail(index, "这部分还不能明确执行，请说明具体要记录或调整的内容。")
         # 不把同一片段中未分清的多个站点或日期偷偷当作第一站处理。
