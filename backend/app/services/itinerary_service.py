@@ -153,6 +153,14 @@ def build_itinerary(drafts: list[DayDraft], requirements: Requirements) -> Itine
     return Itinerary(days=sorted(days, key=lambda day: day.day))
 
 
+def clear_place_route_estimates(day: DayPlan, activity_id: str) -> None:
+    """地点改变会同时影响到达和离开两段；旧估算不能用于新的端点。"""
+    index = next(i for i, activity in enumerate(day.activities) if activity.id == activity_id)
+    for target in day.activities[index : index + 2]:
+        target.transport_minutes, target.transport_cost = None, None
+        target.transport_cost_basis, target.transport_source_indices = "unknown", []
+
+
 def refresh_planning_origin_routes(itinerary: Itinerary, previous: Itinerary | None) -> None:
     """新规划起点下的首段重新查路，不把原先悬空或旧起点的估算复制过来。"""
     old_days = {day.day: day for day in previous.days} if previous else {}

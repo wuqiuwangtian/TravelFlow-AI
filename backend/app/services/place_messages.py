@@ -13,7 +13,7 @@ from app.domain.itinerary import Itinerary, Place, ScheduledActivity
 from app.domain.models import Requirements
 from app.maps.amap import AmapProvider
 from app.maps.matching import choose_place
-from app.services.itinerary_service import enrich_itinerary, refresh_planning_origin_routes
+from app.services.itinerary_service import clear_place_route_estimates, enrich_itinerary
 from app.services.journey_messages import itinerary_fingerprint
 from app.services.replan_service import explicit_day
 from app.services.travel_messages import _number
@@ -148,7 +148,11 @@ async def _apply(
         return PlaceReply(
             "此站已有预约或旅中记录，地点没有改变。请先核对或更正已有记录，再修改地点。"
         )
-    moved = activity.place is not None and activity.place.id != selected.id
+    moved = activity.place is None or (
+        activity.place.id,
+        activity.place.longitude,
+        activity.place.latitude,
+    ) != (selected.id, selected.longitude, selected.latitude)
     activity.place = selected.model_copy(deep=True)
     activity.place_name = selected.name
     activity.city = selected.city or activity.city
@@ -171,9 +175,8 @@ async def _apply(
         activity.cost_source = "estimate"
         activity.notes = (activity.notes + "；地点已确认，费用沿用原估算，实际价格待核实。")[-2000:]
     if pending.replacement or moved:
-        activity.transport_minutes, activity.transport_cost = None, None
-        activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
-    refresh_planning_origin_routes(working, itinerary)
+        day = next(d for d in working.days if d.day == pending.day)
+        clear_place_route_estimates(day, activity.id)
     updated = await enrich_itinerary(working, requirements, settings, day_number=pending.day)
     if not any(a.id == pending.activity_id for d in updated.days for a in d.activities):
         return _prompt(
@@ -190,7 +193,7 @@ async def _apply(
     if any("冲突" in w for w in day.warnings):
         reply += "仍有时间冲突，已有预约保持，详情见时间轴。"
     if any(leg.status not in {"ok", "planned"} for leg in day.legs):
-        reply += "部分交通尚未核实，已保留建议安排。"
+        reply += "部分交通尚未核实，未取得的耗时或价格保留未知。"
     return PlaceReply(reply, itinerary=updated)
 
 

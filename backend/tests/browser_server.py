@@ -21,7 +21,7 @@ from geo_fixtures import GeoMaps  # noqa: E402
 from linked_fixtures import linked_itinerary  # noqa: E402
 from move_fixtures import move_itinerary  # noqa: E402
 from ordinary_journey_fixtures import FLOW_MARKER, JourneyMaps, journey_drafts  # noqa: E402
-from place_fixtures import place_itinerary  # noqa: E402
+from place_fixtures import connected_place_itinerary, place_itinerary  # noqa: E402
 
 from app.agents.checkpoint import open_checkpointer, thread_config  # noqa: E402
 from app.agents.graph import build_graph  # noqa: E402
@@ -285,12 +285,18 @@ async def legacy():
 
 
 @app.post("/test/places")
-async def place_trip(attention: bool = False, planning_origin: bool = False):
+async def place_trip(
+    attention: bool = False, planning_origin: bool = False, connected: bool = False
+):
     store = app.state.store
     session = await store.create_session("地点候选验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
-    itinerary = place_itinerary()
+    itinerary = connected_place_itinerary(matched=False) if connected else place_itinerary()
     req = requirements().model_copy(update={"duration_days": 2})
+    if connected:
+        itinerary = await itinerary_service.enrich_itinerary(
+            itinerary, req, Settings(_env_file=None, amap_api_key=None)
+        )
     if planning_origin:
         first, second = itinerary.days
         second.activities[0].booking = Booking(start_time="10:00", duration_minutes=60)

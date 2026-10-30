@@ -45,7 +45,11 @@ from app.services.adjustment_service import add_adjustment, edit_adjustment, rem
 from app.services.branch_lock import branch_guard
 from app.services.budget_service import budget_overview, save_budget_item
 from app.services.chat_service import ChatService
-from app.services.itinerary_service import enrich_itinerary, sync_markdown
+from app.services.itinerary_service import (
+    clear_place_route_estimates,
+    enrich_itinerary,
+    sync_markdown,
+)
 from app.services.plan_undo import (
     PlanChange,
     UndoPlanInput,
@@ -706,6 +710,18 @@ async def update_activity(
                 activity.notes = (activity.notes + "（费用为手动估算）")[:2000]
                 activity.cost_source = "manual"
         day.activities[index] = activity
+        old_location = (
+            (old.place.id, old.place.longitude, old.place.latitude)
+            if old.place
+            else (old.place_name, old.city)
+        )
+        new_location = (
+            (activity.place.id, activity.place.longitude, activity.place.latitude)
+            if activity.place
+            else (activity.place_name, activity.city)
+        )
+        if old_location != new_location:
+            clear_place_route_estimates(day, activity.id)
         assert detail.itinerary is not None
         detail.itinerary = await enrich_itinerary(
             detail.itinerary, detail.requirements or Requirements(), settings, day_number=number

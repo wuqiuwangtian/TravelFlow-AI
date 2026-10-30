@@ -1,6 +1,7 @@
 """测试专用地点与行程，坐标仅用于验证路由和界面，不代表商户资料。"""
 
 from app.domain.itinerary import (
+    Booking,
     BudgetItem,
     DayPlan,
     ExpenseCreate,
@@ -124,3 +125,44 @@ def place_itinerary():
     )
     apply_budget_overrides(itinerary, Requirements())
     return itinerary
+
+
+def connected_place_itinerary(*, matched=True):
+    plan = place_itinerary()
+    lunch, hotel = plan.days[0].activities
+    lunch.place = candidates()[0] if matched else None
+    lunch.place_status = "matched" if matched else "ambiguous"
+    lunch.duration_minutes = 60
+    lunch.transport_mode, lunch.transport_minutes = "transit", 5
+    lunch.transport_cost, lunch.transport_cost_basis = 6, "total"
+    lunch.transport_source_indices = [1]
+    hotel.booking = Booking(start_time="12:00", duration_minutes=60)
+    hotel.transport_mode, hotel.transport_minutes = "transit", 10
+    hotel.transport_cost, hotel.transport_cost_basis = 8, "total"
+    hotel.transport_source_indices = [2]
+    plan.days[0].activities.insert(
+        0,
+        ScheduledActivity(
+            id="park",
+            title="上午公园",
+            city="北京",
+            place=hotel.place,
+            place_status="matched",
+            start_time="09:00",
+            duration_minutes=30,
+        ),
+    )
+    plan.days[0].activities.append(
+        ScheduledActivity(
+            id="last",
+            title="下午散步",
+            city="北京",
+            place=hotel.place,
+            place_status="matched",
+            transport_minutes=15,
+            transport_cost=9,
+            transport_cost_basis="total",
+            transport_source_indices=[3],
+        )
+    )
+    return plan

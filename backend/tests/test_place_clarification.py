@@ -2,14 +2,14 @@ import json
 
 import pytest
 from conftest import FakeLLM
-from place_fixtures import candidates, place_itinerary
+from place_fixtures import candidates, connected_place_itinerary, place_itinerary
 
 from app.agents.checkpoint import build_serde, thread_config
 from app.agents.state import initial_state
 from app.core.config import Settings
 from app.core.errors import ProviderError
 from app.domain.enums import PlanStatus
-from app.domain.itinerary import Booking, Place, ReplanContext, RouteLeg
+from app.domain.itinerary import Booking, BudgetItem, Place, ReplanContext, RouteLeg
 from app.domain.models import Requirements
 from app.maps.amap import AmapProvider
 from app.services.chat_service import ChatService
@@ -20,6 +20,81 @@ REQ = Requirements(
     destination="北京", origin="上海", duration_days=2, budget=2000, budget_basis="total"
 )
 SETTINGS = Settings(_env_file=None, amap_api_key=None)
+
+
+@pytest.mark.parametrize("route_state", ["unconfigured", "failed", "fresh"])
+@pytest.mark.parametrize("matched", [True, False])
+async def test_changing_place_rechecks_both_adjacent_routes(monkeypatch, route_state, matched):
+    async def route(self, origin, destination, mode):
+        if route_state == "failed":
+            raise ProviderError("测试路线暂不可用")
+        return RouteLeg(
+            from_id="",
+            to_id="",
+            mode=mode,
+            status="ok",
+            duration_seconds=7200 if origin.id == "west" else 600,
+            cost=4,
+            cost_basis="total",
+            cost_source="reference",
+        )
+
+    monkeypatch.setattr(AmapProvider, "route", route)
+    settings = Settings(
+        _env_file=None, amap_api_key=None if route_state == "unconfigured" else "test-map-only"
+    )
+    plan = connected_place_itinerary(matched=matched)
+    before = plan.model_dump()
+    result = await handle_place_message("第1天第2站的地址在西城区那家", plan, REQ, settings)
+    day = result.itinerary.days[0]
+    assert day.activities[1].place.id == "west"
+    for target in day.activities[1:3]:
+        assert target.transport_minutes is target.transport_cost is None
+        assert target.transport_cost_basis == "unknown" and target.transport_source_indices == []
+    if route_state == "fresh":
+        assert [leg.duration_seconds for leg in day.legs[:2]] == [600, 7200]
+        assert [leg.cost for leg in day.legs[:2]] == [4, 4]
+        assert any("入住酒店" in warning and "冲突" in warning for warning in day.warnings)
+        assert "仍有时间冲突" in result.reply
+    else:
+        assert all(leg.duration_seconds is leg.cost is None for leg in day.legs[:2])
+    assert day.activities[2].booking == plan.days[0].activities[2].booking
+    assert day.activities[2].start_time == "12:00"
+    assert day.activities[3].transport_minutes == 15 and day.activities[3].transport_cost == 9
+    assert result.itinerary.expenses == plan.expenses
+    assert result.itinerary.budget_items == plan.budget_items
+    assert result.itinerary.days[1] == plan.days[1]
+    assert plan.model_dump() == before
+
+
+async def test_confirming_same_place_keeps_existing_route_estimates():
+    plan = connected_place_itinerary()
+    result = await handle_place_message("第1天第2站的地址在朝阳区那家", plan, REQ, SETTINGS)
+    day = result.itinerary.days[0]
+    assert day.activities[1].place.id == "east"
+    assert [leg.duration_seconds for leg in day.legs[:2]] == [300, 600]
+    assert [leg.cost for leg in day.legs[:2]] == [6, 8]
+
+
+async def test_place_change_keeps_explicit_manual_transport_budget_with_unknown_duration():
+    plan = connected_place_itinerary()
+    plan.budget_items.append(
+        BudgetItem(
+            id="manual-next-leg",
+            title="人工接驳预估",
+            category="transport",
+            day=1,
+            activity_id="hotel",
+            source="transport",
+            planned_cents=1234,
+        )
+    )
+    result = await handle_place_message("第1天第2站的地址在西城区那家", plan, REQ, SETTINGS)
+    leg = result.itinerary.days[0].legs[1]
+    assert leg.duration_seconds is None
+    assert leg.cost == 12.34 and leg.cost_source == "manual"
+    assert result.itinerary.expenses == plan.expenses
+    assert result.itinerary.budget_items == plan.budget_items
 
 
 async def seed(environment, itinerary=None):
@@ -51,6 +126,73 @@ async def seed(environment, itinerary=None):
         return response.json()
 
     return sid, bid, say
+
+
+@pytest.mark.parametrize("entry", ["edit", "chat", "stream"])
+async def test_place_change_persists_unknown_routes_and_exports_without_extra_versions(
+    environment, monkeypatch, entry
+):
+    client, store, _, _ = environment
+    _, bid, say = await seed(environment, connected_place_itinerary(matched=False))
+    original = (await store.list_versions(bid))[-1]
+    before = (await client.get(f"/api/versions/{original.id}")).json()
+
+    async def no_model(*args, **kwargs):
+        raise AssertionError("地点确认和编辑不应调用模型")
+
+    monkeypatch.setattr(FakeLLM, "structured", no_model)
+    if entry == "edit":
+        old = before["itinerary"]["days"][0]["activities"][1]
+        edited = await client.put(
+            f"/api/versions/{original.id}/days/1/activities/{old['id']}",
+            json={"activity": {**old, "place_name": "示例餐厅(西单店)"}},
+        )
+        assert edited.status_code == 200, edited.text
+    else:
+        question = await say("确认第1天第2站的地点", stream=entry == "stream")
+        assert question["clarification"]["kind"] == "place"
+        assert len(await store.list_versions(bid)) == 1
+        confirmed = await say("选第二个", "new-place-routes-once", stream=entry == "stream")
+        replay = await say("选第二个", "new-place-routes-once", stream=entry == "stream")
+        assert replay["version_id"] == confirmed["version_id"]
+    versions = await store.list_versions(bid)
+    assert len(versions) == 2
+    detail = (await client.get(f"/api/versions/{versions[-1].id}")).json()
+    day = detail["itinerary"]["days"][0]
+    assert "西单店" in day["activities"][1]["place_name"]
+    for leg in day["legs"][:2]:
+        assert leg["duration_seconds"] is leg["cost"] is None
+    assert (
+        day["activities"][2]["booking"]
+        == before["itinerary"]["days"][0]["activities"][2]["booking"]
+    )
+    assert detail["itinerary"]["expenses"] == before["itinerary"]["expenses"]
+    assert detail["itinerary"]["budget_items"] == before["itinerary"]["budget_items"]
+    assert detail["itinerary"]["days"][1] == before["itinerary"]["days"][1]
+    for fmt in ("md", "html"):
+        exported = await client.get(f"/api/versions/{versions[-1].id}/export?format={fmt}")
+        assert exported.status_code == 200
+        assert "西单店" in exported.text and "12:00" in exported.text and "待核实" in exported.text
+    assert (await client.get(f"/api/versions/{original.id}")).json() == before
+    assert (await client.get(f"/api/versions/{versions[-1].id}")).json() == detail
+    assert len(await store.list_versions(bid)) == 2
+
+
+async def test_edit_at_same_poi_keeps_route_quotes_when_only_name_is_canonicalised(environment):
+    client, store, _, _ = environment
+    _, bid, _ = await seed(environment, connected_place_itinerary())
+    original = (await store.list_versions(bid))[-1]
+    before = (await client.get(f"/api/versions/{original.id}")).json()
+    old = before["itinerary"]["days"][0]["activities"][1]
+    edited = await client.put(
+        f"/api/versions/{original.id}/days/1/activities/{old['id']}",
+        json={"activity": {**old, "title": "午餐说明补充"}, "place_id": "east"},
+    )
+    assert edited.status_code == 200, edited.text
+    day = edited.json()["itinerary"]["days"][0]
+    assert day["activities"][1]["place_name"] == "示例餐厅(望京店)"
+    assert [leg["duration_seconds"] for leg in day["legs"][:2]] == [300, 600]
+    assert [leg["cost"] for leg in day["legs"][:2]] == [6, 8]
 
 
 @pytest.mark.parametrize(
