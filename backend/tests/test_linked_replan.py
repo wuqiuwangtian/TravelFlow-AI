@@ -103,7 +103,9 @@ async def test_optional_stops_can_be_omitted_but_bookings_logistics_and_paid_sto
         ),
     )
     preview = await preview_linked_replan(original, LinkedReplanInput(first_day=1), REQ, SETTINGS)
-    assert not preview.conflicts
+    assert any("未核实的交通耗时" in conflict for conflict in preview.conflicts)
+    changed_leg = next(leg for leg in preview.itinerary.days[1].legs if leg.to_id == "museum")
+    assert changed_leg.duration_seconds is None
     ids = {a.id for a in preview.itinerary.days[1].activities}
     assert {"park", "museum", "hotel-two"} <= ids and "optional" not in ids
     assert next(c for c in preview.changes if c.title == "可选绕路公园").status == "omitted"

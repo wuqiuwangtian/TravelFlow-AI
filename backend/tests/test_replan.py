@@ -101,7 +101,10 @@ async def test_impossible_reservation_is_preserved_and_conflict_is_explicit():
     assert result.days[0].activities[-1].id == "end"
     assert any("预约冲突" in w for w in result.days[0].warnings)
     assert any("时间冲突" in w for w in result.days[0].warnings)
-    assert result.days[0].activities[-1].start_time == "17:30"
+    assert any("交通耗时尚未查到" in w for w in result.days[0].warnings)
+    assert (
+        next(leg for leg in result.days[0].legs if leg.to_id == "booking").duration_seconds is None
+    )
 
 
 async def test_new_position_has_zero_dwell_and_unknown_travel_is_disclosed():

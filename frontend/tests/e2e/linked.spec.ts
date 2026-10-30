@@ -192,7 +192,8 @@ test("精简的可选项目在预览中明确标注，取消不会留下部分�
     .getByRole("listitem")
     .filter({ hasText: "可选绕路公园" });
   await expect(row).toContainText("本次精简");
-  await expect(applyButton(page)).toBeVisible();
+  await expect(prompt(page)).toContainText("未核实的交通耗时");
+  await expect(applyButton(page)).toHaveCount(0);
   await prompt(page)
     .getByRole("button", { name: "取消这次操作", exact: true })
     .click();

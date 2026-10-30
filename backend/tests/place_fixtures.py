@@ -194,3 +194,52 @@ def replan_itinerary():
     booked.transport_cost, booked.transport_cost_basis = 8, "total"
     plan.days[1].activities.insert(0, origin)
     return plan
+
+
+def logistics_itinerary():
+    plan = replan_itinerary()
+    plan.days[1].activities.extend(
+        [
+            ScheduledActivity(
+                id="optional-park",
+                title="可选公园",
+                place_name="公园",
+                city="北京",
+                duration_minutes=90,
+                transport_minutes=10,
+            ),
+            ScheduledActivity(
+                id="departure-station",
+                title="返程去北京南站",
+                place_name="北京南站",
+                city="北京",
+                kind="station",
+                duration_minutes=20,
+                transport_minutes=30,
+                transport_cost=12,
+                transport_cost_basis="total",
+            ),
+            ScheduledActivity(
+                id="return-train",
+                title="高铁返上海",
+                place_name="上海虹桥站",
+                city="上海",
+                kind="station",
+                duration_minutes=20,
+                transport_mode="rail",
+                transport_minutes=120,
+            ),
+            ScheduledActivity(
+                id="overnight-hotel",
+                title="过夜住宿",
+                place_name="示例中转酒店",
+                city="上海",
+                kind="hotel",
+                duration_minutes=30,
+                transport_minutes=15,
+                cost=300,
+                cost_basis="total",
+            ),
+        ]
+    )
+    return plan

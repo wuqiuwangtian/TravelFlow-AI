@@ -48,7 +48,12 @@ from app.services.linked_replan_messages import (
 from app.services.linked_replan_service import preview_linked_replan
 from app.services.place_messages import handle_place_message
 from app.services.replan_clarification import ask_replan_day, resume_replan_day
-from app.services.replan_service import explicit_day, explicit_days, set_replan_context
+from app.services.replan_service import (
+    explicit_day,
+    explicit_days,
+    explicit_logistics_changes,
+    set_replan_context,
+)
 from app.services.travel_time import time_label
 
 logger = get_logger(__name__)
@@ -572,6 +577,9 @@ def make_refiner_node(
             previous=current,
             scope_day=scope_day,
             scope_days=scope_days,
+            changeable_logistics_ids=explicit_logistics_changes(user_text, current, scope_day)
+            if current
+            else None,
         )
         reply = "已按您的意见调整，并更新每日行程与费用汇总。请再次查阅。"
         if itinerary and scope_day is not None:

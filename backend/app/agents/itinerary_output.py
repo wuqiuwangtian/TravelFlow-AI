@@ -74,6 +74,7 @@ async def prepare_itinerary(
     previous: Itinerary | None = None,
     scope_day: int | None = None,
     scope_days: set[int] | None = None,
+    changeable_logistics_ids: set[str] | None = None,
 ) -> tuple[Itinerary | None, str]:
     selected_days = (
         scope_days if scope_days is not None else ({scope_day} if scope_day is not None else set())
@@ -139,9 +140,13 @@ async def prepare_itinerary(
     if previous:
         preserve_travel_records(previous, itinerary, detach_missing=False)
         if scope_days is not None:
-            preserve_replan_scope(previous, itinerary, scope_days)
+            preserve_replan_scope(
+                previous, itinerary, scope_days, changeable_logistics_ids=changeable_logistics_ids
+            )
         elif scope_day is not None:
-            preserve_replan_scope(previous, itinerary, scope_day)
+            preserve_replan_scope(
+                previous, itinerary, scope_day, changeable_logistics_ids=changeable_logistics_ids
+            )
     emit_progress("routes", "正在匹配地点并校验每日路线…")
     refresh_planning_origin_routes(itinerary, previous)
     if scope_days is None:

@@ -17,6 +17,83 @@ from app.maps.matching import normal_name
 from app.services.travel_time import minutes, time_label, window_error
 
 
+def is_logistics(activity: ScheduledActivity) -> bool:
+    return not activity.is_context_anchor and (
+        activity.kind in {"hotel", "station", "transport"}
+        or activity.transport_mode in {"rail", "flight", "transfer"}
+    )
+
+
+def _origin_key(activity: ScheduledActivity | None) -> tuple[str, str, str] | None:
+    return (
+        (activity.id, activity.place.id if activity.place else activity.place_name, activity.city)
+        if activity
+        else None
+    )
+
+
+def explicit_logistics_changes(
+    text: str, itinerary: Itinerary, default_day: int | None = None
+) -> set[str]:
+    """仅放行用户明确取消或更换的未预约站点；保留、疑问和费用修改不算地点变更。"""
+    from app.services.travel_messages import _number
+
+    allowed: set[str] = set()
+    day_number = default_day
+    for clause in re.split(r"[，,；;。\n]+", text):
+        mentioned = explicit_days(clause)
+        day_number = next(iter(mentioned)) if len(mentioned) == 1 else day_number
+        if (
+            re.search(
+                r"如果|假如|是否|能否|能不能|吗|[?？]|预算|预估|费用|金额|账目|记录|退款|报销",
+                clause,
+            )
+            or re.search(r"(?:不要|不用|别|不)(?:再)?(?:改|删|取消|换|调整)", clause)
+            or not re.search(
+                r"取消|删掉|删除|去掉|不坐|不住|不去|别去|改乘|改住|换一家|换家|换成|改成|改为|换到|改到",
+                clause,
+            )
+        ):
+            continue
+        ordinal = re.search(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*站", clause)
+        candidates = [
+            a
+            for day in itinerary.days
+            if day.day == day_number
+            for index, a in enumerate(day.activities, 1)
+            if is_logistics(a)
+            and a.progress == "not_started"
+            and not a.booking
+            and (
+                ordinal
+                and index == _number(ordinal[1])
+                or not ordinal
+                and any(len(name) >= 2 and name in clause for name in [a.title, a.place_name])
+            )
+        ]
+        if not candidates and not ordinal:
+            candidates = [
+                a
+                for day in itinerary.days
+                if day.day == day_number
+                for a in day.activities
+                if is_logistics(a)
+                and a.progress == "not_started"
+                and not a.booking
+                and (
+                    a.kind == "hotel"
+                    and re.search(r"酒店|住宿|住处", clause)
+                    or a.transport_mode == "rail"
+                    and re.search(r"高铁|铁路|火车|列车", clause)
+                    or a.transport_mode == "flight"
+                    and re.search(r"航班|飞机", clause)
+                )
+            ]
+        if len(candidates) == 1:
+            allowed.add(candidates[0].id)
+    return allowed
+
+
 def record_booking(
     itinerary: Itinerary, day_number: int, activity_id: str, booking: Booking | None
 ) -> None:
@@ -150,7 +227,12 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
 
 
 def _preserve_replan_day(
-    previous: Itinerary, current: Itinerary, day_number: int, *, preserve_order: bool = False
+    previous: Itinerary,
+    current: Itinerary,
+    day_number: int,
+    *,
+    preserve_order: bool = False,
+    changeable_logistics_ids: set[str] | None = None,
 ) -> DayPlan:
     old_day = next(d for d in previous.days if d.day == day_number)
     updated = next((d for d in current.days if d.day == day_number), old_day.model_copy(deep=True))
@@ -172,11 +254,16 @@ def _preserve_replan_day(
             and a.progress == "not_started"
             and not a.is_context_anchor
         ]
-        # 模型遗漏的预约与结束地点由程序恢复。
+        # 模型不能靠遗漏必要交通、住宿、预约或结束点来满足时限。
         for old in old_day.activities[index + 1 :]:
             if old.id in prefix_ids:
                 continue
-            if old.booking or old.id == context.end_activity_id:
+            if (
+                old.booking
+                or old.id == context.end_activity_id
+                or is_logistics(old)
+                and old.id not in (changeable_logistics_ids or set())
+            ):
                 found = next(
                     (
                         i
@@ -210,6 +297,21 @@ def _preserve_replan_day(
                 a for a in remaining if a.id == context.end_activity_id
             ]
         updated.activities = [a.model_copy(deep=True) for a in prefix] + remaining
+        old_ids = [a.id for a in old_day.activities]
+        for position, activity in enumerate(updated.activities):
+            if (
+                activity.id in prefix_ids
+                or not is_logistics(activity)
+                or activity.id not in old_ids
+            ):
+                continue
+            old_index = old_ids.index(activity.id)
+            old_from = old_day.activities[old_index - 1] if old_index else None
+            new_from = updated.activities[position - 1] if position else None
+
+            if _origin_key(old_from) != _origin_key(new_from):
+                activity.transport_minutes, activity.transport_cost = None, None
+                activity.transport_cost_basis, activity.transport_source_indices = "unknown", []
         updated.legs = [
             leg.model_copy(deep=True)
             for leg in old_day.legs
@@ -224,11 +326,18 @@ def preserve_replan_scope(
     day_number: int | set[int],
     *,
     preserve_order: bool = False,
+    changeable_logistics_ids: set[str] | None = None,
 ) -> None:
     """只采用指定日，其他天逐项保留；各日仍保护既有起点、预约和执行记录。"""
     numbers = {day_number} if isinstance(day_number, int) else day_number
     selected = {
-        number: _preserve_replan_day(previous, current, number, preserve_order=preserve_order)
+        number: _preserve_replan_day(
+            previous,
+            current,
+            number,
+            preserve_order=preserve_order,
+            changeable_logistics_ids=changeable_logistics_ids,
+        )
         for number in numbers
     }
     current.days = [
@@ -263,10 +372,7 @@ def optional_to_remove(day: DayPlan) -> int | None:
             activity.progress == "not_started"
             and activity.id != context.end_activity_id
             and activity.id not in context.protected_activity_ids
-            and (
-                not context.preserve_logistics
-                or activity.kind not in {"hotel", "station", "transport"}
-            )
+            and not is_logistics(activity)
         ):
             optional.append(index)
         if activity.id != context.end_activity_id:

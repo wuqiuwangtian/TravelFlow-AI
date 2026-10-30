@@ -492,6 +492,7 @@ async def enrich_itinerary(
                         remove = optional_to_remove(working)
                         if remove is None:
                             break
+                        clear_place_route_estimates(working, working.activities[remove].id)
                         removed = working.activities.pop(remove)
                         assert working.replan_context is not None
                         working.replan_context.omitted_titles = list(
