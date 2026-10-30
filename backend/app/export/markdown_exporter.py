@@ -15,6 +15,7 @@ from app.export.common import (
     disclaimer_text,
     format_when,
     linkify_citations,
+    plan_markdown_for_export,
     reference_lines,
 )
 
@@ -26,7 +27,7 @@ def render_markdown(
     todos: list[TodoItem] | None = None,
 ) -> str:
     """渲染 Markdown 文本。"""
-    linked, _missing = linkify_citations(detail.markdown, detail.citations)
+    linked, _missing = linkify_citations(plan_markdown_for_export(detail), detail.citations)
 
     parts: list[str] = [
         f"# {session_title}",

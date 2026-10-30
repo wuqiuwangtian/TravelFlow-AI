@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.streaming import emit_notice, emit_progress
 from app.core.config import Settings
+from app.core.errors import LLMOutputInvalid
 from app.core.logging import get_logger
 from app.domain.itinerary import DayDraft, Itinerary, ScheduledActivity
 from app.domain.models import Requirements, TodoItem
@@ -67,7 +68,15 @@ async def prepare_itinerary(
     source_count: int,
     previous: Itinerary | None = None,
     scope_day: int | None = None,
+    scope_days: set[int] | None = None,
 ) -> tuple[Itinerary | None, str]:
+    selected_days = (
+        scope_days if scope_days is not None else ({scope_day} if scope_day is not None else set())
+    )
+    missing = selected_days - {day.day for day in details.days}
+    if missing:
+        labels = "、".join(str(day) for day in sorted(missing))
+        raise LLMOutputInvalid(f"本次调整未返回第{labels}天的行程，原计划已保留，请重试。")
     if not details.days:
         emit_notice("未提取到每日行程，路书已保留；可点击「整理每日行程」重试。")
         return None, markdown
@@ -108,10 +117,16 @@ async def prepare_itinerary(
                 activity.cost_source = "estimate" if activity.cost is not None else "unknown"
     if previous:
         preserve_travel_records(previous, itinerary)
-        if scope_day is not None:
+        if scope_days is not None:
+            preserve_replan_scope(previous, itinerary, scope_days)
+        elif scope_day is not None:
             preserve_replan_scope(previous, itinerary, scope_day)
     emit_progress("routes", "正在匹配地点并校验每日路线…")
-    itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=scope_day)
+    if scope_days is None:
+        itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=scope_day)
+    else:
+        for number in sorted(scope_days):
+            itinerary = await enrich_itinerary(itinerary, requirements, settings, day_number=number)
     return itinerary, sync_markdown(markdown, itinerary, requirements)
 
 

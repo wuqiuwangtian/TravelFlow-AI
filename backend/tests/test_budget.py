@@ -1,10 +1,162 @@
+from datetime import datetime
+
+import pytest
 from test_itinerary_api import generate
 
 from app.agents.checkpoint import build_serde, thread_config
-from app.domain.itinerary import ExpenseCreate, Itinerary
-from app.domain.models import Requirements
+from app.domain.itinerary import BudgetItem, DayPlan, ExpenseCreate, Itinerary, ScheduledActivity
+from app.domain.models import Requirements, VersionDetail, VersionInfo
+from app.export import render_html, render_markdown
 from app.services.budget_service import budget_overview
+from app.services.itinerary_service import summarise_day
+from app.services.journey_messages import prepare_journey_message
 from app.services.travel_service import add_expense
+
+
+def test_export_reprojects_legacy_duplicate_cost_table_without_rewriting_the_snapshot():
+    plan = Itinerary(
+        days=[
+            DayPlan(
+                day=1,
+                activities=[
+                    ScheduledActivity(
+                        id="lunch",
+                        title="午餐（淮扬菜）",
+                        kind="meal",
+                        cost=125,
+                        cost_basis="total",
+                    )
+                ],
+            )
+        ]
+    )
+    add_expense(
+        plan,
+        ExpenseCreate(
+            title="第4站午餐",
+            amount="86.35",
+            category="meal",
+            day=1,
+            request_id="export-legacy-station",
+        ),
+    )
+    req = Requirements(duration_days=1)
+    summarise_day(plan.days[0], req)
+    detail = VersionDetail(
+        version=VersionInfo(id="v", branch_id="b", seq=1, created_at=datetime(2026, 10, 30)),
+        markdown="## 五、费用预估\n旧错误小计211.35元",
+        itinerary=plan,
+        requirements=req,
+    )
+    before = detail.model_dump()
+    for renderer in (render_markdown, render_html):
+        output = renderer(detail)
+        assert "211.35" not in output
+        assert "125.00" in output and "86.35" in output
+    assert detail.model_dump() == before
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "unique",
+        "ambiguous",
+        "other-day-row",
+        "payment-other-day",
+        "explicit-budget",
+        "other-station",
+    ],
+)
+def test_legacy_station_expense_matches_only_a_unique_same_day_category(case):
+    plan = Itinerary(
+        days=[
+            DayPlan(
+                day=1,
+                activities=[
+                    ScheduledActivity(
+                        id="lunch",
+                        title="第5站午餐" if case == "other-station" else "午餐（淮扬菜）",
+                        kind="meal",
+                        cost=125,
+                        cost_basis="total",
+                    )
+                ],
+            ),
+            DayPlan(day=2),
+        ]
+    )
+    if case == "ambiguous":
+        plan.days[0].activities.append(
+            ScheduledActivity(
+                id="other", title="午餐（另一家）", kind="meal", cost=125, cost_basis="total"
+            )
+        )
+    if case == "other-day-row":
+        plan.days[1].activities.append(
+            ScheduledActivity(
+                id="other", title="午餐（另一家）", kind="meal", cost=125, cost_basis="total"
+            )
+        )
+    if case == "explicit-budget":
+        plan.budget_items.append(
+            BudgetItem(
+                id="custom-food",
+                title="单独登记",
+                category="meal",
+                source="custom",
+                planned_cents=2000,
+            )
+        )
+    add_expense(
+        plan,
+        ExpenseCreate(
+            title="第4站午餐",
+            amount="86.35",
+            category="meal",
+            day=2 if case == "payment-other-day" else 1,
+            budget_item_id="custom-food" if case == "explicit-budget" else None,
+            request_id="legacy-station-meal",
+        ),
+    )
+    original = plan.model_dump()
+    overview = budget_overview(plan, Requirements())
+    paid = next(row for row in overview.rows if row.expense_ids)
+    expected = (
+        "stay-lunch"
+        if case in ["unique", "other-day-row"]
+        else "custom-food"
+        if case == "explicit-budget"
+        else "expense-legacy-station-meal"
+    )
+    assert paid.id == expected
+    assert paid.actual_cents == 8635
+    if case == "unique":
+        assert len(overview.rows) == 1 and overview.projected_cents == 12500
+    assert plan.model_dump() == original
+
+
+@pytest.mark.parametrize("ordinal,linked", [("第1站", True), ("第4站", False)])
+def test_new_station_expense_keeps_title_and_links_only_an_existing_activity(ordinal, linked):
+    plan = Itinerary(
+        days=[
+            DayPlan(
+                day=1,
+                activities=[
+                    ScheduledActivity(
+                        id="lunch", title="午餐", kind="meal", cost=125, cost_basis="total"
+                    )
+                ],
+            )
+        ]
+    )
+    result = prepare_journey_message(f"第1天{ordinal}午餐实付86.35元", plan, Requirements())
+    assert result.itinerary is not None
+    expense = result.itinerary.expenses[0]
+    assert expense.title == ordinal + "午餐" and expense.amount_cents == 8635
+    assert expense.activity_id == ("lunch" if linked else None)
+    if linked:
+        assert budget_overview(result.itinerary, Requirements()).projected_cents == 12500
+    assert not plan.expenses
 
 
 def test_projection_replaces_settled_estimates_and_does_not_double_count_partial_or_legacy():

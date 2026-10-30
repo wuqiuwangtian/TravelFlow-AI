@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from app.core.channels import VerificationChannel, channel_for
 from app.core.logging import get_logger
-from app.domain.models import Citation, TodoItem, VersionDetail
+from app.domain.models import Citation, Requirements, TodoItem, VersionDetail
 
 logger = get_logger(__name__)
 
@@ -73,6 +73,19 @@ def budget_coverage_markdown(detail: VersionDetail) -> str:
         "\n\n## 费用覆盖提醒\n\n"
         + "\n".join(f"- {warning}" for warning in overview.coverage_warnings)
         + "\n\n费用清单仅含已列项目，暂不能据此认定整趟旅行节省。\n"
+    )
+
+
+def plan_markdown_for_export(detail: VersionDetail) -> str:
+    """从所选版本的结构化快照投影路书，避免旧派生费用表与当前预算视图不一致。"""
+    if detail.itinerary is None:
+        return detail.markdown
+    from app.services.itinerary_service import sync_markdown
+
+    return sync_markdown(
+        detail.markdown,
+        detail.itinerary.model_copy(deep=True),
+        detail.requirements or Requirements(),
     )
 
 

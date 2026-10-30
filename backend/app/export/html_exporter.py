@@ -21,6 +21,7 @@ from app.export.common import (
     disclaimer_text,
     format_when,
     linkify_citations,
+    plan_markdown_for_export,
 )
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -48,7 +49,7 @@ def render_html(
     todos: list[TodoItem] | None = None,
 ) -> str:
     """渲染单文件 HTML。"""
-    linked, _missing = linkify_citations(detail.markdown, detail.citations)
+    linked, _missing = linkify_citations(plan_markdown_for_export(detail), detail.citations)
     body_html = _md.render(linked + budget_coverage_markdown(detail))
 
     template = _env.get_template("report.html.jinja")

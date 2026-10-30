@@ -144,10 +144,9 @@ def set_replan_context(itinerary: Itinerary, day_number: int, data: ReplanInput)
     return day
 
 
-def preserve_replan_scope(
+def _preserve_replan_day(
     previous: Itinerary, current: Itinerary, day_number: int, *, preserve_order: bool = False
-) -> None:
-    """其他天逐项保留，当天从起点之后接上模型给出的未开始安排。"""
+) -> DayPlan:
     old_day = next(d for d in previous.days if d.day == day_number)
     updated = next((d for d in current.days if d.day == day_number), old_day.model_copy(deep=True))
     context = old_day.replan_context
@@ -211,8 +210,24 @@ def preserve_replan_scope(
             for leg in old_day.legs
             if leg.from_id in prefix_ids and leg.to_id in prefix_ids
         ]
+    return updated
+
+
+def preserve_replan_scope(
+    previous: Itinerary,
+    current: Itinerary,
+    day_number: int | set[int],
+    *,
+    preserve_order: bool = False,
+) -> None:
+    """只采用指定日，其他天逐项保留；各日仍保护既有起点、预约和执行记录。"""
+    numbers = {day_number} if isinstance(day_number, int) else day_number
+    selected = {
+        number: _preserve_replan_day(previous, current, number, preserve_order=preserve_order)
+        for number in numbers
+    }
     current.days = [
-        updated if d.day == day_number else d.model_copy(deep=True) for d in previous.days
+        selected[d.day] if d.day in selected else d.model_copy(deep=True) for d in previous.days
     ]
 
 
@@ -312,6 +327,16 @@ def explicit_day(text: str) -> int | None:
 
     match = re.search(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*天", text)
     return _number(match[1]) if match else None
+
+
+def explicit_days(text: str) -> set[int]:
+    """普通修改明确提到的行程日；住宿的第N晚归入第N天。"""
+    from app.services.travel_messages import _number
+
+    return {
+        _number(value)
+        for value in re.findall(r"第\s*(\d+|[一二三四五六七八九十两]+)\s*(?:天|晚)", text)
+    }
 
 
 def check_overnight_links(itinerary: Itinerary) -> None:

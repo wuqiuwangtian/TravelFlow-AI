@@ -194,8 +194,24 @@ def handle_travel_message(
                 offset = (today - requirements.departure_date).days + 1
                 day = offset if any(d.day == offset for d in result.days) else None
         try:
+            activity_id = None
+            ordinal = re.search(
+                r"第\s*(\d+|[一二三四五六七八九十两]+)\s*(?:站|个(?:停留)?点)", text
+            )
+            if ordinal and day is not None:
+                index = _number(ordinal[1]) - 1
+                plan_day = next((item for item in result.days if item.day == day), None)
+                if plan_day and 0 <= index < len(plan_day.activities):
+                    target = plan_day.activities[index]
+                    if not target.is_context_anchor:
+                        activity_id = target.id
             data = ExpenseCreate(
-                title=name, amount=amounts[0], category=category, day=day, request_id=uuid4().hex
+                title=name,
+                amount=amounts[0],
+                category=category,
+                day=day,
+                activity_id=activity_id,
+                request_id=uuid4().hex,
             )
             if re.search(r"每人|人均", text):
                 if requirements.travelers is None:

@@ -4,6 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from app.domain.itinerary import BudgetItem, BudgetOverview, BudgetRow, ExpenseCategory, Itinerary
+from app.services.expense_selection import expense_matches_text
 
 if TYPE_CHECKING:
     from app.domain.models import Requirements
@@ -95,7 +96,7 @@ def budget_overview(itinerary: Itinerary, requirements: "Requirements") -> Budge
                 and r.category == entry.category
                 and not r.id.startswith("expense-")
                 and len(entry.title) >= 2
-                and entry.title in r.title
+                and expense_matches_text(entry, r.title)
             ]
             if len(candidates) == 1:
                 row = candidates[0]

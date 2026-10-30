@@ -47,7 +47,7 @@ from app.services.linked_replan_messages import (
 )
 from app.services.linked_replan_service import preview_linked_replan
 from app.services.place_messages import handle_place_message
-from app.services.replan_service import explicit_day, set_replan_context
+from app.services.replan_service import explicit_day, explicit_days, set_replan_context
 from app.services.travel_time import time_label
 
 logger = get_logger(__name__)
@@ -367,8 +367,26 @@ def make_refiner_node(
             }
 
         scope_day = None
+        scope_days = None
+        requested_days: set[int] = set()
         if current:
-            scope_day = explicit_day(user_text)
+            duration_changed = (
+                verdict.requirements.duration_days is not None
+                and verdict.requirements.duration_days != requirements.duration_days
+            )
+            requested_days = (
+                explicit_days(user_text) if not verdict.on_trip and not duration_changed else set()
+            )
+            if requested_days:
+                unknown_days = requested_days - {day.day for day in current.days}
+                if unknown_days:
+                    raise InvalidRequest("指定的日期不在当前行程中，请先明确是否需要改变旅行天数。")
+                if len(requested_days) > 1:
+                    scope_days = requested_days
+                else:
+                    scope_day = next(iter(requested_days))
+            else:
+                scope_day = explicit_day(user_text)
             context_days = [d for d in current.days if d.replan_context]
             if verdict.on_trip:
                 update = verdict.on_trip
@@ -455,7 +473,7 @@ def make_refiner_node(
                     ),
                 )
                 current = working
-            elif context_days and scope_day is None:
+            elif context_days and scope_day is None and scope_days is None:
                 latest = max(
                     context_days,
                     key=lambda d: d.replan_context.updated_at if d.replan_context else datetime.min,
@@ -485,7 +503,7 @@ def make_refiner_node(
         changed = verdict.clear_preferences or bool(
             verdict.requirements.model_dump(exclude_defaults=True, exclude_none=True)
         )
-        if changed and not verdict.on_trip and explicit_day(user_text) is None:
+        if changed and not verdict.on_trip and not requested_days:
             scope_day = None
         if (verdict.needs_research or changed) and search:
             emit_notice("本次修改涉及新的出行信息，正在补充检索。")
@@ -527,6 +545,12 @@ def make_refiner_node(
             )
             if scope_day is not None:
                 prompt += f"\n本次仅调整第{scope_day}天。起点之前的活动、已有预约和其他天保持原样。"
+            elif scope_days is not None:
+                labels = "、".join(f"第{day}天" for day in sorted(scope_days))
+                prompt += (
+                    f"\n本次仅调整{labels}，每个指定日都必须返回。"
+                    "未指定的天数、已有预约和执行记录保持原样。"
+                )
             prompt += (
                 "\nreplan_context 是用户提供的出发地点、出发时刻与结束时限，后续行程必须从此接上；"
                 "booking 是已有预约，不能改时间、地点、时长或遗漏。若时间不足优先删普通活动。"
@@ -563,6 +587,7 @@ def make_refiner_node(
             len(research.build_citations()) if research else 0,
             previous=current,
             scope_day=scope_day,
+            scope_days=scope_days,
         )
         reply = "已按您的意见调整，并更新每日行程与费用汇总。请再次查阅。"
         if itinerary and scope_day is not None:
