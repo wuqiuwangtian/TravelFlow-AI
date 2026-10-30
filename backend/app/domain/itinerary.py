@@ -166,6 +166,7 @@ class BudgetOverview(BaseModel):
     projected_cents: int = 0
     unknown_count: int = 0
     budget_cents: int | None = None
+    coverage_warnings: list[str] = Field(default_factory=list)
 
 
 class ReceiptDraft(BaseModel):

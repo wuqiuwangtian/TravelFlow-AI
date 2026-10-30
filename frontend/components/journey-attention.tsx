@@ -23,13 +23,20 @@ export function JourneyAttention({
   onBudget: (rowId: string) => void;
   onNote: (day: number) => void;
 }) {
-  const { places, notes, unknownRows, unknownCount, budgetScopeUnknown } =
-    journeyAttention(detail);
+  const {
+    places,
+    notes,
+    unknownRows,
+    unknownCount,
+    budgetScopeUnknown,
+    coverageWarnings,
+  } = journeyAttention(detail);
   if (
     !places.length &&
     !notes.length &&
     unknownCount === 0 &&
-    !budgetScopeUnknown
+    !budgetScopeUnknown &&
+    !coverageWarnings.length
   )
     return null;
   return (
@@ -52,6 +59,9 @@ export function JourneyAttention({
                   ? `费用 ${unknownCount} 项未定`
                   : null,
               budgetScopeUnknown ? "预算比较口径未定" : null,
+              coverageWarnings.length
+                ? `费用范围 ${coverageWarnings.length} 处待核对`
+                : null,
               notes.length ? `时间与行程 ${notes.length} 条提醒` : null,
             ]
               .filter(Boolean)
@@ -129,6 +139,19 @@ export function JourneyAttention({
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+          {coverageWarnings.length > 0 && (
+            <section aria-label="费用覆盖提醒">
+              <h3 className="font-medium">费用清单覆盖范围</h3>
+              <ul className="mt-2 space-y-2 text-xs leading-6">
+                {coverageWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs leading-6 text-warning">
+                可在对话中补充安排，或在费用区添加自定义项。明确无需支出时可记为0元，不会自动补价格。
+              </p>
             </section>
           )}
           {notes.length > 0 && (

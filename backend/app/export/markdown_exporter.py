@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.domain.models import TodoItem, VersionDetail
 from app.export.common import (
+    budget_coverage_markdown,
     build_todos,
     disclaimer_text,
     format_when,
@@ -37,7 +38,7 @@ def render_markdown(
         "",
         "---",
         "",
-        linked.strip(),
+        linked.strip() + budget_coverage_markdown(detail),
         "",
     ]
 

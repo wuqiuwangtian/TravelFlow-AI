@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from app.core.channels import VerificationChannel, channel_for
 from app.core.logging import get_logger
-from app.domain.models import Citation, TodoItem
+from app.domain.models import Citation, TodoItem, VersionDetail
 
 logger = get_logger(__name__)
 
@@ -63,6 +63,17 @@ def format_when(searched_at: datetime | None) -> str:
 
 def disclaimer_text(searched_at: datetime | None) -> str:
     return DISCLAIMER_HEAD.format(when=format_when(searched_at))
+
+
+def budget_coverage_markdown(detail: VersionDetail) -> str:
+    overview = detail.budget_overview
+    if not overview or not overview.coverage_warnings:
+        return ""
+    return (
+        "\n\n## 费用覆盖提醒\n\n"
+        + "\n".join(f"- {warning}" for warning in overview.coverage_warnings)
+        + "\n\n费用清单仅含已列项目，暂不能据此认定整趟旅行节省。\n"
+    )
 
 
 def linkify_citations(markdown: str, citations: list[Citation]) -> tuple[str, list[int]]:

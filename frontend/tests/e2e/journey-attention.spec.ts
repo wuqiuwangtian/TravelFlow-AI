@@ -237,6 +237,7 @@ test("已知零元与已结算项目不显示待定，缺失费用汇总不冒�
             })),
             unknown_count: 0,
             budget_cents: 200000,
+            coverage_warnings: [],
           };
       await route.fulfill({ json: data });
     },
@@ -249,6 +250,99 @@ test("已知零元与已结算项目不显示待定，缺失费用汇总不冒�
   await expect(attention(page)).toContainText("费用汇总未取得");
   await attention(page).locator("summary").click();
   await expect(attention(page)).toContainText("暂不能判断总价或预算余量");
+});
+
+test("已列费用全有价格时仍提示住宿与往返漏项，补充明确预算后消除范围提醒", async ({
+  page,
+}) => {
+  const trip = await (
+    await page.request.post(`${proxy}/api/sessions`, { data: {} })
+  ).json();
+  const sid = trip.session.id;
+  const bid = trip.branches[0].id;
+  const reply = await (
+    await page.request.post(`${proxy}/api/chat`, {
+      data: { session_id: sid, message: "北京三日游" },
+    })
+  ).json();
+  let detail = await (
+    await page.request.get(`${proxy}/api/versions/${reply.version_id}`)
+  ).json();
+  const expenses = detail.itinerary.expenses;
+  for (const row of detail.budget_overview.rows.filter(
+    (item: { planned_cents: number | null }) => item.planned_cents === null,
+  )) {
+    const changed = await page.request.put(
+      `${proxy}/api/versions/${detail.version.id}/budget-items/${row.id}`,
+      { data: { amount: "0" } },
+    );
+    expect(changed.ok()).toBe(true);
+    detail = await changed.json();
+  }
+  expect(detail.budget_overview.unknown_count).toBe(0);
+  await page.goto(`/chat/${sid}`);
+  await expect(attention(page).locator("summary")).toContainText(
+    "费用范围 3 处待核对",
+  );
+  await attention(page).locator("summary").click();
+  const scope = attention(page).getByRole("region", {
+    name: "费用覆盖提醒",
+    exact: true,
+  });
+  await expect(scope).toContainText("住宿费用尚未列入清单");
+  await expect(scope).toContainText("去程交通费用安排");
+  await expect(scope).toContainText("返程交通费用安排");
+  const budget = page.getByRole("region", { name: "费用与预算", exact: true });
+  await expect(
+    budget.locator("summary").filter({ hasText: "住宿" }),
+  ).toContainText("预估未列");
+  await expect(
+    budget.getByRole("region", { name: "费用覆盖提醒", exact: true }),
+  ).toContainText("暂不能认定整趟旅行节省");
+  await noOverflow(page);
+  for (const day of [1, 2]) {
+    const result = await page.request.post(
+      `${proxy}/api/versions/${detail.version.id}/budget-items`,
+      {
+        data: {
+          title: `第${day}晚住亲友家`,
+          category: "lodging",
+          day,
+          amount: "0",
+          request_id: `coverage-night-${day}`,
+        },
+      },
+    );
+    expect(result.ok()).toBe(true);
+    detail = await result.json();
+  }
+  const result = await page.request.post(
+    `${proxy}/api/versions/${detail.version.id}/budget-items`,
+    {
+      data: {
+        title: "往返交通",
+        category: "transport",
+        amount: "500",
+        request_id: "coverage-round-trip",
+      },
+    },
+  );
+  expect(result.ok()).toBe(true);
+  detail = await result.json();
+  expect(detail.budget_overview.coverage_warnings).toEqual([]);
+  expect(detail.itinerary.expenses).toEqual(expenses);
+  const before = (await saved(page, sid)).versions[bid].length;
+  await page.reload();
+  await expect(attention(page).locator("summary")).not.toContainText(
+    "费用范围",
+  );
+  await expect(
+    budget.getByRole("region", { name: "费用覆盖提醒", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    budget.locator("summary").filter({ hasText: "住宿" }),
+  ).toContainText("预估 ¥0.00");
+  expect((await saved(page, sid)).versions[bid]).toHaveLength(before);
 });
 
 test("从汇总跨天查看后保存预算草稿，仍归属开始编辑的日期", async ({ page }) => {

@@ -5,8 +5,10 @@ from app.core.config import Settings
 from app.core.errors import ProviderError
 from app.domain.itinerary import (
     Activity,
+    BudgetItem,
     DayDraft,
     DayPlan,
+    ExpenseCreate,
     Itinerary,
     Place,
     RouteLeg,
@@ -14,6 +16,122 @@ from app.domain.itinerary import (
 )
 from app.domain.models import Requirements
 from app.services.itinerary_service import build_itinerary, check_day, sync_markdown
+from app.services.travel_service import add_expense
+
+
+@pytest.mark.parametrize("mode", ["rail", "flight"])
+@pytest.mark.parametrize("basis", ["total", "per_person"])
+def test_generated_ticket_is_not_charged_as_both_arrival_and_station_fee(mode, basis):
+    drafts = [
+        DayDraft(
+            day=1,
+            activities=[
+                Activity(title="出发站", kind="station", city="上海"),
+                Activity(
+                    title="到达站",
+                    kind="station",
+                    city="扬州",
+                    cost=270,
+                    cost_basis=basis,
+                    transport_mode=mode,
+                    transport_cost=270,
+                    transport_cost_basis=basis,
+                ),
+            ],
+        )
+    ]
+    plan = build_itinerary(drafts, Requirements(duration_days=1))
+    arrival = plan.days[0].activities[1]
+    assert arrival.cost is None
+    assert arrival.transport_cost == 270 and arrival.transport_cost_basis == basis
+    assert drafts[0].activities[1].cost == 270  # 原输入不被修改。
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"cost_source": "manual"},
+        {"kind": "hotel"},
+        {"cost": 30},
+        {"cost_basis": "unknown"},
+        {"transport_cost_basis": "per_person"},
+        {"transport_mode": "transfer"},
+    ],
+)
+def test_distinct_unknown_or_manual_stop_costs_are_not_guessed_to_be_duplicate(change):
+    item = Activity(
+        title="到达站",
+        kind="station",
+        cost=270,
+        cost_basis="total",
+        transport_mode="rail",
+        transport_cost=270,
+        transport_cost_basis="total",
+    )
+    item = item.model_copy(update=change)
+    plan = build_itinerary([DayDraft(day=1, activities=[item])], Requirements(duration_days=1))
+    assert plan.days[0].activities[0].cost == item.cost
+
+
+async def test_ticket_normalization_preserves_original_expense_and_manual_station_budget():
+    req = Requirements(origin="上海", destination="扬州", duration_days=1, travelers=2)
+    details = PlanDetails(
+        days=[
+            DayDraft(
+                day=1,
+                activities=[
+                    Activity(title="上海站", place_name="上海站", city="上海", kind="station"),
+                    Activity(
+                        title="扬州站",
+                        place_name="扬州站",
+                        city="扬州",
+                        kind="station",
+                        cost=270,
+                        cost_basis="total",
+                        transport_mode="rail",
+                        transport_cost=270,
+                        transport_cost_basis="total",
+                        transport_minutes=120,
+                    ),
+                ],
+            )
+        ]
+    )
+    previous = build_itinerary(details.days, req)
+    target = previous.days[0].activities[1]
+    target.cost, target.cost_basis, target.cost_source = 123.45, "total", "manual"
+    previous.budget_items = [
+        BudgetItem(
+            id="stay-" + target.id,
+            title=target.title,
+            day=1,
+            activity_id=target.id,
+            category="transport",
+            source="activity",
+            planned_cents=12345,
+        )
+    ]
+    add_expense(
+        previous,
+        ExpenseCreate(
+            title="已付票款",
+            amount="100",
+            category="transport",
+            day=1,
+            activity_id=target.id,
+            budget_item_id="stay-" + target.id,
+            request_id="ticket-actual-preserved",
+        ),
+    )
+    before = previous.model_dump()
+    current, _ = await prepare_itinerary(
+        details, "原路书", req, Settings(_env_file=None, amap_api_key=None), 1, previous=previous
+    )
+    assert current.expenses == previous.expenses
+    assert current.budget_items == previous.budget_items
+    assert current.days[0].activities[1].id == target.id
+    assert current.days[0].activities[1].cost == 123.45
+    assert previous.model_dump() == before
 
 
 def activity(id, **kwargs):

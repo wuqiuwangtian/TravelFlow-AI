@@ -50,6 +50,7 @@ export function journeyAttention(detail: VersionDetail) {
     notes,
     unknownRows,
     unknownCount: overview?.unknown_count ?? null,
+    coverageWarnings: overview?.coverage_warnings ?? [],
     budgetScopeUnknown:
       !!overview &&
       detail.requirements?.budget != null &&

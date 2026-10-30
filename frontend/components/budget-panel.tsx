@@ -265,11 +265,32 @@ export function BudgetPanel({
           : "预计数按当前已列项目计算，未列出的开支需另计。"}
         退款到账冲减消费，报销作为回款单列。
       </p>
+      {!!overview.coverage_warnings?.length && (
+        <section
+          aria-label="费用覆盖提醒"
+          className="mt-3 rounded-lg border border-warning-line bg-warning-soft p-3 text-xs leading-6 text-warning"
+        >
+          <p className="font-medium">
+            费用清单尚有范围待核对，暂不能认定整趟旅行节省。
+          </p>
+          <ul className="mt-2 space-y-2">
+            {overview.coverage_warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+          <p className="mt-2">
+            可通过对话补充安排，或添加自定义项；确认无需支出时可填0元。
+          </p>
+        </section>
+      )}
       <div className="trip-budget-categories">
         {(Object.keys(labels) as ExpenseCategory[]).map((category) => {
           const rows = overview.rows.filter((r) => r.category === category);
           const planned = rows.reduce((n, r) => n + (r.planned_cents ?? 0), 0),
             paid = rows.reduce((n, r) => n + r.actual_cents, 0);
+          const unpriced = rows.filter(
+            (row) => row.planned_cents === null,
+          ).length;
           return (
             <details
               key={category}
@@ -279,7 +300,12 @@ export function BudgetPanel({
               <summary className="cursor-pointer text-sm font-medium text-[var(--tf-ink)]">
                 {labels[category]}
                 <span className="ml-2 text-[11px] font-normal text-[var(--tf-muted)]">
-                  预估 {money(planned)} · 已记 {money(paid)}
+                  {rows.length === 0
+                    ? "预估未列"
+                    : unpriced === rows.length
+                      ? "预估待核实"
+                      : `${unpriced ? "已知预估" : "预估"} ${money(planned)}${unpriced ? `，另${unpriced}项待核实` : ""}`}{" "}
+                  · 已记 {money(paid)}
                 </span>
               </summary>
               <div className="mt-3 space-y-3">

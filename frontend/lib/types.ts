@@ -322,6 +322,7 @@ export interface BudgetOverview {
   projected_cents: number;
   unknown_count: number;
   budget_cents: number | null;
+  coverage_warnings?: string[];
 }
 
 export interface ReceiptDraft {

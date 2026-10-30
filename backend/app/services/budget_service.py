@@ -124,6 +124,9 @@ def budget_overview(itinerary: Itinerary, requirements: "Requirements") -> Budge
     result.budget_cents = cents(
         requirements.budget, requirements.budget_basis or "unknown", requirements.travelers
     )
+    from app.services.budget_coverage import coverage_warnings
+
+    result.coverage_warnings = coverage_warnings(itinerary, requirements, result.rows)
     return result
 
 

@@ -53,6 +53,18 @@ def _kind(activity: ScheduledActivity) -> None:
             activity.kind = "meal"
         elif re.search(r"游览|参观|景区|风景|公园|博物|寺庙|古镇|景点", text):
             activity.kind = "attraction"
+    # 模型偶尔把同一张票同时写成到站活动费和到达交通费。
+    # 只合并明确同额、同口径的铁路／航班重复项，人工金额和其他停留费用不猜测。
+    if (
+        activity.kind == "station"
+        and activity.transport_mode in {"rail", "flight"}
+        and activity.cost_source != "manual"
+        and activity.cost is not None
+        and activity.cost == activity.transport_cost
+        and activity.cost_basis != "unknown"
+        and activity.cost_basis == activity.transport_cost_basis
+    ):
+        activity.cost, activity.cost_basis, activity.cost_source = None, "unknown", "unknown"
     # 兼容旧路书：到站交通的时长是上一段路程，不是此站的停留时间。
     if activity.kind == "transport":
         activity.transport_mode = (

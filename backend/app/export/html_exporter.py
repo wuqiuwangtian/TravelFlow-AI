@@ -16,6 +16,7 @@ from markdown_it import MarkdownIt
 
 from app.domain.models import TodoItem, VersionDetail
 from app.export.common import (
+    budget_coverage_markdown,
     build_todos,
     disclaimer_text,
     format_when,
@@ -48,7 +49,7 @@ def render_html(
 ) -> str:
     """渲染单文件 HTML。"""
     linked, _missing = linkify_citations(detail.markdown, detail.citations)
-    body_html = _md.render(linked)
+    body_html = _md.render(linked + budget_coverage_markdown(detail))
 
     template = _env.get_template("report.html.jinja")
     return template.render(
