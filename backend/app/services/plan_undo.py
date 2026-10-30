@@ -13,8 +13,10 @@ from pydantic import BaseModel, Field
 from app.agents.checkpoint import thread_config
 from app.core.errors import ConflictError, InvalidRequest
 from app.domain.enums import PlanStatus
+from app.domain.itinerary import BudgetItem
 from app.domain.models import Requirements, ResearchBundle, VersionDetail
 from app.search.base import SearchResult
+from app.services.budget_service import apply_budget_overrides
 from app.services.itinerary_service import sync_markdown
 from app.storage.session_store import SessionStore
 
@@ -33,10 +35,14 @@ class UndoPlanInput(BaseModel):
     change_version_id: str = Field(min_length=1, max_length=100)
 
 
-def _planning(detail: VersionDetail) -> dict:
+def _planning(detail: VersionDetail, budget_items: list[BudgetItem] | None = None) -> dict:
     """费用、回款、回顾与游玩状态不构成新的规划；不扫描更早的任意历史回退。"""
     assert detail.itinerary is not None
-    itinerary = detail.itinerary.model_dump(mode="json", exclude_computed_fields=True)
+    source = detail.itinerary.model_copy(deep=True)
+    if budget_items is not None:
+        source.budget_items = [item.model_copy(deep=True) for item in budget_items]
+        apply_budget_overrides(source, detail.requirements or Requirements())
+    itinerary = source.model_dump(mode="json", exclude_computed_fields=True)
     for field in ("expenses", "adjustments", "recap", "ended_at"):
         itinerary.pop(field, None)
     for day in itinerary["days"]:
@@ -70,14 +76,29 @@ def _restore(before: VersionDetail, current: VersionDetail) -> VersionDetail:
     itinerary = restored.itinerary
     # 不重写金额、付款日期、凭证、退款／报销、照片及回顾。
     records = current.itinerary.model_copy(deep=True)
-    for field in ("expenses", "adjustments", "recap", "ended_at"):
+    for field in ("expenses", "adjustments", "budget_items", "recap", "ended_at"):
         setattr(itinerary, field, getattr(records, field))
+    apply_budget_overrides(itinerary, restored.requirements or Requirements())
     old_activities = {a.id: (d.day, a) for d in itinerary.days for a in d.activities}
+    linked_ids = {entry.activity_id for entry in records.expenses if entry.activity_id} | {
+        item.activity_id for item in records.budget_items if item.activity_id
+    }
+    days = {day.day for day in itinerary.days}
+    if any(entry.day is not None and entry.day not in days for entry in records.expenses) or any(
+        item.day is not None and item.day not in days for item in records.budget_items
+    ):
+        raise ConflictError(
+            "新增行程日已有消费或人工预算，不能直接撤销该日期；请在对话中调整后续安排。"
+        )
     for day in current.itinerary.days:
         for activity in day.activities:
             found = old_activities.get(activity.id)
             original = found[1] if found else None
             original_day = found[0] if found else None
+            if original is None and activity.id in linked_ids:
+                raise ConflictError(
+                    "新增站点已关联消费或人工预算，直接撤销会移除其关联；请在对话中调整后续安排。"
+                )
             protected = activity.progress != "not_started" or activity.booking is not None
             if protected and (
                 original is None
@@ -147,7 +168,8 @@ async def current_change(store: SessionStore, version_id: str) -> PlanChange | N
         before = await store.get_version_detail(version.id)
         if before is None or not before.itinerary or not before.itinerary.days:
             return None
-        if _planning(before) != _planning(after):
+        budgets = current.itinerary.budget_items
+        if _planning(before, budgets) != _planning(after, budgets):
             if after.version.trigger != "user_message":
                 return None
             blocker = None

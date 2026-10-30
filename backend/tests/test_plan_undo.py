@@ -10,7 +10,7 @@ from app.agents.state import initial_state
 from app.api import routes_itinerary
 from app.domain.clarification import PlaceClarification
 from app.domain.enums import PlanStatus
-from app.domain.itinerary import ScheduledActivity
+from app.domain.itinerary import RouteLeg, ScheduledActivity
 from app.domain.models import ResearchBundle
 from app.search.base import SearchResult
 from app.services.chat_service import ChatService
@@ -24,11 +24,24 @@ async def latest(store, branch_id):
     return await store.get_version_detail((await store.list_versions(branch_id))[-1].id)
 
 
-async def seed(environment):
+async def seed(environment, *, with_transport=False):
     client, store, graph, _ = environment
     session = await store.create_session("规划撤销验收")
     branch = await store.create_branch(session.id, "主方案", is_primary=True)
     plan = move_itinerary(with_receipt=True)
+    if with_transport:
+        plan.days[1].legs = [
+            RouteLeg(
+                from_id="park",
+                to_id="museum",
+                mode="transit",
+                status="planned",
+                duration_seconds=1800,
+                cost=10,
+                cost_basis="total",
+                cost_source="estimate",
+            )
+        ]
     req = requirements()
     values = {
         **initial_state(),
@@ -147,6 +160,325 @@ async def test_undo_after_expense_and_refund_keeps_exact_records_and_receipt_lin
     assert (await graph.aget_state(thread_config(branch.id))).values[
         "itinerary"
     ] == result.itinerary
+
+
+@pytest.mark.parametrize("item_id", ["stay-museum", "leg-museum"])
+@pytest.mark.parametrize("amount", ["125.50", "0", None])
+async def test_manual_budget_after_revision_still_allows_undo_and_preserves_latest_override(
+    environment, item_id, amount
+):
+    client, store, _, _ = environment
+    _, branch, before, changed = await seed(environment, with_transport=item_id.startswith("leg-"))
+    response = await client.put(
+        f"/api/versions/{changed.version.id}/budget-items/{item_id}",
+        json={"amount": amount},
+    )
+    assert response.status_code == 200, response.text
+    current = await latest(store, branch.id)
+    change = await offer(client, current.version.id)
+    assert change and change["version_id"] == changed.version.id
+    response = await undo(client, current.version.id, changed.version.id)
+    assert response.status_code == 200, response.text
+    result = await latest(store, branch.id)
+    assert result.itinerary.budget_items == current.itinerary.budget_items
+    assert result.itinerary.expenses == current.itinerary.expenses
+    assert (
+        result.itinerary.days[1].activities[1].title == before.itinerary.days[1].activities[1].title
+    )
+    view = response.json()["budget_overview"]
+    assert next(row for row in view["rows"] if row["id"] == item_id)["planned_cents"] == (
+        int(float(amount) * 100) if amount is not None else None
+    )
+
+
+@pytest.mark.parametrize("operation", ["add", "edit", "delete"])
+async def test_undo_keeps_latest_custom_budget_and_never_restores_deleted_rows(
+    environment, operation
+):
+    client, store, _, _ = environment
+    _, branch, _, changed = await seed(environment)
+    created = await client.post(
+        f"/api/versions/{changed.version.id}/budget-items",
+        json={
+            "title": "人工保险预估",
+            "amount": "88.88",
+            "category": "other",
+            "request_id": "custom-undo-budget",
+        },
+    )
+    assert created.status_code == 200
+    current_id = created.json()["version"]["id"]
+    endpoint = f"/api/versions/{current_id}/budget-items/custom-custom-undo-budget"
+    if operation == "edit":
+        assert (await client.put(endpoint, json={"amount": None})).status_code == 200
+    elif operation == "delete":
+        assert (await client.delete(endpoint)).status_code == 200
+    current = await latest(store, branch.id)
+    assert (await offer(client, current.version.id))["version_id"] == changed.version.id
+    response = await undo(client, current.version.id, changed.version.id)
+    assert response.status_code == 200, response.text
+    result = await latest(store, branch.id)
+    assert result.itinerary.budget_items == current.itinerary.budget_items
+    assert result.itinerary.expenses == current.itinerary.expenses
+
+
+async def add_planned_stop(store, graph, branch, detail, *, new_day=False):
+    revised = detail.model_copy(deep=True)
+    target = ScheduledActivity(
+        id="new-undo-stop",
+        title="新增餐厅",
+        place_name="新增餐厅",
+        city="北京",
+        kind="meal",
+        cost=50,
+        cost_basis="total",
+    )
+    if new_day:
+        from app.domain.itinerary import DayPlan
+
+        revised.itinerary.days.append(DayPlan(day=4, activities=[target]))
+        revised.requirements.duration_days = 4
+    else:
+        revised.itinerary.days[1].activities.append(target)
+    revised.markdown = sync_markdown(detail.markdown, revised.itinerary, revised.requirements)
+    values = dict((await graph.aget_state(thread_config(branch.id))).values)
+    values.update(
+        itinerary=revised.itinerary,
+        requirements=revised.requirements,
+        plan_markdown=revised.markdown,
+    )
+    config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
+    await ChatService(graph=graph, store=store).record_version(branch.id, values, config)
+    return await latest(store, branch.id)
+
+
+@pytest.mark.parametrize("finance", ["expense", "budget", "none"])
+async def test_new_stop_with_financial_link_blocks_undo_without_leaving_dangling_links(
+    environment, finance
+):
+    client, store, graph, _ = environment
+    _, branch, _, changed = await seed(environment)
+    added = await add_planned_stop(store, graph, branch, changed)
+    if finance == "expense":
+        response = await client.post(
+            f"/api/versions/{added.version.id}/expenses",
+            json={
+                "title": "餐厅订金",
+                "amount": "12.34",
+                "category": "meal",
+                "day": 2,
+                "activity_id": "new-undo-stop",
+                "budget_item_id": "stay-new-undo-stop",
+                "request_id": "new-stop-expense",
+            },
+        )
+        assert response.status_code == 200
+    elif finance == "budget":
+        assert (
+            await client.put(
+                f"/api/versions/{added.version.id}/budget-items/stay-new-undo-stop",
+                json={"amount": "66.66"},
+            )
+        ).status_code == 200
+    current = await latest(store, branch.id)
+    change = await offer(client, current.version.id)
+    response = await undo(client, current.version.id, added.version.id)
+    if finance == "none":
+        assert response.status_code == 200, response.text
+        assert "new-undo-stop" not in {
+            a["id"] for day in response.json()["itinerary"]["days"] for a in day["activities"]
+        }
+    else:
+        assert "关联" in change["blocked_reason"] and response.status_code == 409
+        assert await latest(store, branch.id) == current
+
+
+@pytest.mark.parametrize("finance", ["expense", "custom-budget"])
+async def test_new_day_with_financial_records_blocks_undo_without_rewriting_payment_day(
+    environment, finance
+):
+    client, store, graph, _ = environment
+    _, branch, _, changed = await seed(environment)
+    added = await add_planned_stop(store, graph, branch, changed, new_day=True)
+    if finance == "expense":
+        response = await client.post(
+            f"/api/versions/{added.version.id}/expenses",
+            json={
+                "title": "第四天车费",
+                "amount": "9.87",
+                "day": 4,
+                "category": "transport",
+                "request_id": "new-day-paid",
+            },
+        )
+    else:
+        response = await client.post(
+            f"/api/versions/{added.version.id}/budget-items",
+            json={"title": "第四天预留", "amount": None, "day": 4, "request_id": "new-day-budget"},
+        )
+    assert response.status_code == 200
+    current = await latest(store, branch.id)
+    assert "日期" in (await offer(client, current.version.id))["blocked_reason"]
+    assert (await undo(client, current.version.id, added.version.id)).status_code == 409
+    assert await latest(store, branch.id) == current
+
+
+async def test_budget_payment_refund_and_saved_recap_survive_undo_and_historical_exports(
+    environment, monkeypatch
+):
+    client, store, graph, _ = environment
+    _, branch, before, changed = await seed(environment)
+
+    async def no_model(*args, **kwargs):
+        raise AssertionError("撤销、预算、记账、回顾和导出不应调用模型")
+
+    monkeypatch.setattr(FakeLLM, "structured", no_model)
+    response = await client.put(
+        f"/api/versions/{changed.version.id}/budget-items/stay-hotel-one", json={"amount": "125.50"}
+    )
+    assert response.status_code == 200
+    vid = response.json()["version"]["id"]
+    response = await client.post(
+        f"/api/versions/{vid}/expenses",
+        json={
+            "title": "实际住宿付款",
+            "amount": "86.35",
+            "category": "lodging",
+            "day": 2,
+            "activity_id": "hotel-one",
+            "budget_item_id": "stay-hotel-one",
+            "request_id": "undo-hotel-payment",
+        },
+    )
+    assert response.status_code == 200
+    vid = response.json()["version"]["id"]
+    response = await client.post(
+        f"/api/versions/{vid}/expense-adjustments",
+        json={
+            "kind": "refund",
+            "status": "received",
+            "expense_id": "undo-hotel-payment",
+            "amount": "5",
+            "request_id": "undo-hotel-refund",
+        },
+    )
+    assert response.status_code == 200
+    vid = response.json()["version"]["id"]
+    recap = (await client.get(f"/api/versions/{vid}/recap")).json()
+    response = await client.put(
+        f"/api/versions/{vid}/recap",
+        json={
+            "title": "手写回忆",
+            "body": "原文应保留",
+            "source_fingerprint": recap["source_fingerprint"],
+        },
+    )
+    assert response.status_code == 200
+    current = await latest(store, branch.id)
+    assert (await offer(client, current.version.id))["version_id"] == changed.version.id
+    undone = await undo(client, current.version.id, changed.version.id)
+    assert undone.status_code == 200, undone.text
+    result = await latest(store, branch.id)
+    assert result.itinerary.expenses == current.itinerary.expenses
+    assert result.itinerary.adjustments == current.itinerary.adjustments
+    assert result.itinerary.budget_items == current.itinerary.budget_items
+    assert result.itinerary.recap == current.itinerary.recap
+    view = (await client.get(f"/api/versions/{result.version.id}/recap")).json()
+    assert view["ledger"] == recap["ledger"]
+    assert view["ledger"]["paid_cents"] == 10635 and view["ledger"]["net_expense_cents"] == 10135
+    assert view["body"] == "原文应保留" and view["stale"]
+    count = len(await store.list_versions(branch.id))
+    for fmt in ("md", "html"):
+        for version in (before, current, result):
+            exported = await client.get(f"/api/versions/{version.version.id}/export?format={fmt}")
+            assert exported.status_code == 200
+        exported = await client.get(f"/api/versions/{result.version.id}/recap/export?format={fmt}")
+        assert exported.status_code == 200
+        assert (
+            "106.35" in exported.text
+            and "101.35" in exported.text
+            and "125.50" not in exported.text
+        )
+    assert await store.get_version_detail(before.version.id) == before
+    assert await store.get_version_detail(current.version.id) == current
+    assert len(await store.list_versions(branch.id)) == count
+    assert (await graph.aget_state(thread_config(branch.id))).values[
+        "itinerary"
+    ] == result.itinerary
+
+
+async def test_undo_after_later_refinement_does_not_restore_an_earlier_cancelled_train(environment):
+    client, store, graph, _ = environment
+    _, branch, _, changed = await seed(environment)
+
+    async def record(detail):
+        detail.markdown = sync_markdown(detail.markdown, detail.itinerary, detail.requirements)
+        values = dict((await graph.aget_state(thread_config(branch.id))).values)
+        values.update(itinerary=detail.itinerary, plan_markdown=detail.markdown)
+        config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
+        await ChatService(graph=graph, store=store).record_version(branch.id, values, config)
+        return await latest(store, branch.id)
+
+    added = changed.model_copy(deep=True)
+    added.itinerary.days[1].activities.append(
+        ScheduledActivity(
+            id="cancelled-train",
+            title="已明确取消的返程高铁",
+            place_name="上海虹桥站",
+            city="上海",
+            kind="station",
+            transport_mode="rail",
+        )
+    )
+    added = await record(added)
+    cancelled = added.model_copy(deep=True)
+    cancelled.itinerary.days[1].activities.pop()
+    cancelled = await record(cancelled)
+    refined = cancelled.model_copy(deep=True)
+    refined.itinerary.days[1].title = "取消返程后的轻松安排"
+    refined = await record(refined)
+    response = await client.put(
+        f"/api/versions/{refined.version.id}/budget-items/stay-hotel-one", json={"amount": "125.50"}
+    )
+    assert response.status_code == 200
+    current = await latest(store, branch.id)
+    change = await offer(client, current.version.id)
+    assert (
+        change["version_id"] == refined.version.id
+        and change["previous_version_id"] == cancelled.version.id
+    )
+    response = await undo(client, current.version.id, refined.version.id)
+    assert response.status_code == 200, response.text
+    result = await latest(store, branch.id)
+    assert "cancelled-train" not in {a.id for day in result.itinerary.days for a in day.activities}
+    assert result.itinerary.budget_items == current.itinerary.budget_items
+    assert await store.get_version_detail(added.version.id) == added
+
+
+async def test_latest_budget_follows_paid_stop_back_to_original_day_on_undo(environment):
+    client, store, graph, _ = environment
+    _, branch, _, changed = await seed(environment)
+    moved = changed.model_copy(deep=True)
+    park = moved.itinerary.days[1].activities.pop(0)
+    moved.itinerary.days[0].activities.append(park)
+    moved.markdown = sync_markdown(moved.markdown, moved.itinerary, moved.requirements)
+    values = dict((await graph.aget_state(thread_config(branch.id))).values)
+    values.update(itinerary=moved.itinerary, plan_markdown=moved.markdown)
+    config = await graph.aupdate_state(thread_config(branch.id), values, as_node="refiner")
+    await ChatService(graph=graph, store=store).record_version(branch.id, values, config)
+    moved = await latest(store, branch.id)
+    response = await client.put(
+        f"/api/versions/{moved.version.id}/budget-items/stay-park", json={"amount": "125.50"}
+    )
+    assert response.status_code == 200
+    current = await latest(store, branch.id)
+    response = await undo(client, current.version.id, moved.version.id)
+    assert response.status_code == 200, response.text
+    row = next(
+        row for row in response.json()["budget_overview"]["rows"] if row["id"] == "stay-park"
+    )
+    assert row["planned_cents"] == 12550 and row["day"] == 2
+    assert (await latest(store, branch.id)).itinerary.expenses == current.itinerary.expenses
 
 
 async def test_progress_on_retained_stop_survives_undo(environment):
