@@ -1,18 +1,35 @@
+import json
+from contextlib import asynccontextmanager
 from datetime import date
 
+import httpx
 import pytest
+from conftest import FakeLLM, FakeSearch
+from fastapi import FastAPI
 from langchain_core.messages import HumanMessage
 
+from app.agents.checkpoint import open_checkpointer
 from app.agents.destination_choice import destination_choice
+from app.agents.graph import build_graph
 from app.agents.nodes.collector import (
     CollectResult,
     DestinationIdea,
     DestinationOptions,
     make_collector_node,
 )
-from app.core.errors import LLMOutputInvalid
+from app.agents.nodes.planner import PlanOutput
+from app.api import routes_chat, routes_session
+from app.core.config import Settings, get_settings
+from app.core.errors import (
+    LLMOutputInvalid,
+    LLMUnavailable,
+    SearchUnavailable,
+    register_exception_handlers,
+)
 from app.domain.enums import PlanStatus
 from app.domain.models import Requirements
+from app.storage.database import create_connection
+from app.storage.session_store import SessionStore
 
 
 @pytest.mark.parametrize(
@@ -245,3 +262,159 @@ async def test_empty_city_reply_can_retry_with_original_request_and_keep_conditi
     assert selected.status_code == 200 and selected.json()["version_id"]
     detail = (await client.get(f"/api/versions/{selected.json()['version_id']}")).json()
     assert detail["requirements"]["origin"] == "上海" and detail["requirements"]["budget"] == 2000
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("failure", ["search", "plan"])
+async def test_city_selection_resumes_after_sqlite_reopen(tmp_path, streaming, failure):
+    path = tmp_path / "city-restart.db"
+    settings = Settings(_env_file=None, amap_api_key=None)
+    calls = []
+    searches = []
+
+    class Model(FakeLLM):
+        def __init__(self, *, collecting=False, offline=False):
+            self.collecting = collecting
+            self.offline = offline
+
+        async def structured(self, messages, schema, **kwargs):
+            calls.append(schema.__name__)
+            if schema is CollectResult:
+                assert self.collecting, "选定城市或恢复时不能重新提取已知条件"
+                extracted = (
+                    Requirements(budget=2000, budget_basis="total")
+                    if "预算" in messages[-1].content
+                    else Requirements(
+                        origin="上海", duration_days=3, travelers=2, preferences=["少走路"]
+                    )
+                )
+                return CollectResult(
+                    extracted=extracted, reply="继续规划", wants_destination_ideas=True
+                )
+            if schema is DestinationOptions:
+                return DestinationOptions(
+                    ideas=[
+                        DestinationIdea(city="北京", reason="博物馆"),
+                        DestinationIdea(city="成都", reason="美食"),
+                    ]
+                )
+            if schema is PlanOutput and self.offline:
+                raise LLMUnavailable("隔离测试：生成失败")
+            return await super().structured(messages, schema, **kwargs)
+
+    class Search(FakeSearch):
+        def __init__(self, *, offline=False):
+            super().__init__()
+            self.offline = offline
+
+        async def search(self, query, **kwargs):
+            searches.append(query)
+            if self.offline:
+                raise SearchUnavailable("隔离测试：检索失败")
+            return await super().search(query, **kwargs)
+
+    @asynccontextmanager
+    async def reopen(*, collecting=False, failed=False):
+        conn = await create_connection(path)
+        try:
+            async with open_checkpointer(path) as saver:
+                app = FastAPI()
+                app.state.store = SessionStore(conn)
+                app.state.graph = build_graph(
+                    Model(collecting=collecting, offline=failed and failure == "plan"),
+                    Search(offline=failed and failure == "search"),
+                    settings=settings,
+                    checkpointer=saver,
+                )
+                app.dependency_overrides[get_settings] = lambda: settings
+                register_exception_handlers(app)
+                app.include_router(routes_session.router)
+                app.include_router(routes_chat.router)
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    yield client, app.state.store
+        finally:
+            await conn.close()
+
+    async def send(client, payload, *, failed=False):
+        response = await client.post("/api/chat/stream" if streaming else "/api/chat", json=payload)
+        if not streaming:
+            assert response.status_code == (502 if failed else 200)
+            return response.json()["error"] if failed else response.json()
+        assert response.status_code == 200
+        event = next(
+            block
+            for block in response.text.split("\n\n")
+            if block.startswith("event: error" if failed else "event: done")
+        )
+        return json.loads(event.split("data: ", 1)[1])
+
+    async with reopen(collecting=True) as (client, store):
+        trip = (await client.post("/api/sessions", json={})).json()
+        sid, bid = trip["session"]["id"], trip["branches"][0]["id"]
+        initial = await send(
+            client,
+            {
+                "session_id": sid,
+                "message": "上海出发，3天，两人，少走路，请推荐城市",
+                "request_id": "restart-start",
+            },
+        )
+        assert initial["planning_context"]["destination_recommendation_requested"]
+        assert initial["missing_fields"] == ["destination", "budget"]
+        assert await store.list_versions(bid) == []
+
+    async with reopen(collecting=True) as (client, store):
+        options = await send(
+            client, {"session_id": sid, "message": "全团预算2000元", "request_id": "restart-budget"}
+        )
+        context = options["planning_context"]
+        assert context["destination_ideas"] == ["北京", "成都"]
+        expected = Requirements(
+            origin="上海",
+            duration_days=3,
+            travelers=2,
+            budget=2000,
+            budget_basis="total",
+            preferences=["少走路"],
+        )
+        assert context["requirements"] == expected.model_dump(mode="json")
+        assert await store.list_versions(bid) == []
+
+    payload = {"session_id": sid, "message": "就选第一个吧", "request_id": "choose-city"}
+    expected.destination = "北京"
+    async with reopen(failed=True) as (client, store):
+        error = await send(client, payload, failed=True)
+        assert error["code"] == (
+            "SEARCH_PROVIDER_UNAVAILABLE" if failure == "search" else "LLM_UNAVAILABLE"
+        )
+        assert await store.list_versions(bid) == []
+
+    search_count = len(searches)
+    async with reopen() as (client, store):
+        history = (await client.get(f"/api/branches/{bid}/messages")).json()
+        assert history["planning_context"]["requirements"] == expected.model_dump(mode="json")
+        assert history["planning_context"]["status"] == (
+            "researching" if failure == "search" else "planning"
+        )
+        result = await send(client, payload)
+        assert result["version_id"] and result["status"] == "reviewing"
+        assert len(searches) == search_count + (3 if failure == "search" else 0)
+        detail = await store.get_version_detail(result["version_id"])
+        assert detail.requirements == expected
+        assert len(detail.itinerary.days) == 3
+
+    counts = (len(calls), len(searches))
+    async with reopen() as (client, store):
+        assert await send(client, payload) == result
+        assert (len(calls), len(searches)) == counts
+        assert len(await store.list_versions(bid)) == 1
+        history = (await client.get(f"/api/branches/{bid}/messages")).json()
+        assert (
+            sum(
+                m["role"] == "user" and m["content"] == payload["message"]
+                for m in history["messages"]
+            )
+            == 1
+        )
