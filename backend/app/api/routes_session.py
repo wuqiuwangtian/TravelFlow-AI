@@ -311,6 +311,8 @@ async def create_branch(
     source = (
         await store.get_version_detail(payload.fork_version_id) if payload.fork_version_id else None
     )
+    if payload.fork_version_id and source is None:
+        raise InvalidRequest("指定的版本不存在")
     if source and source.version.branch_id != parent_id:
         raise InvalidRequest("源版本不属于指定分支")
     graph = getattr(request.app.state, "graph", None)
@@ -323,6 +325,11 @@ async def create_branch(
             recovered = await recover_plan_undo(store, graph, parent_id)
             if recovered and source and source.version.id == recovered.version.id:
                 source = recovered
+            if not payload.fork_version_id:
+                # 当前分叉以持久化版本为准，不能因 checkpoint 缺失或陈旧而丢失记录。
+                versions = await store.list_versions(parent_id)
+                if versions:
+                    source = await store.get_version_detail(versions[-1].id)
             source_config = thread_config(parent_id)
             if source and source.version.checkpoint_id:
                 source_config = thread_config(parent_id, checkpoint_id=source.version.checkpoint_id)
@@ -352,7 +359,7 @@ async def create_branch(
             session_id,
             payload.title,
             parent_branch_id=parent_id,
-            fork_version_id=payload.fork_version_id,
+            fork_version_id=source.version.id if source else None,
         )
         if values:
             assert graph is not None
