@@ -14,4 +14,3 @@
 最短启动路径见 [README 的手动启动说明](README.md#方式二手动启动适合开发调试)：后端 `uv sync` 后运行 `uv run uvicorn app.main:app --reload --port 8000`，前端 `pnpm install` 后运行 `pnpm dev -p 3100`（分别在对应目录执行）。配置步骤按 README 说明，勿覆盖已有 `.env`。最短隔离验收与预期结果见[开发说明](docs/handoff/DEVELOPMENT.md#接手后的最短验收路径)。
 
 行为、环境、任务或关键决定变化时，同轮更新对应权威文档及受影响链接；阶段结束更新现状中的接续信息，不另建每轮交接报告。历史结果须带日期和版本，不能作为当前版本已验证的证明。
-
