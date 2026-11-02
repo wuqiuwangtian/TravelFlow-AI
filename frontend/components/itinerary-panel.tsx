@@ -148,7 +148,7 @@ export function ItineraryPanel({
   }
 
   function showAttention(
-    target: "place" | "budget" | "note",
+    target: "place" | "budget" | "note" | "coverage",
     number?: number,
     id?: string,
   ) {
@@ -160,7 +160,9 @@ export function ItineraryPanel({
           ? "journey-current-stop"
           : target === "budget"
             ? `journey-budget-row-${id}`
-            : "journey-query-notes",
+            : target === "coverage"
+              ? "journey-budget"
+              : "journey-query-notes",
       );
       if (!element) return;
       const disclosure =
@@ -168,7 +170,9 @@ export function ItineraryPanel({
           ? element
           : element.closest("details");
       if (disclosure) disclosure.open = true;
-      scrollToElement(element, { block: "center" });
+      scrollToElement(element, {
+        block: target === "coverage" ? "start" : "center",
+      });
       element.focus({ preventScroll: true });
     });
   }
@@ -284,6 +288,7 @@ export function ItineraryPanel({
               onPlace={(number, id) => showAttention("place", number, id)}
               onBudget={(id) => showAttention("budget", undefined, id)}
               onNote={(number) => showAttention("note", number)}
+              onCoverage={() => showAttention("coverage")}
             />
             <div
               className="mb-5 flex gap-2 overflow-x-auto pb-1"

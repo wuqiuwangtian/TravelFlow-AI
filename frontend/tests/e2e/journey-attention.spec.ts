@@ -501,3 +501,116 @@ test("空分支不显示旧分支提醒，旧版本迟到也不能带回旧警�
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await expect(attention(page)).toHaveCount(0);
 });
+
+test("未配置地图时说明原因与配置入口，不把逐项地点当成可确认任务", async ({
+  page,
+}) => {
+  const trip = await (
+    await page.request.post(`${proxy}/test/places?connected=true`)
+  ).json();
+  const session = await (
+    await page.request.get(`${proxy}/api/sessions/${trip.session_id}`)
+  ).json();
+  const version = session.versions[trip.branch_id].at(-1).id;
+  const detail = await (
+    await page.request.get(`${proxy}/api/versions/${version}`)
+  ).json();
+  expect(detail.itinerary.map_status).toBe("unconfigured");
+  expect(
+    detail.itinerary.days.some((day: { activities: { place_status: string }[] }) =>
+      day.activities.some((activity) => activity.place_status !== "matched"),
+    ),
+  ).toBe(true);
+  await page.goto(`/chat/${trip.session_id}`);
+  await expect(attention(page)).toBeVisible();
+  await attention(page).locator("summary").click();
+  const places = attention(page).getByRole("region", {
+    name: "待明确地点",
+    exact: true,
+  });
+  await expect(places).toContainText("未配置地图服务");
+  await expect(places).toContainText("地点没有核对");
+  await expect(
+    places.getByRole("link", { name: "前往设置配置地图", exact: true }),
+  ).toHaveAttribute("href", "/settings#maps");
+  await noOverflow(page);
+  expect(
+    (await saved(page, trip.session_id)).versions[trip.branch_id],
+  ).toHaveLength(1);
+});
+
+test("已有预约的待明确地点说明保护原因，入口指向更正或清除预约", async ({
+  page,
+}) => {
+  const trip = await (
+    await page.request.post(`${proxy}/test/places?booked_place=true`)
+  ).json();
+  await page.goto(`/chat/${trip.session_id}`);
+  await expect(attention(page)).toBeVisible();
+  await attention(page).locator("summary").click();
+  const places = attention(page).getByRole("region", {
+    name: "待明确地点",
+    exact: true,
+  });
+  await expect(places).toContainText("已有预约，地点暂不能更改");
+  await expect(places).toContainText("更正或清除预约记录");
+  await attention(page)
+    .getByRole("button", { name: "查看第1天第1站待明确地点", exact: true })
+    .click();
+  const active = page.getByRole("region", { name: "当前站点", exact: true });
+  await expect(active).toBeFocused();
+  await expect(
+    active.getByRole("button", { name: "更正预约记录", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "确认第1天第1站的地点", exact: true }),
+  ).toHaveCount(0);
+  await active
+    .getByRole("button", { name: "更正预约记录", exact: true })
+    .click();
+  const booking = page.getByRole("form", { name: "记录预约", exact: true });
+  await expect(
+    booking.getByRole("button", { name: "清除预约记录", exact: true }),
+  ).toBeVisible();
+  await expect(booking).toBeVisible();
+  await noOverflow(page);
+  expect(
+    (await saved(page, trip.session_id)).versions[trip.branch_id],
+  ).toHaveLength(1);
+});
+
+test("费用覆盖提醒可直达费用区，刷新后仍保持同一结论", async ({ page }) => {
+  const trip = await seed(page);
+  await page.goto(`/chat/${trip.session_id}`);
+  await attention(page).locator("summary").click();
+  const scope = attention(page).getByRole("region", {
+    name: "费用覆盖提醒",
+    exact: true,
+  });
+  await expect(scope).toContainText("去程交通费用安排");
+  await scope
+    .getByRole("button", { name: "查看费用区核对覆盖范围", exact: true })
+    .click();
+  await expect(page.locator("#journey-budget")).toBeFocused();
+  await expect
+    .poll(
+      async () =>
+        (await page.locator("#journey-budget").boundingBox())?.y ?? 9999,
+    )
+    .toBeLessThan(160);
+  await expect(
+    page.getByRole("region", { name: "费用与预算", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await attention(page).locator("summary").click();
+  await expect(
+    attention(page).getByRole("region", {
+      name: "费用覆盖提醒",
+      exact: true,
+    }),
+  ).toContainText("去程交通费用安排");
+  await noOverflow(page);
+  expect(
+    (await saved(page, trip.session_id)).versions[trip.branch_id],
+  ).toHaveLength(1);
+});

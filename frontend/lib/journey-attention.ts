@@ -55,5 +55,6 @@ export function journeyAttention(detail: VersionDetail) {
       !!overview &&
       detail.requirements?.budget != null &&
       overview.budget_cents === null,
+    mapUnconfigured: detail.itinerary?.map_status === "unconfigured",
   };
 }

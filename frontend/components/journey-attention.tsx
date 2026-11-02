@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui";
 import { journeyAttention } from "@/lib/journey-attention";
 import type { VersionDetail } from "@/lib/types";
@@ -16,12 +17,14 @@ export function JourneyAttention({
   onPlace,
   onBudget,
   onNote,
+  onCoverage,
 }: {
   detail: VersionDetail;
   busy: boolean;
   onPlace: (day: number, activityId: string) => void;
   onBudget: (rowId: string) => void;
   onNote: (day: number) => void;
+  onCoverage: () => void;
 }) {
   const {
     places,
@@ -30,6 +33,7 @@ export function JourneyAttention({
     unknownCount,
     budgetScopeUnknown,
     coverageWarnings,
+    mapUnconfigured,
   } = journeyAttention(detail);
   if (
     !places.length &&
@@ -75,6 +79,14 @@ export function JourneyAttention({
           {places.length > 0 && (
             <section aria-label="待明确地点">
               <h3 className="font-medium">地点待明确</h3>
+              {mapUnconfigured && (
+                <p className="mt-2 text-xs leading-6 text-warning">
+                  此版本生成时未配置地图服务，地点没有核对，逐项也无法确认；配置高德地图后可重新整理这份行程。{" "}
+                  <Link href="/settings#maps" className="underline">
+                    前往设置配置地图
+                  </Link>
+                </p>
+              )}
               <ul className="mt-2 space-y-3">
                 {places.map(({ day, stop, activity }) => (
                   <li
@@ -83,8 +95,9 @@ export function JourneyAttention({
                   >
                     <p>
                       第{day}天第{stop}站 · {activity.title}：
-                      {placeStatus[activity.place_status] ?? "地点资料尚未完整"}
-                      。
+                      {activity.booking
+                        ? "已有预约，地点暂不能更改；可先更正或清除预约记录。"
+                        : `${placeStatus[activity.place_status] ?? "地点资料尚未完整"}。`}
                     </p>
                     <Button
                       size="sm"
@@ -152,6 +165,16 @@ export function JourneyAttention({
               <p className="mt-2 text-xs leading-6 text-warning">
                 可在对话中补充安排，或在费用区添加自定义项。明确无需支出时可记为0元，不会自动补价格。
               </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-warning"
+                disabled={busy}
+                onClick={onCoverage}
+                aria-label="查看费用区核对覆盖范围"
+              >
+                查看费用区
+              </Button>
             </section>
           )}
           {notes.length > 0 && (

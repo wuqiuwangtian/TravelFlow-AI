@@ -328,6 +328,7 @@ async def place_trip(
     connected: bool = False,
     replan: bool = False,
     logistics: bool = False,
+    booked_place: bool = False,
 ):
     store = app.state.store
     session = await store.create_session("地点候选验收")
@@ -342,6 +343,8 @@ async def place_trip(
         else place_itinerary()
     )
     req = requirements().model_copy(update={"duration_days": 2})
+    if booked_place:
+        itinerary.days[0].activities[0].booking = Booking(start_time="12:00", duration_minutes=60)
     if connected or replan or logistics:
         itinerary = await itinerary_service.enrich_itinerary(
             itinerary, req, Settings(_env_file=None, amap_api_key=None)

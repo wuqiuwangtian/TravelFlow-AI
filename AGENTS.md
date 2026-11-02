@@ -1,6 +1,6 @@
 # 项目开发约定
 
-- 开发维护入口是 [README.md](MAINTAINING.md)。新会话先核对实际 Git 状态，再读 [PROJECT_STATUS.md](PROJECT_STATUS.md#当前接续状态) 与 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md#当前执行任务)，按用户最新任务工作。
+- 开发维护入口是 [MAINTAINING.md](MAINTAINING.md)。新会话先核对实际 Git 状态，再读 [PROJECT_STATUS.md](PROJECT_STATUS.md#当前接续状态) 与 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md#当前执行任务)，按用户最新任务工作。
 - 当前能力与验证边界只在现状页维护，任务顺序与完成条件只在路线图维护；专题记录保存历史证据。行为、环境、计划或关键决定变化时同步更新受影响文档，阶段交付前更新接续状态，不另建重复快照。
 - 不同 AI 接手或并行工作前，确认分支、未提交改动归属及负责范围；保留已有工作，不覆盖其他参与者修改。并行开发优先用独立分支／worktree，集成前审阅差异并运行相关检查；文档中的历史版本不能替代当前 Git 核对。
 - 前端改动遵守 [frontend/AGENTS.md](frontend/AGENTS.md) 及共享设计规范；不要把历史设计样稿当作未完成的重新选型任务。
