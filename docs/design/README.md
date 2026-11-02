@@ -1,6 +1,6 @@
 # 设计材料与历史样稿
 
-正式应用已完成本轮前端升级。当前规范以 [SYSTEM.md](SYSTEM.md) 和 [DESIGN_BRIEF.md](../../DESIGN_BRIEF.md) 为准；新对话从 [README入口](../../README.md#开发者与-ai-接续入口) 接续，不重新进行四轮选型。
+正式应用已完成本轮前端升级。当前规范以 [SYSTEM.md](SYSTEM.md) 和 [DESIGN_BRIEF.md](../../DESIGN_BRIEF.md) 为准；新对话从 [开发维护入口](../../MAINTAINING.md) 接续，不重新进行四轮选型。
 
 - 正式工作区、撤销、工程、费用、入口配置、回顾、比较和主题的记录见 [升级计划](../../FRONTEND_UPGRADE_PLAN.md)。
 - 最新主题与全站收口见 [交付记录](../frontend-themes.md)／[原图](themes/README.md)。
