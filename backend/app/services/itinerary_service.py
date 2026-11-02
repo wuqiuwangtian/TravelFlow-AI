@@ -451,7 +451,11 @@ async def check_day(
                     )
         elif mode not in {"rail", "flight", "transfer"} and leg.duration_seconds is None:
             leg.status = "unmatched" if provider else "unavailable"
-            leg.message = "保留建议安排，地图恢复后可自动校验。"
+            leg.message = (
+                "地点尚未确认，暂不能核对这段交通；确认两端地点后会重新计算。"
+                if provider and (origin.place is None or destination.place is None)
+                else "保留建议安排，地图恢复后可自动校验。"
+            )
         if leg.cost is None and destination.transport_cost is not None:
             leg.cost, leg.cost_basis = destination.transport_cost, destination.transport_cost_basis
             leg.cost_source = "estimate"

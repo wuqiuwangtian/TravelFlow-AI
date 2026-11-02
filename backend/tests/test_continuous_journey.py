@@ -195,6 +195,22 @@ async def test_auto_transit_failure_falls_back_to_road_transfer():
     assert result.estimated_cost == 30
 
 
+async def test_unconfirmed_place_is_not_reported_as_map_outage():
+    class Maps:
+        async def search_places(self, *args):
+            return []
+
+        async def route(self, *args):
+            raise AssertionError("地点未确认时不应调用算路")
+
+    first = ScheduledActivity(id="a", title="A", place=point("a", "A"))
+    second = ScheduledActivity(id="b", title="未知地点", place_name="未知地点", city="苏州")
+    result = await check_day(DayPlan(day=1, activities=[first, second]), Requirements(), Maps())
+    assert result.legs[0].status == "unmatched"
+    assert "地点尚未确认" in result.legs[0].message
+    assert "地图恢复" not in result.legs[0].message
+
+
 async def test_fixed_user_time_is_not_silently_overwritten():
     first = ScheduledActivity(id="a", title="游览", start_time="09:00", duration_minutes=120)
     fixed = ScheduledActivity(
