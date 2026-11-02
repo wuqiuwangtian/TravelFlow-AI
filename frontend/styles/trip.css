@@ -130,6 +130,7 @@
   .trip-receipt-preview {
     display: inline-flex;
     align-items: center;
+    position: relative;
     min-height: 40px;
     border: 1px solid var(--tf-line);
     border-radius: var(--tf-radius);

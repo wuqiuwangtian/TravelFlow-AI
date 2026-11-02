@@ -358,9 +358,18 @@ for (const interrupted of [false, true]) {
       await send(page, "第1天第5站已完成");
       await send(page, "第1天午餐退款到账10元");
       const recap = page.getByRole("region", { name: "旅行回顾", exact: true });
+      const documentHeight = () =>
+        page.evaluate(() => document.documentElement.scrollHeight);
+      const beforeRecap = await documentHeight();
       await recap
         .getByRole("button", { name: "打开旅行回顾", exact: true })
         .click();
+      await expect(
+        recap.getByLabel("回顾标题", { exact: true }),
+      ).toBeVisible();
+      // 桌面的路线列各自滚动；隐藏的照片上传控件不能把整页撑出大段空白。
+      if ((page.viewportSize()?.width ?? 0) >= 1024)
+        expect(await documentHeight()).toBeLessThanOrEqual(beforeRecap + 100);
       await recap
         .getByLabel("回顾标题", { exact: true })
         .fill("连贯旅行 " + sid);
