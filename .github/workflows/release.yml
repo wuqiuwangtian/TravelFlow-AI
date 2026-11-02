@@ -1,0 +1,48 @@
+name: Release
+
+# 只在 v* tag 推送时创建源码发布；不构建、不附着二进制或镜像。
+on:
+  push:
+    tags:
+      - "v*"
+
+# 创建 Release 需要写仓库内容；其余权限不授予。
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 创建 GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 校验发布元数据与 tag
+        run: node scripts/check-release.mjs --tag "$GITHUB_REF_NAME"
+
+      - name: 从 CHANGELOG 提取对应版本段
+        run: node scripts/check-release.mjs --notes --tag "$GITHUB_REF_NAME" > release-notes.md
+
+      - name: 创建 Release（已存在则跳过）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME 已存在，跳过创建。"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "TravelFlow AI $GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            --latest
+          echo "已创建 Release $GITHUB_REF_NAME（仅源码，未附着构建产物）。"

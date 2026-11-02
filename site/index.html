@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TravelFlow AI · 本地运行的 AI 旅行助手</title>
+    <meta
+      name="description"
+      content="TravelFlow AI 是一个在你自己的电脑上运行的 AI 旅行助手：用对话生成可修改的逐日行程，在旅途中调整安排、记录消费。MIT 许可，源码开放。"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="#top" aria-label="TravelFlow AI 首页">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" focusable="false">
+              <path d="M4 18c4-1 5-4 7-8s4-5 9-5c-1 5-3 8-7 9s-6 2-9 4Z" />
+              <circle cx="15.5" cy="8.5" r="1.6" />
+            </svg>
+          </span>
+          <span class="brand-name">TravelFlow AI</span>
+        </a>
+
+        <nav class="site-nav" aria-label="主导航">
+          <a href="#screens">界面</a>
+          <a href="#features">功能</a>
+          <a href="#start">快速开始</a>
+          <a href="#limits">已知限制</a>
+          <a class="nav-github" href="https://github.com/wuqiuwangtian/TravelFlow-AI">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="wrap hero-inner">
+          <p class="eyebrow">开源 · MIT 许可 · 本地运行</p>
+          <h1>把旅行计划<br />放在你自己的电脑上</h1>
+          <p class="hero-lead">
+            TravelFlow AI 是一个跑在本机的 AI 旅行助手。用对话描述想去哪、玩几天、预算多少，得到可修改的逐日行程；旅途中调整安排、记录实际消费，旅后整理回顾。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#start">三步开始</a>
+            <a class="button button-ghost" href="https://github.com/wuqiuwangtian/TravelFlow-AI">查看源码</a>
+          </div>
+          <ul class="hero-facts">
+            <li>
+              <strong>本地优先</strong>
+              <span>会话与路书保存为本机 SQLite 文件</span>
+            </li>
+            <li>
+              <strong>可修改</strong>
+              <span>版本、分叉、单活动编辑与路线重算</span>
+            </li>
+            <li>
+              <strong>自选模型</strong>
+              <span>OpenAI 兼容接口，或接本地模型</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="screens">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">界面</p>
+            <h2>从规划到旅中，一套连续的记录</h2>
+            <p>桌面端与手机端使用同一份数据。以下截图来自实际界面，使用隔离样例数据，展示主要工作区、工作台与主题。</p>
+          </div>
+
+          <div class="shots">
+            <figure class="shot">
+              <div class="shot-frame">
+                <img
+                  src="assets/desktop-workspace.png"
+                  alt="桌面工作区：左侧导航与旅行列表、中间对话、右侧逐日路书并排显示"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <span class="shot-tag">桌面</span>
+                <strong>工作区</strong>
+                <span>对话、条件与路书在同一屏内协作。</span>
+              </figcaption>
+            </figure>
+
+            <figure class="shot">
+              <div class="shot-frame">
+                <img
+                  src="assets/workbench.png"
+                  alt="旅行工作台：新建旅行、常用偏好入口与最近的旅行列表"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <span class="shot-tag">桌面</span>
+                <strong>工作台</strong>
+                <span>新建旅行、常用偏好入口与最近的旅行。</span>
+              </figcaption>
+            </figure>
+
+            <figure class="shot shot-mobile">
+              <div class="shot-frame">
+                <img
+                  src="assets/mobile-today.png"
+                  alt="手机今日路线：按时间排列当天活动，可标记完成并记录实际消费"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <span class="shot-tag">手机</span>
+                <strong>今日路线</strong>
+                <span>旅中查看安排、完成状态与实际消费。</span>
+              </figcaption>
+            </figure>
+
+            <figure class="shot">
+              <div class="shot-frame">
+                <img
+                  src="assets/themes.png"
+                  alt="三套配色主题下的同一行程页面：暖纸墨绿、冷白深蓝、深灰绿"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                <span class="shot-tag">设置</span>
+                <strong>主题</strong>
+                <span>多套配色与桌面、手机布局密度可选。</span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-tint" id="features">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">功能</p>
+            <h2>围绕真实旅行流程设计</h2>
+            <p>规划、旅中执行与旅后回顾放在同一条记录线上，修改和失败恢复都保留上下文。</p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">01</span>
+              <h3>本地优先的数据</h3>
+              <p>
+                会话、路书与票据记录默认保存在本机 SQLite 文件；配置文件含 API Key，保留在本地
+                <code>.env</code>，不进入版本库。
+              </p>
+            </article>
+
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">02</span>
+              <h3>可回溯的修改</h3>
+              <p>
+                每次修改生成新版本，可从任意版本分叉、对比或回退；替换活动后自动重算当天路线，旧版本保持不变。
+              </p>
+            </article>
+
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">03</span>
+              <h3>检索与地图核验</h3>
+              <p>
+                支持多个检索源；接入高德后可查看地点地图、步行、公交与驾车耗时，以及地点间步行距离。未知信息会单独标注。
+              </p>
+            </article>
+
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">04</span>
+              <h3>旅中执行与记录</h3>
+              <p>
+                今日路线支持完成、跳过与从当前位置调整后续安排；预约、实际消费、退款与报销分别记录，费用未知不当作零。
+              </p>
+            </article>
+
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">05</span>
+              <h3>旅后回顾与生涯</h3>
+              <p>
+                按事实模板整理旅行回顾，汇总到访城市与足迹，常用旅行偏好可复用到下一次规划。
+              </p>
+            </article>
+
+            <article class="feature">
+              <span class="feature-index" aria-hidden="true">06</span>
+              <h3>导出与离线查看</h3>
+              <p>
+                行程可导出为 Markdown 或单文件 HTML，双击即可在浏览器打开；导出内容禁用原始 HTML，避免脚本注入。
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="start">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">快速开始</p>
+            <h2>三步在本地跑起来</h2>
+            <p>需要 Git、uv 0.5 以上与 Node.js 20 以上。首次启动会安装依赖并编译前端，可能需要几分钟。</p>
+          </div>
+
+          <ol class="steps">
+            <li class="step">
+              <span class="step-number" aria-hidden="true">1</span>
+              <div class="step-body">
+                <h3>准备环境</h3>
+                <p>
+                  安装 Git、<a href="https://docs.astral.sh/uv/">uv</a> 与
+                  <a href="https://nodejs.org/">Node.js</a>，然后在终端确认版本：
+                </p>
+                <pre><code>uv --version
+node -v</code></pre>
+                <p class="step-note">Windows 使用 PowerShell 或 Git Bash；macOS、Linux 使用系统终端。</p>
+              </div>
+            </li>
+
+            <li class="step">
+              <span class="step-number" aria-hidden="true">2</span>
+              <div class="step-body">
+                <h3>获取源码并启动</h3>
+                <pre><code>git clone https://github.com/wuqiuwangtian/TravelFlow-AI.git
+cd TravelFlow-AI
+./start.sh        # macOS / Linux / WSL
+start.bat         # Windows：双击运行</code></pre>
+                <p>
+                  脚本会检查环境、安装依赖，并在前后端都就绪后打开浏览器。按
+                  <kbd>Ctrl</kbd> + <kbd>C</kbd> 同时停止两个服务。
+                </p>
+              </div>
+            </li>
+
+            <li class="step">
+              <span class="step-number" aria-hidden="true">3</span>
+              <div class="step-body">
+                <h3>打开界面并配置</h3>
+                <p>
+                  访问 <a href="http://localhost:3100">http://localhost:3100</a>，在「设置」里填写模型与检索服务，然后描述行程。
+                  没有 API Key 也可以先启动并查看界面。
+                </p>
+                <p class="step-note">
+                  默认前端端口 3100、后端端口 8000；可用 <code>FRONTEND_PORT</code>、<code>BACKEND_PORT</code> 调整。
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section-tint" id="limits">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">已知限制</p>
+            <h2>发布前请先了解这些边界</h2>
+          </div>
+
+          <ul class="limits">
+            <li>
+              <strong>本地运行，不提供托管服务。</strong>
+              项目没有在线试用、托管实例或 SLA 承诺；需要在自己的电脑上安装并维护运行环境。
+            </li>
+            <li>
+              <strong>需要自备模型与检索服务。</strong>
+              AI 生成、联网检索与地图能力分别依赖对应服务；第三方服务的可用性、配额与费用由服务方决定。
+            </li>
+            <li>
+              <strong>生成内容需要人工核实。</strong>
+              行程、费用与时间估算可能不准确，出发前请核对地点、营业时间、交通与价格。
+            </li>
+            <li>
+              <strong>地图与部分检索源有使用条件。</strong>
+              地图、路线与地点图片依赖高德并需要自备 Key；部分检索源在特定网络环境下需要代理，或改用国内服务。
+            </li>
+            <li>
+              <strong>数据由你自行保管。</strong>
+              记录保存在本机，默认不加密；请自行备份 <code>backend/data/travelflow.db</code> 与
+              <code>backend/.env</code>，不要提交或分享含密钥的配置。
+            </li>
+            <li>
+              <strong>手机端为响应式网页。</strong>
+              目前不提供原生移动应用；手机浏览器与桌面浏览器使用同一份本地数据。
+            </li>
+            <li>
+              <strong>部分能力仍在校验中。</strong>
+              真实服务、实际旅行与 Windows 环境有各自的验收范围，详见仓库内的开发与验证文档。
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section license" id="license">
+        <div class="wrap license-inner">
+          <div>
+            <p class="eyebrow">许可</p>
+            <h2>MIT License</h2>
+            <p>
+              TravelFlow AI 以 MIT 许可开放源码，可自由使用、修改与分发。第三方组件与许可见
+              <a href="https://github.com/wuqiuwangtian/TravelFlow-AI/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。
+            </p>
+            <p class="license-note">
+              v1.0.0 为纯源码发布，不提供预构建二进制、容器镜像或托管实例。
+            </p>
+          </div>
+          <div class="license-actions">
+            <a class="button button-primary" href="https://github.com/wuqiuwangtian/TravelFlow-AI">在 GitHub 查看源码</a>
+            <a class="button button-ghost" href="https://github.com/wuqiuwangtian/TravelFlow-AI/blob/main/LICENSE">阅读 LICENSE</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <p>TravelFlow AI · MIT License · 源码发布</p>
+        <p>
+          <a href="https://github.com/wuqiuwangtian/TravelFlow-AI">GitHub</a>
+          <span aria-hidden="true"> / </span>
+          <a href="https://github.com/wuqiuwangtian/TravelFlow-AI/blob/main/LICENSE">LICENSE</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

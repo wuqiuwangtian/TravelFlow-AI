@@ -1,0 +1,99 @@
+name: 缺陷报告
+description: 报告可复现的缺陷或异常行为
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜索现有 Issue，并移除日志、截图中的 API Key、`.env` 内容、个人旅行数据和数据库内容。
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，确认不是重复报告
+          required: true
+        - label: 我已移除 API Key、个人数据和数据库内容
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      description: 填写版本号，或执行 git rev-parse --short HEAD 得到的提交号
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 操作系统、Node、Python、uv、pnpm 版本，以及启动方式和浏览器版本
+      placeholder: |
+        操作系统：
+        Node：
+        Python：
+        uv：
+        pnpm：
+        浏览器：
+    validations:
+      required: true
+
+  - type: dropdown
+    id: launch
+    attributes:
+      label: 启动方式
+      options:
+        - start.sh（Linux/macOS/WSL）
+        - start.bat（Windows）
+        - 手动启动前后端
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 实际发生了什么，期望是什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从干净启动开始的最小步骤
+      placeholder: |
+        1. 打开应用并进入某个页面
+        2. 执行某个操作
+        3. 观察到异常结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 请先移除密钥、个人旅行内容和本地绝对路径
+      render: shell
+
+  - type: dropdown
+    id: services
+    attributes:
+      label: 已配置的外部服务
+      multiple: true
+      options:
+        - 未配置外部服务
+        - 大模型（云端）
+        - 大模型（本地）
+        - 信息检索
+        - 高德地图
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 是否稳定复现、最近改动、相关 Issue 等

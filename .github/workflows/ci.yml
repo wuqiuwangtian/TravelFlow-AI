@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 默认只读；需要额外权限的任务在 job 级单独声明
+permissions:
+  contents: read
+
 # 同一分支的重复触发取消旧任务，避免浪费
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -100,3 +104,31 @@ jobs:
           name: browser-test-results
           path: frontend/test-results/
           retention-days: 7
+
+  release-check:
+    name: 发布校验（文档链接 + 版本元数据）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 检查文档相对链接与锚点
+        run: node scripts/check-docs-links.mjs
+
+      - name: 检查发布元数据（LICENSE、版本、敏感文件、README）
+        run: node scripts/check-release.mjs
+
+  dependency-review:
+    name: 依赖变更审查
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4

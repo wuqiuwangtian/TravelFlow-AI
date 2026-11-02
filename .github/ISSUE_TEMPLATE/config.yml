@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（私密报告）
+    url: https://github.com/wuqiuwangtian/TravelFlow-AI/security/advisories/new
+    about: 不要用公开 Issue 报告安全漏洞，请通过 GitHub Security Advisories 私密提交。
+  - name: 使用与开发文档
+    url: https://github.com/wuqiuwangtian/TravelFlow-AI/blob/main/SUPPORT.md
+    about: 安装、配置、开发检查与支持范围说明。
