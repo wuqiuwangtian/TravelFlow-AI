@@ -22,31 +22,31 @@ Linux 缺系统库时使用 `pnpm exec playwright install --with-deps chromium`�
 
 ## FE-0 现状盘点
 
-独立的 `playwright.audit.config.ts` 使用同一隔离服务，串行运行 `tests/audit/` 的 20 项状态探测，不混入正常业务回归。FE-1 后已修复项增加正向断言，`pnpm exec playwright test --config=playwright.audit.config.ts` 输出截图与 JSON 到忽略的 `frontend/test-results/fe1-audit/`，保留 `docs/frontend-audit/` 中的 FE-0 历史证据。源码扫描默认输出到 `frontend/test-results/frontend-inventory/`。报告与边界见 [FE-0 盘点](../../../docs/frontend-audit/README.md)和 [FE-1 交付](../../../docs/frontend-feedback.md)，不能以探测通过宣称没有界面问题。
+独立的 `playwright.audit.config.ts` 使用同一隔离服务，串行运行 `tests/audit/` 的 20 项状态探测，不混入正常业务回归。FE-1 后已修复项增加正向断言，`pnpm exec playwright test --config=playwright.audit.config.ts` 输出截图与 JSON 到忽略的 `frontend/test-results/fe1-audit/`，保留 `docs/frontend-audit/` 中的 FE-0 历史证据。源码扫描默认输出到 `frontend/test-results/frontend-inventory/`。报告与边界见 [FE-0 盘点](../../../docs/internal/frontend-audit/README.md)和 [FE-1 交付](../../../docs/internal/frontend-feedback.md)，不能以探测通过宣称没有界面问题。
 
 ## FE-3 共享基础
 
-`design-foundation.spec.ts` 使用路由替身隔离常用偏好，不改写偏好单例；核对共享按钮／导航的实际反馈、等待与失败恢复、主题基础色对比度和减少动画。此项不证明全站主题设置已完成。整套回归的单 worker 已固化在 `playwright.config.ts`，本地及 CI 均默认串行运行；本次 FE-3 验证采用这一方式，覆盖与边界见 [共享基础交付记录](../../../docs/frontend-foundation.md)。
+`design-foundation.spec.ts` 使用路由替身隔离常用偏好，不改写偏好单例；核对共享按钮／导航的实际反馈、等待与失败恢复、主题基础色对比度和减少动画。此项不证明全站主题设置已完成。整套回归的单 worker 已固化在 `playwright.config.ts`，本地及 CI 均默认串行运行；本次 FE-3 验证采用这一方式，覆盖与边界见 [共享基础交付记录](../../../docs/internal/frontend-foundation.md)。
 
 ## FE-3 旅行工作区
 
-`journey-workspace.spec.ts` 检查 D3／M1 的实际布局、当前站、日期与旅中状态、直达入口和草稿保留，使用浏览器内测试 SVG 核对 P1 缩略图／完整图、失败回落及焦点。正式行为与阶段边界见 [工作区交付记录](../../../docs/frontend-workspace.md)。
+`journey-workspace.spec.ts` 检查 D3／M1 的实际布局、当前站、日期与旅中状态、直达入口和草稿保留，使用浏览器内测试 SVG 核对 P1 缩略图／完整图、失败回落及焦点。正式行为与阶段边界见 [工作区交付记录](../../../docs/internal/frontend-workspace.md)。
 
 ## FE-3 正式规划撤销
 
-`plan-undo.spec.ts` 经正式对话和版本接口检查最近一次规划修改的说明与撤销、等待反馈、输入草稿与焦点、真实消费保留、断流后刷新重试、并发版本冲突、修改记录查询失败与历史隔离。新版本读取稍迟于消息时，手机完成说明仍须回到视野内，初次打开的 M1 顺序保持。业务边界与完整验证见 [撤销交付记录](../../../docs/frontend-plan-undo.md)。
+`plan-undo.spec.ts` 经正式对话和版本接口检查最近一次规划修改的说明与撤销、等待反馈、输入草稿与焦点、真实消费保留、断流后刷新重试、并发版本冲突、修改记录查询失败与历史隔离。新版本读取稍迟于消息时，手机完成说明仍须回到视野内，初次打开的 M1 顺序保持。业务边界与完整验证见 [撤销交付记录](../../../docs/internal/frontend-plan-undo.md)。
 
 ## FE-3 W1 高级工程
 
-`studio-workspace.spec.ts` 检查电脑并排布局、长参数独立滚动、手机直达、草稿与正式版本隔离、独立产物、键盘移动和撤销、空间控件不位移、只读快照，以及保存等待／失败和减少动画。采用核对弹窗还需位于实际页面宽度内并能真实关闭；手机不能只用可能已被内容撑宽的 `innerWidth` 判断溢出。原 `studio-*.spec.ts` 继续核对既有节点与模板、执行、缓存、分日、定位、合并、预算和采用能力。见 [W1 交付记录](../../../docs/frontend-studio.md)。
+`studio-workspace.spec.ts` 检查电脑并排布局、长参数独立滚动、手机直达、草稿与正式版本隔离、独立产物、键盘移动和撤销、空间控件不位移、只读快照，以及保存等待／失败和减少动画。采用核对弹窗还需位于实际页面宽度内并能真实关闭；手机不能只用可能已被内容撑宽的 `innerWidth` 判断溢出。原 `studio-*.spec.ts` 继续核对既有节点与模板、执行、缓存、分日、定位、合并、预算和采用能力。见 [W1 交付记录](../../../docs/internal/frontend-studio.md)。
 
 ## FE-4 比较与指南
 
-`reference-pages.spec.ts` 核对双端各列独立加载及重试、选择上限与正常空态、迟到正文和主方案回执隔离、真实切换主方案时版本不变、分支来源、长内容与实际视口，以及指南的章节跳转、键盘折叠、减少动画和外链说明。临时数据库与现有正式接口继续验证版本和来源；特定失败和迟到响应由测试控制。见 [交付记录](../../../docs/frontend-reference-pages.md)。
+`reference-pages.spec.ts` 核对双端各列独立加载及重试、选择上限与正常空态、迟到正文和主方案回执隔离、真实切换主方案时版本不变、分支来源、长内容与实际视口，以及指南的章节跳转、键盘折叠、减少动画和外链说明。临时数据库与现有正式接口继续验证版本和来源；特定失败和迟到响应由测试控制。见 [交付记录](../../../docs/internal/frontend-reference-pages.md)。
 
 ## FE-4 三主题与最终收口
 
-`theme-settings.spec.ts` 覆盖首屏、默认主题、无效值、跨标签同步、存储受限、服务不可读、服务草稿保护、三主题正式页面与对比度、真实版本不变、节点坐标与模板弹窗。`npm run check:design` 与 CI 约束正式源码的语义颜色和产品 emoji；测试数据及用户原文不受清洗。最终 316 项回归与 Windows 两端核对见 [收口记录](../../../docs/frontend-themes.md)。
+`theme-settings.spec.ts` 覆盖首屏、默认主题、无效值、跨标签同步、存储受限、服务不可读、服务草稿保护、三主题正式页面与对比度、真实版本不变、节点坐标与模板弹窗。`npm run check:design` 与 CI 约束正式源码的语义颜色和产品 emoji；测试数据及用户原文不受清洗。最终 316 项回归与 Windows 两端核对见 [收口记录](../../../docs/internal/frontend-themes.md)。
 
 ## 普通主流程少操作
 

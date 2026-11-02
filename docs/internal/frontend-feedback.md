@@ -1,6 +1,6 @@
 # FE-1 反馈与恢复基础
 
-2026-10-26 起实施，依据 [FE-0 盘点](frontend-audit/README.md)。沿用现有视觉，整体风格、导航布局及手机版分支比较留待 FE-2 讨论。
+2026-10-26 起实施，依据 [FE-0 盘点](./frontend-audit/README.md)。沿用现有视觉，整体风格、导航布局及手机版分支比较留待 FE-2 讨论。
 
 ## 第一组：入口、草稿和旅行列表
 
@@ -41,6 +41,6 @@
 
 | 场景 | 桌面 | 手机 |
 | --- | --- | --- |
-| 旅行列表 | [查看](frontend-feedback/desktop-sessions.png) | [查看](frontend-feedback/mobile-sessions.png) |
-| 节点复制结果 | [查看](frontend-feedback/desktop-studio-copy.png) | [查看](frontend-feedback/mobile-studio-copy.png) |
-| 设置保存结果 | [查看](frontend-feedback/desktop-settings-result.png) | [查看](frontend-feedback/mobile-settings-result.png) |
+| 旅行列表 | [查看](./frontend-feedback/desktop-sessions.png) | [查看](./frontend-feedback/mobile-sessions.png) |
+| 节点复制结果 | [查看](./frontend-feedback/desktop-studio-copy.png) | [查看](./frontend-feedback/mobile-studio-copy.png) |
+| 设置保存结果 | [查看](./frontend-feedback/desktop-settings-result.png) | [查看](./frontend-feedback/mobile-settings-result.png) |

@@ -1,12 +1,12 @@
 # 开发与隔离验收
 
-2026-10-28记录的本机环境（新环境须重新核实），工作区 `/home/wqwt/code/TravelFlow-AI`，WSL Arch＋zsh。当前 WSL Node v26.3.0、Python 3.13.13，后端虚拟环境位于 `backend/.venv`；pnpm、uv 已安装。这是环境记录，不是修改项目最低版本要求。
+2026-10-28记录的本机环境（新环境须重新核实），工作区为仓库根目录（示例路径 `<repo>`），WSL Arch＋zsh。当前 WSL Node v26.3.0、Python 3.13.13，后端虚拟环境位于 `backend/.venv`；pnpm、uv 已安装。这是环境记录，不是修改项目最低版本要求。
 
 ## 环境与日常运行
 
 - 前端 Next.js 16.4.1／React 19.3.0／TypeScript 5.9.3；后端 FastAPI／LangGraph／SQLite。具体依赖以 `package.json`、pnpm 锁文件和 `backend/pyproject.toml`／uv 锁文件为准。
-- 正常前端 3100，正常后端 8000；本站 `/api/backend` 代理到服务端 `BACKEND_URL`。普通使用和首次安装见 [README](../../README.md)。已有 `.env` 不复制覆盖，不回显密钥。
-- 本机终端工具调用使用明确 cwd 与 `login:false`。构建、本地监听、Windows 进程、Git 元数据和网络在当前 Codex 沙箱中通常需工具执行权限；依当前会话权限处理。
+- 正常前端 3100，正常后端 8000；本站 `/api/backend` 代理到服务端 `BACKEND_URL`。普通使用和首次安装见 [README](../../../README.md)。已有 `.env` 不复制覆盖，不回显密钥。
+- 本机终端工具调用使用明确 cwd 与 `login:false`。构建、本地监听、Windows 进程、Git 元数据和网络在当前执行环境的沙箱中通常需工具执行权限；依当前会话权限处理。
 
 ## 后端检查
 
@@ -19,7 +19,7 @@
 .venv/bin/python -m pytest tests -q
 ```
 
-历史测试数量不作为接手基线；当前结果见[项目现状](../../PROJECT_STATUS.md#当前接续状态)。只按本次改动选检查，不为接手重复跑全部历史阶段。
+历史测试数量不作为接手基线；当前结果见[项目现状](../PROJECT_STATUS.md#当前接续状态)。只按本次改动选检查，不为接手重复跑全部历史阶段。
 
 ## 前端检查与浏览器回归
 
@@ -48,7 +48,7 @@ PLAYWRIGHT_BROWSERS_PATH=/tmp/travelflow-browser pnpm exec playwright test --wor
 
 ## Windows 原生核对材料
 
-已归档：[普通主流程](native-qa/ordinary-flow.cjs)、[三主题](native-qa/themes.cjs) 和 [共用运行器](native-qa/runtime.cjs)。用于原生 Edge 两种视口复核，不替代完整 Playwright 集合。
+已归档：[普通主流程](./native-qa/ordinary-flow.cjs)、[三主题](./native-qa/themes.cjs) 和 [共用运行器](./native-qa/runtime.cjs)。用于原生 Edge 两种视口复核，不替代完整 Playwright 集合。
 
 先用两个终端启动独立 QA 服务。第一个在仓库根目录：
 
@@ -66,7 +66,7 @@ BACKEND_URL=http://127.0.0.1:8137 node node_modules/next/dist/bin/next start --h
 
 ```powershell
 $qaNode = "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
-$qaRoot = '\\wsl.localhost\Arch\home\wqwt\code\TravelFlow-AI'
+$qaRoot = '<Windows 可访问的仓库路径>'
 & $qaNode "$qaRoot\docs\handoff\native-qa\ordinary-flow.cjs"
 & $qaNode "$qaRoot\docs\handoff\native-qa\themes.cjs"
 ```
@@ -87,10 +87,10 @@ $qaRoot = '\\wsl.localhost\Arch\home\wqwt\code\TravelFlow-AI'
 
 ## 接手后的最短验收路径
 
-1. 从[开发维护入口](../../MAINTAINING.md)读当前状态与路线图，核对Git分支、未提交改动和负责范围。
-2. 安装依赖／配置按[README](../../README.md)，已有环境先检查 `backend/.venv` 和前端依赖，不重装或覆盖配置。锁文件是依赖版本依据；本文机器版本只是历史环境记录。
+1. 从[开发维护入口](../MAINTAINING.md)读当前状态与路线图，核对Git分支、未提交改动和负责范围。
+2. 安装依赖／配置按[README](../../../README.md)，已有环境先检查 `backend/.venv` 和前端依赖，不重装或覆盖配置。锁文件是依赖版本依据；本文机器版本只是历史环境记录。
 3. 只改文档时检查差异、内部链接和引用路径，不启动模型或重跑业务。后端行为修改按上文运行Ruff、mypy与相关pytest；前端行为修改先完成生产构建，再运行相关浏览器场景。
-4. 浏览器验收应由仓库测试配置启动隔离服务；预期3137页面可打开、8137健康检查成功，测试用例通过。不得把正常8000个人数据库服务当QA后端。完整入口和场景见[测试说明](../../frontend/tests/e2e/README.md)。
-5. 阶段完成更新[现状](../../PROJECT_STATUS.md#当前接续状态)的版本／证据／未完成工作，以及[路线图](../../PRODUCT_ROADMAP.md#当前执行任务)中的任务状态；历史证据按需补到已有专题，不另建交接总览。
+4. 浏览器验收应由仓库测试配置启动隔离服务；预期3137页面可打开、8137健康检查成功，测试用例通过。不得把正常8000个人数据库服务当QA后端。完整入口和场景见[测试说明](../../../frontend/tests/e2e/README.md)。
+5. 阶段完成更新[现状](../PROJECT_STATUS.md#当前接续状态)的版本／证据／未完成工作，以及[路线图](../PRODUCT_ROADMAP.md#当前执行任务)中的任务状态；历史证据按需补到已有专题，不另建交接总览。
 
 `/tmp`工具与本机浏览器缓存只是可选便利，不是新AI接手的前置条件。没有Windows运行库或外部服务凭据时标注未验证，不把静态检查写作实际运行成功。

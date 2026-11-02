@@ -1,6 +1,6 @@
 # 前端视觉与交互设计约定
 
-阶段：2026-10-28。四轮选型已完成，沿用默认 A、D3／M1、C1／P1、R1／W1 与两端密度。FE-3 主要页面五批及 FE-4 四批已交付，三主题设置、剩余控件与颜色收口和本轮隔离回归已完成。结果与边界见 [收口记录](docs/frontend-themes.md)。共享设计规范见 [SYSTEM.md](docs/design/SYSTEM.md)。
+阶段：2026-10-28。四轮选型已完成，沿用默认 A、D3／M1、C1／P1、R1／W1 与两端密度。FE-3 主要页面五批及 FE-4 四批已交付，三主题设置、剩余控件与颜色收口和本轮隔离回归已完成。结果与边界见 [收口记录](./docs/internal/frontend-themes.md)。共享设计规范见 [SYSTEM.md](./docs/design/SYSTEM.md)。
 
 ## 用户已明确的要求
 
@@ -55,7 +55,7 @@
 
 ## 第四轮已确认的决定
 
-[完整任务交互样稿](docs/design/task-flows.html)与[任务说明](docs/design/TASK_FLOWS.md)串联对话改行程、上一站导航与完成、原位实付与预算差额、自由节点工程。主题、密度、D3／M1、C1／P1 全部沿用已确认值；正文沿用样稿中的系统中文无衬线字体栈与层级作为迁移基线，实际页面继续核对可读性。
+[完整任务交互样稿](./docs/design/task-flows.html)与[任务说明](./docs/design/TASK_FLOWS.md)串联对话改行程、上一站导航与完成、原位实付与预算差额、自由节点工程。主题、密度、D3／M1、C1／P1 全部沿用已确认值；正文沿用样稿中的系统中文无衬线字体栈与层级作为迁移基线，实际页面继续核对可读性。
 
 - R1：直接同步可撤销的行程修改，原位解释变化并可撤销；用户已选为默认方式，符合尽量少操作的目标。实付仍由用户填写保存，撤销规划保留已记消费。
 - R2：先在对话核对建议，采用后同步路线、预估与路书，也可保留原安排。与 R1 比较的是修改采用方式，不是能否继续用对话规划。
@@ -76,6 +76,6 @@
 
 选型确认后形成配色、字体与层级、间距、圆角、边界、图标、动效、状态和移动端规则，并用共享组件承载。新页面和新节点复用规范；确需新变体时先补规范，不在业务文件中临时拼一套视觉。
 
-FE-2 的比较样稿保留为历史记录。FE-3 已按批次将确认项应用到共享基础、应用外壳、D3／M1 正式工作区、R1 对话规划撤销、W1 高级工程及费用与旅中操作，覆盖与验证见 [共享基础](docs/frontend-foundation.md)、[正式旅行工作区](docs/frontend-workspace.md)、[正式规划撤销](docs/frontend-plan-undo.md)、[高级工程工作区](docs/frontend-studio.md)及[费用与旅中操作](docs/frontend-trip-money.md)；FE-4 的入口与配置页面见 [首批交付](docs/frontend-account-pages.md)，回顾、照片和生涯见 [第二批交付](docs/frontend-history.md)，比较与指南见 [第三批交付](docs/frontend-reference-pages.md)，主题与全站收口见 [第四批交付](docs/frontend-themes.md)。不替换现有行程数据，不把样稿模拟结果当成真实业务能力。现有 emoji 和缺失动效在 FE-3/4 的组件迁移与全站收口中清理，必须列入检查，不能仅检查新首页。
+FE-2 的比较样稿保留为历史记录。FE-3 已按批次将确认项应用到共享基础、应用外壳、D3／M1 正式工作区、R1 对话规划撤销、W1 高级工程及费用与旅中操作，覆盖与验证见 [共享基础](./docs/internal/frontend-foundation.md)、[正式旅行工作区](./docs/internal/frontend-workspace.md)、[正式规划撤销](./docs/internal/frontend-plan-undo.md)、[高级工程工作区](./docs/internal/frontend-studio.md)及[费用与旅中操作](./docs/internal/frontend-trip-money.md)；FE-4 的入口与配置页面见 [首批交付](./docs/internal/frontend-account-pages.md)，回顾、照片和生涯见 [第二批交付](./docs/internal/frontend-history.md)，比较与指南见 [第三批交付](./docs/internal/frontend-reference-pages.md)，主题与全站收口见 [第四批交付](./docs/internal/frontend-themes.md)。不替换现有行程数据，不把样稿模拟结果当成真实业务能力。现有 emoji 和缺失动效在 FE-3/4 的组件迁移与全站收口中清理，必须列入检查，不能仅检查新首页。
 
-样稿入口：[第一轮视觉方向](docs/design/visual-directions.html)、[第二轮布局比较](docs/design/layout-options.html)、[第三轮组件与图文](docs/design/layout-options.html?round=components)、[第四轮完整任务](docs/design/task-flows.html)。其中地点、时刻、金额与操作结果均为界面演示；前两轮保留为比较记录，当前默认密度与布局以本文件为准。
+样稿入口：[第一轮视觉方向](./docs/design/visual-directions.html)、[第二轮布局比较](./docs/design/layout-options.html)、[第三轮组件与图文](./docs/design/layout-options.html?round=components)、[第四轮完整任务](./docs/design/task-flows.html)。其中地点、时刻、金额与操作结果均为界面演示；前两轮保留为比较记录，当前默认密度与布局以本文件为准。
