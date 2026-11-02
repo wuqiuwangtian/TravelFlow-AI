@@ -155,7 +155,7 @@ function readChangelogSections(text) {
   for (let i = 0; i < headings.length; i += 1) {
     const current = headings[i];
     const nextIndex = lines.findIndex(
-      (line, index) => index > current.bodyStart - 1 && /^##[ \t]+\[/.test(line),
+      (line, index) => index > current.bodyStart - 1 && /^##[ \t]+/.test(line),
     );
     if (nextIndex !== -1) current.bodyEnd = nextIndex;
   }
