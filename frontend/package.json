@@ -2,6 +2,14 @@
   "name": "travelflow-frontend",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wuqiuwangtian/TravelFlow-AI.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "packageManager": "pnpm@12.6.0",
   "scripts": {
     "dev": "next dev",
