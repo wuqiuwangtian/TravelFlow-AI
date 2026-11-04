@@ -4,6 +4,13 @@
 
 ---
 
+## [未发布]
+
+### 安全修复
+
+- 定点升级certifi至2026.10.18，移除受损CA证书信任（[维护者公告](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2)）。
+- 升级langgraph-checkpoint-sqlite至3.1.2及其依赖langgraph-checkpoint至4.3.1，采用Store命名空间校验修复（[维护者公告](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-6hmw-9432-67qq)）。现有v1.0.0源码标签不变，使用main的用户需同步代码并执行 `uv sync --frozen` 更新后端环境。
+
 ## [1.0.0] - 2026-11-02
 
 首个公开版本，以 MIT License 发布。TravelFlow AI 是一个跑在本机的 AI 旅行助手：用对话描述需求，得到可修改的结构化行程，并在旅途中调整安排、记录消费，旅后整理回顾。
