@@ -30,3 +30,6 @@
 *.ico binary
 *.woff binary
 *.woff2 binary
+
+# 跨仓契约按原始字节校验摘要，所有平台保持LF。
+contracts/** text eol=lf
