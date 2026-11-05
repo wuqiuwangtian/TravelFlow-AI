@@ -27,6 +27,10 @@ TravelFlow AI 的源码以 [MIT License](./LICENSE) 发布。第三方依赖、�
 
 `@img/sharp-libvips` 是本机可选原生依赖，本仓库不复制其源码，也不修改它。若重新分发包含该库的安装目录或构建产物，请保留其许可文本并遵守 LGPL 的相应义务；不需要把本项目代码改为 LGPL。前端生产构建会打包第三方 JavaScript，重新分发构建产物时应保留相应依赖的许可声明。
 
+## 隔离开发原型
+
+`frontend/prototypes/android-runtime/` 单独锁定 Capacitor 8.6.0（`@capacitor/core`、`@capacitor/android`、`@capacitor/cli`，MIT），没有进入正式前端依赖。生成脚本将 core 的许可文本复制到原型静态资源；完整候选依赖见该目录的 `pnpm-lock.yaml`。Android SDK、模拟器系统镜像与 JDK 不随本仓库分发，使用者需自行安装并遵守各自许可；原型锁定不代表正式客户端框架已定型。
+
 ## 示例图片
 
 `docs/design/assets/west-lake-reference.jpg`

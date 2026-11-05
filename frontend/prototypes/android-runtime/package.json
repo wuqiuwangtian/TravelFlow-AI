@@ -1,0 +1,13 @@
+{
+  "name": "travelflow-android-p0",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/core": "8.6.0",
+    "@capacitor/android": "8.6.0",
+    "@capacitor/cli": "8.6.0"
+  },
+  "packageManager": "pnpm@12.6.0",
+  "license": "MIT",
+  "description": "Isolated P0 Android runtime candidate; not production application dependencies"
+}

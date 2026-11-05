@@ -114,3 +114,13 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 上述清单检查器只依赖Python标准库。仓库根目录也可运行 `uv run --project backend python backend/scripts/check_mobile_inventory.py`，不要求POSIX shell；Windows原生Python可用 `py backend/scripts/check_mobile_inventory.py`。这些是工具入口，不代表Windows安装包已验收。静态导出成功后，可用 `python -m http.server 18489 --bind 127.0.0.1 --directory <新目录>` 查看隔离原型；正式用户入口不应要求执行此开发命令。
 
 P0跨端账目口径：仓库根目录执行 `uv run --project backend python backend/scripts/export_ledger_vectors.py --check`，再在frontend执行 `node scripts/check-local-ledger.mjs`。前者使用正式Python模型检查参考样例，后者用已锁定的TypeScript编译器运行隔离汇总并对照。需要更新样例时去掉 `--check`，必须审阅领域行为差异；两项已进入CI。该工具不读取.env／个人数据，也不证明写入或同步正确。页面损坏样例验证只在原型独立IndexedDB进行，不得在用户真实账本中注入错误数据。
+
+### P0 Android隔离运行时原型
+
+仓库根目录运行 `node frontend/scripts/prepare-android-probe.mjs --output <不存在的新目录>`。需要已安装正式前端开发依赖、Node 22+ 与 pnpm；脚本仅在新目录按原型锁文件安装 Capacitor 8.6.0 并生成工程，不安装SDK、不接受许可、不修改正式前端依赖。目标目录已存在会拒绝，避免覆盖工作。使用官方 [Android SDK](https://developer.android.com/studio#command-line-tools-only) 及 JDK 21；生成的 Gradle wrapper 为8.14.3，compile／target SDK为36，AGP默认Build Tools为35.0.0。安装过程可能额外下载Gradle／Maven依赖。
+
+用户已明确允许本机为隔离原型接受官方SDK许可和下载。工具缓存使用 `~/.cache/travelflow-p0-android/`，最终验收工程及APK在 `/tmp/travelflow android final p0/`；均不进入仓库。其他开发者仍需自行确认许可与安装位置。用当前终端的 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_USER_HOME`、`GRADLE_USER_HOME` 指向自己的隔离目录，在生成工程的 `android/` 执行 `./gradlew :app:assembleDebug --no-daemon`（Windows用 `gradlew.bat`）。Android系统镜像用于模拟器，并非APK构建前提。不要把整个SDK或生成工程提交。
+
+虚构HTTP服务：仓库根目录执行 `python backend/scripts/android_probe_service.py`，固定监听 `127.0.0.1:18510`，不运行正式后端，也不读取.env。模拟器通过 `10.0.2.2:18510/echo`访问宿主；原型debug配置仅为该地址开放明文，release默认拒绝明文；不适用真机访问。`X-P0-Token: fixture-token`是公开虚构测试值，不是实际鉴权设计。
+
+安装debug APK仅限自己的隔离模拟器（应用ID `org.travelflow.p0`），不要默认向ADB列出的第一台设备安装。打开后应显示原生桥就绪；保存1.23元后重放同一操作，条数与金额不应增加。强制停止后重新打开应保留；模拟器关闭网络后冷启动仍应可新增。恢复网络，点击测试服务应得到原生HTTP通过；停止服务后请求失败，本地保存仍可用。固定金额／单表SQLite不是正式财务写入或同步协议。实际证据、剩余流式／取消缺口和下一步见[计划运行时验证](../MOBILE_CONTINUITY_PLAN.md#p0-android运行时验证2026-11-05)。
