@@ -112,3 +112,5 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 功能矩阵覆盖：运行 `backend/.venv/bin/python backend/scripts/check_mobile_inventory.py`；从任意目录定位仓库，校验源码与[移动矩阵](../MOBILE_CAPABILITIES.md)。新增路由或改变声明时同步分类，缺项、过期项、重复项失败；工具不判定领域语义正确性。个人机型不是推进前提，性能基线工具暂保留不继续优化，当前按里程碑公开兼容矩阵推进。
 
 上述清单检查器只依赖Python标准库。仓库根目录也可运行 `uv run --project backend python backend/scripts/check_mobile_inventory.py`，不要求POSIX shell；Windows原生Python可用 `py backend/scripts/check_mobile_inventory.py`。这些是工具入口，不代表Windows安装包已验收。静态导出成功后，可用 `python -m http.server 18489 --bind 127.0.0.1 --directory <新目录>` 查看隔离原型；正式用户入口不应要求执行此开发命令。
+
+P0跨端账目口径：仓库根目录执行 `uv run --project backend python backend/scripts/export_ledger_vectors.py --check`，再在frontend执行 `node scripts/check-local-ledger.mjs`。前者使用正式Python模型检查参考样例，后者用已锁定的TypeScript编译器运行隔离汇总并对照。需要更新样例时去掉 `--check`，必须审阅领域行为差异；两项已进入CI。该工具不读取.env／个人数据，也不证明写入或同步正确。页面损坏样例验证只在原型独立IndexedDB进行，不得在用户真实账本中注入错误数据。

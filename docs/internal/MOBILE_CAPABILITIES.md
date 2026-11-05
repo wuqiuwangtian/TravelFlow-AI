@@ -112,3 +112,7 @@
 | `routes_system.list_models` | `GET /api/system/models` | ONLINE |
 
 声明共84项；以源码和检查器当前结果为准。Android实际能力、SDK与离线覆盖必须另给运行证据。
+
+## 当前原型证据
+
+账目只读汇总已完成Python参考样例与TS原型的14组口径对照，详见[里程碑证据](MOBILE_CONTINUITY_PLAN.md#p0账目领域口径核对2026-11-05)。它不是整个LOCAL类别或写入接口已迁移，也不改变上表正式适配未完成的状态。

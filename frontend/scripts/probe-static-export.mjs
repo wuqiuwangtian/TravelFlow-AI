@@ -17,7 +17,7 @@ if (output && existsSync(output)) throw new Error("Output directory must not alr
 const temporary = mkdtempSync(path.join(tmpdir(), "travelflow-export-probe-"));
 try {
   for (const name of [
-    "app", "components", "lib", "styles", "public", "package.json",
+    "app", "components", "lib", "styles", "public", "prototypes", "package.json",
     "pnpm-lock.yaml", "tsconfig.json", "next-env.d.ts", "postcss.config.mjs",
   ]) {
     if (name === "next-env.d.ts" && !existsSync(path.join(root, name))) continue;

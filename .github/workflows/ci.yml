@@ -53,6 +53,9 @@ jobs:
       - name: 移动功能迁移清单覆盖检查
         run: uv run python scripts/check_mobile_inventory.py
 
+      - name: 移动账目参考样例与Python规则一致
+        run: PYTHONPATH=. uv run python scripts/export_ledger_vectors.py --check
+
   frontend:
     name: 前端（typecheck + build）
     runs-on: ubuntu-latest
@@ -78,6 +81,9 @@ jobs:
 
       - name: 依赖漏洞检查（包含开发依赖，中危及以上阻断）
         run: pnpm audit --audit-level=moderate
+
+      - name: 可移植账目原型与参考样例一致
+        run: node scripts/check-local-ledger.mjs
 
       - name: 类型检查
         run: pnpm typecheck
