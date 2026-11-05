@@ -9,6 +9,7 @@
 | [开发与隔离验收](./handoff/DEVELOPMENT.md) | 环境、检查命令、测试服务与 Windows 核对方法 |
 | [项目约定](../../AGENTS.md) | AI 开工与协作规则；前端另读其目录约定 |
 | [设计约束](../../DESIGN_BRIEF.md)、[共享规范](../design/SYSTEM.md) | 已确认体验与实现规范；历史样稿不是待重新选型任务 |
+| [手机端说明](../design/MOBILE.md) | 面向所有者与维护者的实际页面、设计归属、源码入口与待评审取舍；不作为手机设计已获认可的证明 |
 | [主流程验收记录](./ordinary-flow.md)、[更新日志](../../CHANGELOG.md) | 按日期保留的问题、修复与证据，不承担当前任务清单 |
 
 最短启动路径见 [README 的手动启动说明](../../README.md#手动启动开发调试)：后端 `uv sync` 后运行 `uv run uvicorn app.main:app --reload --port 8000`，前端 `pnpm install` 后运行 `pnpm dev -p 3100`（分别在对应目录执行）。配置步骤按 README 说明，勿覆盖已有 `.env`。最短隔离验收与预期结果见[开发说明](./handoff/DEVELOPMENT.md#接手后的最短验收路径)。

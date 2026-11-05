@@ -2,6 +2,7 @@
 
 正式应用已完成本轮前端升级。当前规范以 [SYSTEM.md](./SYSTEM.md) 和 [DESIGN_BRIEF.md](../../DESIGN_BRIEF.md) 为准；新对话从 [开发维护入口](../internal/MAINTAINING.md) 接续，不重新进行四轮选型。
 
+- 手机端先看[现状与设计评审说明](MOBILE.md)：页面结构、实际选择规则、连接／定位边界与待用户决定事项；具体手机实现不因历史选型记录而被视为已获用户认可。
 - 正式工作区、撤销、工程、费用、入口配置、回顾、比较和主题的记录见 [升级计划](../internal/FRONTEND_UPGRADE_PLAN.md)。
 - 最新主题与全站收口见 [交付记录](../internal/frontend-themes.md)／[原图](./themes/README.md)。
 - 普通用户主流程最新修复见 [走查记录](../internal/ordinary-flow.md)／[原图](../internal/ordinary-flow/README.md)。
