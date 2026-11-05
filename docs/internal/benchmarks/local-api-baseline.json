@@ -1,0 +1,464 @@
+{
+  "schema_version": 1,
+  "workload_sha256": "a5ee001debb9102f4b9c799ef938024bd3bc1dfda8a7a49adea3c66b17c805a1",
+  "python": "3.13.13",
+  "measurement": "in-process ASGI; SQLite; initialized runtime; sequential requests",
+  "excluded": [
+    "network",
+    "Next.js proxy",
+    "browser",
+    "Android",
+    "external providers"
+  ],
+  "spans": "nested, do not sum; instrumentation overhead included",
+  "invariants": "historical version immutable; exact ledger; unknown costs preserved",
+  "cases": [
+    {
+      "days": 3,
+      "activities": 18,
+      "initial_versions": 10,
+      "final_versions": 70,
+      "results": {
+        "read_version": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 1.062,
+            "p95": 1.524,
+            "max": 19.637
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 21909,
+            "p95": 21909,
+            "max": 21909
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 0.361,
+              "p95": 0.544,
+              "max": 0.561
+            }
+          }
+        },
+        "read_session": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 0.876,
+            "p95": 1.544,
+            "max": 1.597
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 2713,
+            "p95": 2713,
+            "max": 2713
+          },
+          "spans_ms": {}
+        },
+        "progress": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 7.625,
+            "p95": 11.368,
+            "max": 26.22
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 21945,
+            "p95": 21974,
+            "max": 21974
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 1.188,
+              "p95": 1.902,
+              "max": 2.113
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 1.547,
+              "p95": 2.531,
+              "max": 2.652
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 0.281,
+              "p95": 0.395,
+              "max": 0.401
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 2.1,
+              "p95": 2.583,
+              "max": 2.954
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.278,
+              "p95": 0.486,
+              "max": 0.773
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.405,
+              "p95": 0.797,
+              "max": 0.844
+            }
+          }
+        },
+        "expense": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 9.156,
+            "p95": 10.218,
+            "max": 10.278
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 31230,
+            "p95": 39896,
+            "max": 40515
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 1.236,
+              "p95": 1.704,
+              "max": 1.811
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 2.017,
+              "p95": 2.558,
+              "max": 2.698
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 0.438,
+              "p95": 0.576,
+              "max": 0.599
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 2.226,
+              "p95": 3.169,
+              "max": 3.391
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.33,
+              "p95": 0.693,
+              "max": 1.533
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.516,
+              "p95": 0.703,
+              "max": 0.977
+            }
+          }
+        }
+      }
+    },
+    {
+      "days": 7,
+      "activities": 42,
+      "initial_versions": 10,
+      "final_versions": 70,
+      "results": {
+        "read_version": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 1.416,
+            "p95": 2.056,
+            "max": 11.382
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 48539,
+            "p95": 48539,
+            "max": 48539
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 0.527,
+              "p95": 0.869,
+              "max": 0.905
+            }
+          }
+        },
+        "read_session": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 0.794,
+            "p95": 1.181,
+            "max": 1.199
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 2713,
+            "p95": 2713,
+            "max": 2713
+          },
+          "spans_ms": {}
+        },
+        "progress": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 9.911,
+            "p95": 11.492,
+            "max": 29.924
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 48575,
+            "p95": 48604,
+            "max": 48604
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 1.48,
+              "p95": 2.152,
+              "max": 2.164
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 2.248,
+              "p95": 2.867,
+              "max": 2.892
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 0.51,
+              "p95": 0.587,
+              "max": 0.614
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 2.64,
+              "p95": 3.081,
+              "max": 3.085
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.308,
+              "p95": 0.512,
+              "max": 0.609
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.61,
+              "p95": 1.113,
+              "max": 2.401
+            }
+          }
+        },
+        "expense": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 10.671,
+            "p95": 13.537,
+            "max": 13.631
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 57864,
+            "p95": 66530,
+            "max": 67149
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 1.381,
+              "p95": 1.926,
+              "max": 2.179
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 2.23,
+              "p95": 3.081,
+              "max": 3.13
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 0.682,
+              "p95": 0.92,
+              "max": 0.988
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 2.833,
+              "p95": 3.46,
+              "max": 3.956
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.284,
+              "p95": 0.574,
+              "max": 0.666
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.587,
+              "p95": 0.927,
+              "max": 1.973
+            }
+          }
+        }
+      }
+    },
+    {
+      "days": 14,
+      "activities": 84,
+      "initial_versions": 10,
+      "final_versions": 70,
+      "results": {
+        "read_version": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 1.843,
+            "p95": 2.73,
+            "max": 11.133
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 95304,
+            "p95": 95304,
+            "max": 95304
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 0.618,
+              "p95": 1.091,
+              "max": 1.153
+            }
+          }
+        },
+        "read_session": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 0.862,
+            "p95": 1.312,
+            "max": 1.445
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 2713,
+            "p95": 2713,
+            "max": 2713
+          },
+          "spans_ms": {}
+        },
+        "progress": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 12.275,
+            "p95": 15.757,
+            "max": 33.431
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 95340,
+            "p95": 95369,
+            "max": 95369
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 1.865,
+              "p95": 2.583,
+              "max": 2.614
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 2.967,
+              "p95": 4.007,
+              "max": 4.66
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 0.936,
+              "p95": 1.103,
+              "max": 1.127
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 2.928,
+              "p95": 3.547,
+              "max": 5.414
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.318,
+              "p95": 0.669,
+              "max": 0.672
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.82,
+              "p95": 1.492,
+              "max": 1.724
+            }
+          }
+        },
+        "expense": {
+          "asgi_ms": {
+            "samples": 30,
+            "p50": 14.153,
+            "p95": 17.166,
+            "max": 17.649
+          },
+          "response_bytes": {
+            "samples": 30,
+            "p50": 104715,
+            "p95": 113465,
+            "max": 114090
+          },
+          "spans_ms": {
+            "get_version_detail_ms": {
+              "samples": 30,
+              "p50": 2.038,
+              "p95": 2.5,
+              "max": 2.911
+            },
+            "aget_state_ms": {
+              "samples": 30,
+              "p50": 3.456,
+              "p95": 4.98,
+              "max": 5.389
+            },
+            "markdown_ms": {
+              "samples": 30,
+              "p50": 1.181,
+              "p95": 1.897,
+              "max": 1.922
+            },
+            "aupdate_state_ms": {
+              "samples": 30,
+              "p50": 3.24,
+              "p95": 4.619,
+              "max": 4.856
+            },
+            "create_version_ms": {
+              "samples": 30,
+              "p50": 0.381,
+              "p95": 0.583,
+              "max": 0.73
+            },
+            "save_plan_ms": {
+              "samples": 30,
+              "p50": 0.832,
+              "p95": 1.44,
+              "max": 2.752
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -100,3 +100,9 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 前端执行 `pnpm install --frozen-lockfile`、`pnpm audit --audit-level=moderate`；审计包括开发依赖，CI遇到中危及以上告警或审计请求失败会阻断。修复后运行完整lint、类型与设计检查、生产构建及受影响浏览器流程；先构建再执行依赖 `.next` 类型的检查，不并发改写构建目录。
 
 临时安全版本覆盖在 `frontend/pnpm-workspace.yaml`（pnpm 12），不放package.json，不通过audit忽略列表掩盖问题。当前覆盖zod的受影响4.x与minimatch的受影响7—10.x；旧minimatch 3.x不在本次公告范围。待上游兼容约束允许安全版本后再移除覆盖，并重新检查锁文件、审计和lint。GitHub Dependabot的告警状态与pnpm审计分别核对，清零不替代业务访问边界和数据恢复验收。
+
+## P0性能与打包边界工具
+
+在backend执行 `PYTHONPATH=. .venv/bin/python scripts/benchmark_local.py --samples 30 --output /tmp/local-api.json`；临时数据库自动清理，禁用外部服务，不读取个人配置。每类操作至少30次才用作本地基线；CI用 `--samples 2` 冒烟，仅验证工具与数据不变量，不设机器时延阈值。报告分段有嵌套，不相加；ASGI数据不含网络／代理／浏览器／Android或冷启动。
+
+在已安装前端依赖后执行 `node scripts/probe-static-export.mjs`。它复制必要源码到临时目录、改临时配置并尝试静态导出，结束清理，不覆盖正常.next。输出blocked表示已复现动态路由阻塞，不是静态构建通过；未知构建错误返回非零。当前结果和后续动作见[计划P0证据](../MOBILE_CONTINUITY_PLAN.md#p0现有证据与接续点2026-11-05)。

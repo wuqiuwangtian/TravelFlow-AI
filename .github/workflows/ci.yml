@@ -36,16 +36,19 @@ jobs:
         run: uv sync --frozen
 
       - name: 代码风格检查
-        run: uv run ruff format --check app
+        run: uv run ruff format --check app scripts
 
       - name: 静态检查
-        run: uv run ruff check app
+        run: uv run ruff check app scripts
 
       - name: 类型检查
         run: uv run mypy app
 
       - name: 行程与接口测试
         run: uv run pytest -q
+
+      - name: 隔离性能工具冒烟（不设耗时阈值）
+        run: PYTHONPATH=. uv run python scripts/benchmark_local.py --samples 2 --output "$RUNNER_TEMP/local-api-smoke.json"
 
   frontend:
     name: 前端（typecheck + build）
