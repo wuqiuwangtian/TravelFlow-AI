@@ -50,6 +50,9 @@ jobs:
       - name: 隔离性能工具冒烟（不设耗时阈值）
         run: PYTHONPATH=. uv run python scripts/benchmark_local.py --samples 2 --output "$RUNNER_TEMP/local-api-smoke.json"
 
+      - name: 移动功能迁移清单覆盖检查
+        run: uv run python scripts/check_mobile_inventory.py
+
   frontend:
     name: 前端（typecheck + build）
     runs-on: ubuntu-latest

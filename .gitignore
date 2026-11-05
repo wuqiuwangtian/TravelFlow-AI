@@ -30,6 +30,7 @@ frontend/next-env.d.ts
 htmlcov/
 test-results/
 playwright-report/
+.playwright-cli/
 
 # Python 缓存
 __pycache__/

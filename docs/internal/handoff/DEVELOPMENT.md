@@ -106,3 +106,9 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 在backend执行 `PYTHONPATH=. .venv/bin/python scripts/benchmark_local.py --samples 30 --output /tmp/local-api.json`；临时数据库自动清理，禁用外部服务，不读取个人配置。每类操作至少30次才用作本地基线；CI用 `--samples 2` 冒烟，仅验证工具与数据不变量，不设机器时延阈值。报告分段有嵌套，不相加；ASGI数据不含网络／代理／浏览器／Android或冷启动。
 
 在已安装前端依赖后执行 `node scripts/probe-static-export.mjs`。它复制必要源码到临时目录、改临时配置并尝试静态导出，结束清理，不覆盖正常.next。输出blocked表示已复现动态路由阻塞，不是静态构建通过；未知构建错误返回非零。当前结果和后续动作见[计划P0证据](../MOBILE_CONTINUITY_PLAN.md#p0现有证据与接续点2026-11-05)。
+
+静态本地入口原型：前端运行 `node scripts/probe-static-export.mjs --portable-entry --output <新目录>`，目标目录必须不存在。结果可用静态HTTP服务打开，不需要Python业务后端；页面仅使用独立原型IndexedDB。正式路由与.next不受影响。它没有Service Worker或完整领域适配，断网新增与恢复静态资源后重载的数据保留，不等于断网冷启动／Android支持。
+
+功能矩阵覆盖：运行 `backend/.venv/bin/python backend/scripts/check_mobile_inventory.py`；从任意目录定位仓库，校验源码与[移动矩阵](../MOBILE_CAPABILITIES.md)。新增路由或改变声明时同步分类，缺项、过期项、重复项失败；工具不判定领域语义正确性。个人机型不是推进前提，性能基线工具暂保留不继续优化，当前按里程碑公开兼容矩阵推进。
+
+上述清单检查器只依赖Python标准库。仓库根目录也可运行 `uv run --project backend python backend/scripts/check_mobile_inventory.py`，不要求POSIX shell；Windows原生Python可用 `py backend/scripts/check_mobile_inventory.py`。这些是工具入口，不代表Windows安装包已验收。静态导出成功后，可用 `python -m http.server 18489 --bind 127.0.0.1 --directory <新目录>` 查看隔离原型；正式用户入口不应要求执行此开发命令。

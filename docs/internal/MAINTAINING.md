@@ -7,6 +7,7 @@
 | [项目现状](./PROJECT_STATUS.md#当前接续状态) | 当前版本、已完成能力、验证边界、阻塞与接续位置 |
 | [产品路线](./PRODUCT_ROADMAP.md#当前执行任务) | 有效产品目标、任务顺序与完成条件；任务状态只在这里维护 |
 | [电脑—手机改进里程碑](MOBILE_CONTINUITY_PLAN.md) | 个人Android＋Windows／WSL本地独立运行、免终端与直接同步的专项计划；框架及连接工具待P0验证 |
+| [移动功能迁移矩阵](MOBILE_CAPABILITIES.md) | 84个当前接口的目标执行层与迁移边界，CI检查声明覆盖，不作为已移植证明 |
 | [开发与隔离验收](./handoff/DEVELOPMENT.md) | 环境、检查命令、测试服务与 Windows 核对方法 |
 | [项目约定](../../AGENTS.md) | AI 开工与协作规则；前端另读其目录约定 |
 | [设计约束](../../DESIGN_BRIEF.md)、[共享规范](../design/SYSTEM.md) | 已确认体验与实现规范；历史样稿不是待重新选型任务 |
