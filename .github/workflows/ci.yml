@@ -82,9 +82,6 @@ jobs:
       - name: 依赖漏洞检查（包含开发依赖，中危及以上阻断）
         run: pnpm audit --audit-level=moderate
 
-      - name: 可移植账目原型与参考样例一致
-        run: node scripts/check-local-ledger.mjs
-
       - name: 类型检查
         run: pnpm typecheck
 

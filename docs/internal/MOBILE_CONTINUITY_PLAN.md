@@ -1,6 +1,6 @@
 # 下一里程碑：双端本地运行与可靠同步
 
-日期：2026-11-05。依据用户实际反馈和本轮澄清制定。本页是里程碑目标、阶段与验收的权威位置；路线图只维护入口，现状页记录实际实现与证据。当前P0已开始，本地接口基线与静态打包边界已复现；Android及连接原型未完成，正式业务改造未开始；框架与连接工具是待验证建议，不是已批准依赖。未部署、采购、迁移或升级应用架构。
+日期：2026-11-05。依据用户实际反馈和本轮澄清制定。用户已确认拆成电脑与独立移动两个仓库，当前责任边界见第3.1节与文末双仓接续；下方P0记录保留历史实验和验证边界，不代表旧命令仍在本仓库。本页是里程碑目标、阶段与验收的权威位置；路线图只维护入口，现状页记录实际实现与证据。当前P0已开始，本地接口基线与静态打包边界已复现；Android及连接原型未完成，正式业务改造未开始；框架与连接工具是待验证建议，不是已批准依赖。未部署、采购、迁移或升级应用架构。
 
 ## 1. 已确定的目标与范围
 
@@ -33,6 +33,9 @@
 ## 3. 推荐架构及需要验证的取舍
 
 ### 3.1 两个本地客户端，共用数据契约
+
+用户已确认分成两个应用仓库：本仓库负责电脑端与现有网页、Python业务、Windows／WSL启停和电脑侧同步；[TravelFlow-Mobile](https://github.com/wuqiuwangtian/TravelFlow-Mobile)负责Android界面、本地执行／存储、独立在线调用和手机侧同步。拆仓不削减移动端原定能力，不代表Capacitor定型。共享契约权威位置为本仓库[contracts](../../contracts/README.md)，移动侧显式导入固定提交快照，两边构建不通过相邻路径互相导入。暂不设第三仓库／共享包；设计token也按来源提交快照更新，不要求两端同步发布。完整同步数据／兼容协商契约仍待P1评审。
+
 
 ```mermaid
 flowchart LR
@@ -193,7 +196,7 @@ P0进行中，其余阶段未开始。每阶段交付可安装／可运行结果
 
 这是初始化后的进程内ASGI测量，不含网络、Next代理、浏览器、Android、模型／地图、冷启动或真实复杂旅行；分段指标存在嵌套不能相加。样本依次执行，写入时版本／消费逐步增长，不能当作固定负载对比或实际手机速度。该条件下未复现秒级等待，不能据此否认用户反馈或宣布提速完成；下一步需关联用户实际慢操作，补代理／渲染和外部调用测量。
 
-[静态导出探针](../../frontend/scripts/probe-static-export.mjs)在临时副本中编译现有前端，未改正式next.config或.next。编译／类型阶段通过，静态导出因动态会话／回顾／工程路由缺少generateStaticParams而被阻断；并行构建下首个报错路由可能不同。命令输出blocked和真实构建退出码，不把探针成功运行等同构建通过。因此现有Next站点不能原封不动当Android静态资源，后续需单独验证可打包入口与本地业务适配；依据也见[Next官方静态导出限制](https://nextjs.org/docs/app/guides/static-exports)。这不是Android APK验证或正式应用构建失败。
+[历史静态导出探针](https://github.com/wuqiuwangtian/TravelFlow-AI/blob/974743fc9df181f01919d06e4cf3cc4a5908bd49/frontend/scripts/probe-static-export.mjs)在临时副本中编译现有前端，未改正式next.config或.next。编译／类型阶段通过，静态导出因动态会话／回顾／工程路由缺少generateStaticParams而被阻断；并行构建下首个报错路由可能不同。命令输出blocked和真实构建退出码，不把探针成功运行等同构建通过。因此现有Next站点不能原封不动当Android静态资源，后续需单独验证可打包入口与本地业务适配；依据也见[Next官方静态导出限制](https://nextjs.org/docs/app/guides/static-exports)。这不是Android APK验证或正式应用构建失败。
 
 初次环境只读核对：WSL PATH及常见SDK目录未找到ADB／Android SDK，Java为27.0.1.0.3；Windows的PowerShell 5.1及wsl.exe可通过绝对路径执行，PATH缺失不能当作Windows不可访问。该次尚未安装SDK、连接工具、创建账号或调用用户真实模型（SDK后续授权与隔离安装见下方运行时证据）；未验证真机、打包框架、GUI服务生命周期和异地P2P。用户随后要求面向开源兼容性且暂停性能工作；改用公开系统矩阵推进，不再等待个人机型与慢操作。连接方案仍需覆盖VPN／代理共存，不能按个人网络推定可用。
 
@@ -211,9 +214,9 @@ P0进行中，其余阶段未开始。每阶段交付可安装／可运行结果
 
 ## P0账目领域口径核对（2026-11-05）
 
-新增[可移植汇总原型](../../frontend/prototypes/domain/ledger.ts)，只处理规范化实付／回款数据的只读汇总，不依赖DOM、网络、Next或原生存储；隔离静态页面和Node检查使用同一份TS源码。正式Python后端未改，不能称为正式两端已共用实现。
+新增[可移植汇总原型](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/main/src/domain/ledger.ts)，只处理规范化实付／回款数据的只读汇总，不依赖DOM、网络、Next或原生存储；隔离静态页面和Node检查使用同一份TS源码。正式Python后端未改，不能称为正式两端已共用实现。
 
-[参考样例生成器](../../backend/scripts/export_ledger_vectors.py)直接调用现有 `Itinerary.ledger_summary` 生成[14组虚构样例](../../frontend/prototypes/domain/ledger-vectors.json)。覆盖空账本、分币、退款与报销、待到账、按原消费逐笔超额回款、净额为负、旧记录无法匹配的回款、较大整分及2000笔记录；人工预算不能混入实付。大样本的repeat只用于测试展开，不是业务／同步协议。CI分别检查样例是否仍符合Python规则，以及TS输出是否符合样例，规则变化须审阅而非盲目重生成。
+[参考样例生成器](../../backend/scripts/export_ledger_vectors.py)直接调用现有 `Itinerary.ledger_summary` 生成[14组虚构样例](../../contracts/ledger-v1/ledger-vectors.json)。覆盖空账本、分币、退款与报销、待到账、按原消费逐笔超额回款、净额为负、旧记录无法匹配的回款、较大整分及2000笔记录；人工预算不能混入实付。大样本的repeat只用于测试展开，不是业务／同步协议。CI分别检查样例是否仍符合Python规则，以及TS输出是否符合样例，规则变化须审阅而非盲目重生成。
 
 Node对照全部通过，输入对象保持不变；原型拒绝非正整分、非法枚举与超出JS安全整数范围的值／累计，避免舍入冒充精确计算。这不是对Python任意整数的全范围等价保证；P1仍需明确跨平台金额编码与边界。此处只验证汇总，不包含消费录入校验、活动／付款日关联、预算结算、修改／删除、幂等或同步冲突。
 
@@ -224,7 +227,7 @@ Node对照全部通过，输入对象保持不变；原型拒绝非正整分、�
 
 ## P0 Android运行时验证（2026-11-05）
 
-用户明确允许为隔离原型接受官方Android SDK许可并下载。新增 [工程准备脚本](../../frontend/scripts/prepare-android-probe.mjs)、[候选原型源码及独立锁文件](../../frontend/prototypes/android-runtime/) 与 [虚构HTTP服务](../../backend/scripts/android_probe_service.py)，工具链与生成工程均在仓库外。正式Next／Python业务和前端主锁文件不变；Capacitor 8.6.0（MIT）仅是隔离候选，未确认正式框架。
+用户明确允许为隔离原型接受官方Android SDK许可并下载。新增 [工程准备脚本](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/main/scripts/prepare-android-probe.mjs)、[候选原型源码及独立锁文件](https://github.com/wuqiuwangtian/TravelFlow-Mobile/tree/main/prototypes/android-runtime) 与 [虚构HTTP服务](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/main/scripts/android_probe_service.py)，工具链与生成工程均在仓库外。正式Next／Python业务和前端主锁文件不变；Capacitor 8.6.0（MIT）仅是隔离候选，未确认正式框架。
 
 构建证据：JDK 21.0.13、Gradle wrapper 8.14.3、AGP 8.13.0、compile／target SDK 36、Build Tools 35.0.0，`:app:assembleDebug --offline --no-daemon`通过，应用ID `org.travelflow.p0`。生成APK约4MB，仅是固定金额实验页，不代表正式应用体积。全工程 `assembleDebug`首次因额外Cordova库打包任务从Maven下载Kotlin依赖的TLS错误失败；应用目标随后独立通过，不能记为全工程构建通过。SDKManager镜像下载也遇到连接中断／TLS握手错误；最终以curl从相同官方地址下载、核对官方仓库XML中的SHA-1后解压，AVD工具正常识别，没有降低TLS校验。
 
@@ -236,4 +239,13 @@ Node对照全部通过，输入对象保持不变；原型拒绝非正整分、�
 
 候选限制：[Capacitor Http文档](https://capacitorjs.com/docs/apis/http)及8.6.0实际Android源码中，`CapacitorHttp.request`在`HttpRequestHandler`读取完整响应后才resolve；不能据普通POST通过就认定支持SSE分块或AbortController的真实取消。流式输出、取消、断线恢复、安全凭据存储、HTTPS证书失败与真实供应商仍需后续验证。APK声明min SDK 24不等于本项目支持Android 7：本实验使用ES2022模块，实际最低WebView／ABI和ARM64、真机、电源管理、空间不足与迁移均未覆盖。
 
-接续：下一项独立验证流式／取消传输适配；达标后继续P0 Windows／WSL入口和成熟连接工具原型。完整功能迁移矩阵、双端数据契约和平台支持评审仍是P0门槛，不提前启动P1／P2迁移。复跑入口见[开发说明](handoff/DEVELOPMENT.md#p0-android隔离运行时原型)。
+接续：下一项独立验证流式／取消传输适配；达标后继续P0 Windows／WSL入口和成熟连接工具原型。完整功能迁移矩阵、双端数据契约和平台支持评审仍是P0门槛，不提前启动P1／P2迁移。复跑入口见[移动开发说明](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/main/docs/internal/MAINTAINING.md)。
+
+
+## 双仓拆分与接续（2026-11-05）
+
+用户认可拆分方向并授权创建公开MIT移动仓库。迁移清单：Android候选目录、工程准备脚本、固定金额原生存储、虚构HTTP服务、TS账目汇总及检查迁入移动仓库；共享样式以带SHA的设计快照移入；Python参考样例迁到本仓库contracts/ledger-v1，由manifest固定实验契约0.1.0，移动仓库导入来源015ca90的完整提交。现有正式网页和手机窄屏适配保留。旧浏览器IndexedDB入口、静态导出探针与桌面侧TS原型检查删除，由已验证原生原型接续；历史代码保留在974743f，不是删除用户业务能力。
+
+迁移后移动仓库独立冻结安装、14组领域对照、摘要及漂移拒绝检查、类型检查与离线APK构建通过；APK全部12个assets及两个Java源文件与迁移前一致。本轮未重跑模拟器／真机或真实供应商。移动初始提交8443cd0的远端CI已通过（含候选APK构建、TS对照及审计）；桌面CI保留Python语义／契约清单及原有应用检查，最新运行结果仍需按提交核对。桌面本地类型检查、ESLint（0错误／11条既有警告）、设计契约、Python样例／84接口清单、契约摘要、文档／发布元数据及Webpack生产构建通过；默认Turbopack本次报内部端口绑定Operation not permitted，不能记为本地默认构建通过，远端CI仍执行默认构建。本轮未重跑正式业务全量回归。
+
+下一项分工：本仓库继续P0 Windows／WSL免终端管理入口，先证明启动、健康检查、重复启动、安全停止、数据目录识别及模式切换不会误开空库；移动仓库继续P0流式／取消／恢复适配，完成条件由其PRODUCT_ROADMAP维护。两端随后联合验证直连与完整数据契约，P0仍未结束；跨仓协议变更需记录双方验收版本。现状与交付版本分别由两仓PROJECT_STATUS维护，不复制完整接续快照。

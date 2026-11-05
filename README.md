@@ -19,7 +19,7 @@ TravelFlow AI 面向普通旅行者：规划、执行、记账和回顾使用同
 
 > 截图使用隔离样例数据，不是真实旅行记录。
 
-手机操作与连接条件见[手机浏览器使用](docs/user-guide.md#手机浏览器使用)。
+手机操作与连接条件见[手机浏览器使用](docs/user-guide.md#手机浏览器使用)。独立 Android 客户端在 [TravelFlow-Mobile](https://github.com/wuqiuwangtian/TravelFlow-Mobile) 开发，目前仍是技术原型，尚不能替代本项目使用；本仓库继续维护电脑端与现有网页。
 
 ## 功能亮点
 
