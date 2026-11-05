@@ -94,3 +94,9 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 5. 阶段完成更新[现状](../PROJECT_STATUS.md#当前接续状态)的版本／证据／未完成工作，以及[路线图](../PRODUCT_ROADMAP.md#当前执行任务)中的任务状态；历史证据按需补到已有专题，不另建交接总览。
 
 `/tmp`工具与本机浏览器缓存只是可选便利，不是新AI接手的前置条件。没有Windows运行库或外部服务凭据时标注未验证，不把静态检查写作实际运行成功。
+
+## 依赖安全检查
+
+前端执行 `pnpm install --frozen-lockfile`、`pnpm audit --audit-level=moderate`；审计包括开发依赖，CI遇到中危及以上告警或审计请求失败会阻断。修复后运行完整lint、类型与设计检查、生产构建及受影响浏览器流程；先构建再执行依赖 `.next` 类型的检查，不并发改写构建目录。
+
+临时安全版本覆盖在 `frontend/pnpm-workspace.yaml`（pnpm 12），不放package.json，不通过audit忽略列表掩盖问题。当前覆盖zod的受影响4.x与minimatch的受影响7—10.x；旧minimatch 3.x不在本次公告范围。待上游兼容约束允许安全版本后再移除覆盖，并重新检查锁文件、审计和lint。GitHub Dependabot的告警状态与pnpm审计分别核对，清零不替代业务访问边界和数据恢复验收。

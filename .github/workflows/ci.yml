@@ -70,6 +70,9 @@ jobs:
       - name: 安装依赖（严格锁定版本）
         run: pnpm install --frozen-lockfile
 
+      - name: 依赖漏洞检查（包含开发依赖，中危及以上阻断）
+        run: pnpm audit --audit-level=moderate
+
       - name: 类型检查
         run: pnpm typecheck
 

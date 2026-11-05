@@ -1,6 +1,6 @@
 # TravelFlow AI 阶段现状
 
-整理日期：2026-11-04。本页描述当前代码能力与验收边界；使用方法见 [README](../../README.md)，后续顺序见 [产品路线](./PRODUCT_ROADMAP.md)，具体变更见 [更新日志](../../CHANGELOG.md)。
+整理日期：2026-11-05。本页描述当前代码能力与验收边界；使用方法见 [README](../../README.md)，后续顺序见 [产品路线](./PRODUCT_ROADMAP.md)，具体变更见 [更新日志](../../CHANGELOG.md)。
 
 项目入口与文档职责见 [开发维护文档](./MAINTAINING.md)。本页维护当前状态，不重复维护路线图的任务表。
 
@@ -14,17 +14,19 @@
 - 已有协作授权：常规开发和可逆修复自主推进，每个完整阶段可提交并推送既有远端；明确风险、方向疑虑或重要取舍由用户决定。未授权对外发消息、付费开通或生产部署。不同 AI 在有并行改动时先确认归属与集成边界，不能覆盖他人工作。
 - 版本、原始消费／付款日、预约、已完成记录、人工预算、照片和请求幂等受保护；未知不等于零，撤销规划不撤销已记消费。设计决定见[设计约束](../../DESIGN_BRIEF.md)，运行与秘密信息边界见[开发说明](./handoff/DEVELOPMENT.md)。
 
-## 2026-11-04 现状复核与依赖安全修复
+## 当前安全修复与验收（2026-11-05）
 
-核对基线为 `bf7c6cd`，开工时main与已fetch的origin/main同步且工作区干净；该基线的CI与Pages已核实成功，不能当作后续依赖修复的CI结果。v1.0.0仍为正式发布版本，本轮不创建新tag或部署。
+开工基线 `8c7eeb0`，已fetch确认main与origin/main同步且工作区干净；该提交的CI 41839147604和Pages成功，GitHub开放Dependabot告警查询为空。本批继续R3依赖修复，不发布新tag或部署；v1.0.0仍是正式版本。
 
-完整后端798项、Ruff检查／格式、mypy 120个源文件、前端TypeScript与设计检查通过。复用现有前端生产构建，普通主流程、完整旅程、结束／重新开启三个浏览器专项26项桌面／390px手机场景通过。初次失败为 `/tmp` 浏览器缺失，补装对应headless shell后重跑成功；不算产品故障。未重建前端、未跑全量浏览器、未新调用真实模型／检索／地图，不证明所有场景无缺陷。
+已完成的后端依赖修复：certifi 2026.10.18移除受损CA信任，langgraph-checkpoint-sqlite 3.1.2及langgraph-checkpoint 4.3.1采用Store命名空间校验。修复依据和公告见[未发布更新日志](../../CHANGELOG.md#未发布)。上一批完整后端798项、Ruff与mypy通过，本批未改后端且未重跑该全量。
 
-推送时GitHub报告3条开放依赖告警，随后经已授权的 `gh api` 核实：certifi为critical，langgraph-checkpoint-sqlite为两条同一GHSA的moderate记录。对照[certifi维护者公告](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2)与[LangGraph维护者公告](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-6hmw-9432-67qq)，定点升级certifi至2026.10.18、langgraph-checkpoint-sqlite至3.1.2，并由解析器升级其依赖langgraph-checkpoint至4.3.1。前者移除受损证书信任，后者修复Store命名空间检查；未证明本项目存在可达的跨命名空间利用路径，不把依赖告警当作已发生数据泄露。修复后完整后端798项再次通过；静态、锁文件与相关浏览器结果按当前修复核对。
+本批重新审计后，对ESLint开发工具链使用范围限定的pnpm overrides：zod 4.x受影响版本固定到4.6.6，minimatch受影响的7—10.x固定到11.0.1，上游尚未接受该安全主版本。minimatch公告于11月4日将范围收窄为>=7.0.0且<11.0.1，因此保留未受该告警影响且被旧插件使用的3.1.5；不为消除数字而强制替换所有分支。pnpm 12的约束写在workspace配置并进入锁文件，上游接受安全版本后可移除临时覆盖，移除仍须验证lint与构建。
 
-未解决事项：`pnpm audit --json`另报告开发依赖zod 4.6.5的high告警（GHSA-mrhx-c7xc-m3w5），以及minimatch 10.2.6／3.1.5的moderate告警（GHSA-g3hv-75wg-m249），路径在ESLint工具链。此批未修改前端依赖，下一轮优先核查影响与兼容修复，不能视作安全问题已清零。GitHub告警是否关闭需待默认分支重新分析，不手动忽略告警。
+本地验证：冻结锁文件安装通过，pnpm audit全部依赖当前零告警；完整ESLint零错误／11条既有警告，TypeScript及设计检查通过，Webpack生产构建成功。本次使用新构建运行ordinary-flow、complete-journey、completion三个专项，26项桌面／390px手机回归全部通过，覆盖正常与故障恢复、分支隔离、记账及回顾导出；未运行全量浏览器。ESLint插件对10.x的peer版本提示在原基线已存在，未通过降级或关闭规则处理。未新增真实模型／检索／地图调用，未做真实手机硬件或多日实走。
 
-业务回归未复现阻塞；通用提醒噪声、候选手输、结束／回顾入口偏深仍待用户实际体验后决定。下一轮按用户确认的[验证、可靠性与安全里程碑](./PRODUCT_ROADMAP.md#下一里程碑验证可靠性与安全)推进，先处理剩余依赖告警，再完成验收与恢复／边界检查。版本、财务、预约、照片及个人数据库未改写。
+CI新增包含开发依赖的 `pnpm audit --audit-level=moderate`，中危及以上告警或审计请求失败均使步骤失败，不忽略告警。审计零告警只代表当前数据库未发现已知问题，不代表应用安全审查完成。命令及覆盖维护见[开发说明](./handoff/DEVELOPMENT.md#依赖安全检查)。
+
+后续按[路线图](./PRODUCT_ROADMAP.md#下一里程碑验证可靠性与安全)做故障恢复、数据／附件一致性和其余安全边界检查。功能改进待用户真实体验后决定，个人数据库、密钥、原始账目和附件未改写。
 
 ## 阶段判断
 

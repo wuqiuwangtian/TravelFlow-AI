@@ -8,6 +8,9 @@
 
 ### 安全修复
 
+- 修复前端ESLint工具链的zod与minimatch依赖告警，限定范围覆盖到zod 4.6.6及minimatch 11.0.1；保留未受本次公告影响的minimatch 3.x。依据：[zod公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)、[minimatch公告](https://github.com/advisories/GHSA-g3hv-75wg-m249)。同步代码后在frontend执行 `pnpm install --frozen-lockfile`。
+- CI增加包含开发依赖的pnpm漏洞审计，中危及以上阻断。
+
 - 定点升级certifi至2026.10.18，移除受损CA证书信任（[维护者公告](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2)）。
 - 升级langgraph-checkpoint-sqlite至3.1.2及其依赖langgraph-checkpoint至4.3.1，采用Store命名空间校验修复（[维护者公告](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-6hmw-9432-67qq)）。现有v1.0.0源码标签不变，使用main的用户需同步代码并执行 `uv sync --frozen` 更新后端环境。
 

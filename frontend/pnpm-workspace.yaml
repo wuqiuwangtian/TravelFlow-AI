@@ -8,3 +8,9 @@
 # 由 `pnpm approve-builds unrs-resolver` 生成。
 allowBuilds:
   unrs-resolver: true
+
+# 开发工具链的安全修复。仅替换受影响的版本，不改仍被旧插件使用的 minimatch 3.x。
+# 上游约束允许安全版本后可移除；跨主版本替换须通过完整 ESLint 与构建验证。
+overrides:
+  'zod@>=4.0.0 <4.6.6': 4.6.6
+  'minimatch@>=7.0.0 <11.0.1': 11.0.1
