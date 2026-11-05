@@ -122,12 +122,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: 检查共享契约清单与摘要
+      - name: 共享契约与源码启动失败保护回归
+        run: node --test scripts/*.test.mjs
+
+      - name: 检查共享契约摘要与已发布版本不变性
+        env:
+          CONTRACT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: node scripts/check-contracts.mjs
 
       - name: 检查文档相对链接与锚点

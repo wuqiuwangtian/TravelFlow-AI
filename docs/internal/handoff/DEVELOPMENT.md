@@ -115,9 +115,17 @@ $qaRoot = '<Windows 可访问的仓库路径>'
 
 ```sh
 node scripts/check-contracts.mjs
+node --test scripts/*.test.mjs
 uv run --project backend python backend/scripts/export_ledger_vectors.py --check
 ```
 
-前者核对契约清单与摘要，后者用正式Python模型核对14组虚构样例；两项纳入本仓库CI。移动仓库单独校验快照与TS实现，不在桌面CI安装移动依赖或SDK。首次提取来源为本仓库提交015ca90；移动快照记录完整提交SHA。既有版本目录不能原地改写；新语义需建新版本、审阅差异并与移动端共同验收，不能盲目重生成旧样例消除失败。源码和契约升级不触碰个人数据。
+契约检查默认核对清单与摘要；完整版本保护使用 `node scripts/check-contracts.mjs --baseline <完整已发布提交SHA>`，基线缺失会失败。Node回归覆盖发布版本保护与start.sh失败退出；Python检查用正式模型核对14组虚构样例；两项纳入本仓库CI。移动仓库单独校验快照与TS实现，不在桌面CI安装移动依赖或SDK。首次提取来源为本仓库提交015ca90；移动快照记录完整提交SHA。既有版本目录不能原地改写；新语义需建新版本、审阅差异并与移动端共同验收，不能盲目重生成旧样例消除失败。源码和契约升级不触碰个人数据。
 
 SDK工具缓存仍在本机 `~/.cache/travelflow-p0-android/`，用户已授权用于隔离原型；它不属于本仓库，移仓不会卸载或重新接受许可。先前模拟器交互证据是历史结果，迁移后的构建与检查必须分别记录。桌面下一项按专项计划P0验证Windows／WSL免终端入口、数据目录识别与安全启停，随后继续连接原型；不继续在此仓库扩展Android实验。
+
+
+## 桌面源码启动故障核对
+
+`start.sh`健康检查需HTTP成功，后端或前端超过等待次数就失败退出、进入清理，不打印“已启动”或打开浏览器。该修复不改变数据路径和正式业务。运行 `bash -n start.sh` 及 `node --test scripts/startup.test.mjs`：用临时目录、假uv／pnpm／curl和短生命周期假服务验证后端超时、HTTP500、前端超时；不安装依赖、不启动用户后端、不读取个人.env。测试加速等待次数只发生在假seq／sleep中，正式等待次数不变。
+
+这不是完整进程管理验证：真实uv／pnpm子进程树、Windows start.bat、重复实例、外来端口、休眠唤醒及原生／WSL数据切换仍需后续P0实测。日常使用当前仍需源码环境与终端。Windows脚本的超时和退出语义尚未纳入本批修复，应与管理入口一起核对，不能拿POSIX测试替代Windows证据。

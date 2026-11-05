@@ -74,15 +74,19 @@ APP_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_POR
 BACKEND_PID=$!
 cd ..
 
-# 等待后端就绪（最多 30 秒）
+# 等待后端就绪（最多30次，每次HTTP请求另有2秒超时）
+BACKEND_READY=0
 for _ in $(seq 1 30); do
-  if curl -sS -o /dev/null -m 2 "http://127.0.0.1:$BACKEND_PORT/api/system/health" 2>/dev/null; then
+  if curl --fail -sS -o /dev/null -m 2 "http://127.0.0.1:$BACKEND_PORT/api/system/health" 2>/dev/null; then
     ok "后端已就绪"
+    BACKEND_READY=1
     break
   fi
   kill -0 "$BACKEND_PID" 2>/dev/null || fail "后端启动失败，日志：/tmp/travelflow-backend.log"
   sleep 1
 done
+
+[ "$BACKEND_READY" -eq 1 ] || fail "等待后端超时，日志：/tmp/travelflow-backend.log"
 
 # ---------------------------------------------------------- 前端
 info "准备前端（首次安装依赖可能较慢）…"
@@ -99,14 +103,18 @@ FRONTEND_PID=$!
 cd ..
 
 info "等待前端就绪…"
+FRONTEND_READY=0
 for _ in $(seq 1 60); do
-  if curl -sS -o /dev/null -m 2 "http://127.0.0.1:$FRONTEND_PORT/" 2>/dev/null; then
+  if curl --fail -sS -o /dev/null -m 2 "http://127.0.0.1:$FRONTEND_PORT/" 2>/dev/null; then
     ok "前端已就绪"
+    FRONTEND_READY=1
     break
   fi
   kill -0 "$FRONTEND_PID" 2>/dev/null || fail "前端启动失败，日志：/tmp/travelflow-frontend.log"
   sleep 1
 done
+
+[ "$FRONTEND_READY" -eq 1 ] || fail "等待前端超时，日志：/tmp/travelflow-frontend.log"
 
 # ---------------------------------------------------------- 打开浏览器
 URL="http://localhost:$FRONTEND_PORT"
