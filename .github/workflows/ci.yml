@@ -130,6 +130,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: 检查共享契约清单与摘要
+        run: node scripts/check-contracts.mjs
+
       - name: 检查文档相对链接与锚点
         run: node scripts/check-docs-links.mjs
 

@@ -1,0 +1,11 @@
+{
+  "contract_id": "travelflow.ledger-projection",
+  "contract_version": "0.1.0",
+  "status": "experimental",
+  "fixture_schema_version": 1,
+  "scope": "read-only-ledger-projection",
+  "files": {
+    "SPEC.md": "9885dbf2ee02b4554f4d1ca55cc6c6543fd52315209fcf2cb60dd8e7bb78dffb",
+    "ledger-vectors.json": "6fe0fd451bfec4b9650065de135c05a7d7bfc19be1940b7774565dfe858f56aa"
+  }
+}

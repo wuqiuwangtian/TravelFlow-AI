@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.domain.itinerary import Itinerary  # noqa: E402
 
-DESTINATION = ROOT / "frontend/prototypes/domain/ledger-vectors.json"
+DESTINATION = ROOT / "contracts/ledger-v1/ledger-vectors.json"
 
 
 def vectors():
