@@ -17,7 +17,7 @@ from contextlib import ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from desktop.processes import OwnedProcess, OwnerExit
+from desktop.processes import OwnedProcess, OwnerExit, supervisor_python
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL_VERSION = 1
@@ -393,7 +393,7 @@ def start(folder, chosen, ports, *, timeout=None):
             raise RuntimeError("Another selection already owns this state directory")
         return {**running, "reused": True}
     command = [
-        sys.executable,
+        supervisor_python(),
         "-m",
         "desktop",
         "_serve",

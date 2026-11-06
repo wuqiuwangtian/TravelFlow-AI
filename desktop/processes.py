@@ -10,6 +10,12 @@ import sys
 from pathlib import Path
 
 
+def supervisor_python():
+    # Windows venv executables can spawn a redirector child before job assignment.
+    # The stdlib manager/gate must run directly; the business app keeps its own venv.
+    return getattr(sys, "_base_executable", sys.executable) if os.name == "nt" else sys.executable
+
+
 class WindowsJob:
     """Kill-on-close job; a gated wrapper joins before it can create children."""
 
@@ -88,7 +94,7 @@ class OwnedProcess:
     def __init__(self, command, *, cwd, env, log):
         self.job = None
         self.process = subprocess.Popen(
-            [sys.executable, str(Path(__file__).with_name("child.py"))],
+            [supervisor_python(), str(Path(__file__).with_name("child.py"))],
             cwd=cwd,
             env=env,
             stdin=subprocess.PIPE,

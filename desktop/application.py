@@ -236,6 +236,7 @@ def service_specs(folder, chosen, ports, instance, proof_token):
         "TRAVELFLOW_NEXT_DIST_DIR": dist_name(),
         "BACKEND_URL": f"http://127.0.0.1:{ports[0]}",
         "NEXT_TELEMETRY_DISABLED": "1",
+        "PYTHONIOENCODING": "utf-8",
         "NO_PROXY": bypass,
         "no_proxy": bypass,
     }
