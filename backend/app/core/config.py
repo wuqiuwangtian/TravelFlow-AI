@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -203,4 +204,5 @@ def _all_llm_ids():
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """获取全局配置单例（便于测试时通过 ``cache_clear`` 重置）。"""
-    return Settings()
+    env_file = os.environ.get("APP_ENV_FILE")
+    return Settings(_env_file=env_file) if env_file else Settings()

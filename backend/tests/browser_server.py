@@ -272,8 +272,11 @@ async def lifespan(app):
     routes_studio.create_llm_provider = lambda settings: BrowserLLM()
     routes_studio.create_search_provider = lambda settings: FakeSearch()
     with TemporaryDirectory(prefix="travelflow-browser-") as folder:
-        db = Path(folder) / "acceptance.db"
+        db = getattr(app.state, "acceptance_database", Path(folder) / "acceptance.db")
+        if hasattr(app.state, "acceptance_database"):
+            settings.session_db_path = db
         conn = await create_connection(db)
+        app.state.db = conn
         try:
             async with open_checkpointer(db) as saver:
                 app.state.store = SessionStore(conn)

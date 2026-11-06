@@ -41,3 +41,8 @@ __pycache__/
 
 # Isolated desktop supervisor state (control token and private logs)
 .desktop-run/
+
+frontend/.next-desktop-*/
+frontend/.next-desktop-*-tsconfig.json
+*.travelflow.lock
+*.travelflow-owner.json

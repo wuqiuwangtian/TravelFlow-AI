@@ -1,4 +1,4 @@
-"""Isolated D0 supervisor. Real application adapters and a GUI are not enabled yet."""
+"""D0 supervisor for isolated probes and explicitly selected source applications."""
 
 import hmac
 import json
@@ -13,7 +13,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -77,9 +77,13 @@ def write_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
-@contextmanager
 def instance_lock(folder):
-    with open(folder / "manager.lock", "a+b") as stream:
+    return file_lock(folder / "manager.lock")
+
+
+@contextmanager
+def file_lock(path):
+    with open(path, "a+b") as stream:
         stream.seek(0)
         if os.name == "nt":
             import msvcrt
@@ -156,45 +160,82 @@ def current(folder):
 
 
 def free_ports(ports):
-    reservations = []
-    try:
-        for port in ports:
-            sock = socket.socket()
-            reservations.append(sock)
-            if os.name == "nt":
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            sock.bind(("127.0.0.1", port))
-    except OSError as error:
-        raise RuntimeError(
-            "Requested service port is occupied; no existing service was stopped"
-        ) from error
-    finally:
-        for sock in reservations:
-            sock.close()
+    # A bind-only probe mistakes recently closed TCP TIME_WAIT sockets for live services.
+    # This is only a preflight: readiness must still prove the per-launch identity.
+    for port in ports:
+        with socket.socket() as sock:
+            sock.settimeout(0.2)
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                raise RuntimeError(
+                    "Requested service port is occupied; no existing service was stopped"
+                )
 
 
 def validate(folder, chosen, ports):
     if len(ports) != 2 or len(set(ports)) != 2 or not all(0 < p < 65536 for p in ports):
         raise ValueError("Two distinct explicit TCP ports are required")
-    if not Path(chosen["database"]).is_relative_to(folder):
+    profile = chosen.get("profile")
+    if profile not in ("synthetic-probe", "application-qa", "application"):
+        raise ValueError("Unknown runtime profile")
+    if profile != "application" and not Path(chosen["database"]).is_relative_to(folder):
         raise ValueError(
             "The synthetic probe database descriptor must stay inside its isolated state directory"
         )
+    if profile != "synthetic-probe":
+        from desktop.application import doctor
+
+        info = doctor()
+        if not info["ready"]:
+            raise RuntimeError("; ".join(info["errors"]))
+        if Path(chosen["database"]).exists() and not Path(chosen["database"]).is_file():
+            raise ValueError("Database path must identify a file, not a directory")
+        if (
+            profile == "application"
+            and not Path(chosen["database"]).exists()
+            and not chosen.get("initialize_database")
+        ):
+            raise RuntimeError(
+                "Database is missing; inspect the path or explicitly allow initialization"
+            )
+        if profile == "application" and not Path(chosen["database"]).parent.is_dir():
+            raise ValueError("Database parent directory must already exist")
     # Refuse startup on kernels where a later stop could not confirm owner exit.
     capability = OwnerExit(os.getpid())
     capability.close()
 
 
-def run_supervisor(folder, chosen, ports, *, timeout=8):
+def identity(chosen):
+    return {
+        k: chosen[k]
+        for k in ("profile", "mode", "project", "backend_cwd", "database", "env_file")
+        if k in chosen
+    }
+
+
+def run_supervisor(folder, chosen, ports, *, timeout=None):
     validate(folder, chosen, ports)
-    with instance_lock(folder):
+    application = chosen["profile"] != "synthetic-probe"
+    timeout = timeout or (60 if application else 8)
+    with instance_lock(folder), ExitStack() as stack:
+        if application:
+            from desktop.application import build_lock
+
+            try:
+                stack.enter_context(build_lock())
+                stack.enter_context(database_lock(chosen))
+            except AlreadyRunning as error:
+                raise RuntimeError(
+                    "Build or database is already in use by another managed instance"
+                ) from error
         saved = folder / "selection.json"
-        if saved.exists() and json.loads(saved.read_text(encoding="utf-8")) != chosen:
+        if saved.exists() and identity(json.loads(saved.read_text(encoding="utf-8"))) != identity(
+            chosen
+        ):
             raise RuntimeError(
                 "Runtime mode/project/database selection differs; use a different state directory"
             )
         free_ports(ports)
-        write_json(saved, chosen)
+        write_json(saved, identity(chosen))
         instance = secrets.token_hex(16)
         token = secrets.token_hex(32)
         stopping = threading.Event()
@@ -249,31 +290,66 @@ def run_supervisor(folder, chosen, ports, *, timeout=8):
             def log_message(self, *args):
                 pass
 
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        for _ in range(10):
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            if server.server_port not in ports:
+                break
+            server.server_close()
+        else:
+            raise RuntimeError("Could not allocate a separate control port")
         server.daemon_threads = True
         server.timeout = 0.2
         try:
             with open(folder / "services.log", "ab") as log:
-                env = {**os.environ, "TRAVELFLOW_PROBE_INSTANCE": instance}
-                for port in ports:
-                    service = OwnedProcess(
-                        [
-                            sys.executable,
-                            str(Path(__file__).with_name("probe.py")),
-                            str(port),
-                        ],
-                        cwd=ROOT / "backend",
-                        env=env,
-                        log=log,
-                    )
+                proof_token = secrets.token_hex(32)
+                if application:
+                    from desktop.application import service_specs
+
+                    specs = service_specs(folder, chosen, ports, instance, proof_token)
+                else:
+                    env = {**os.environ, "TRAVELFLOW_PROBE_INSTANCE": instance}
+                    specs = [
+                        (
+                            [sys.executable, str(Path(__file__).with_name("probe.py")), str(port)],
+                            ROOT / "backend",
+                            env,
+                            "/health",
+                            None,
+                        )
+                        for port in ports
+                    ]
+                for port, (command, cwd, env, health_path, role) in zip(ports, specs, strict=True):
+                    service = OwnedProcess(command, cwd=cwd, env=env, log=log)
                     services.append(service)
                     deadline = time.monotonic() + timeout
                     while time.monotonic() < deadline:
                         if service.process.poll() is not None:
                             raise RuntimeError("Owned probe process exited before becoming healthy")
                         try:
-                            result = request(port, "/health")
-                            if result.get("instance") == instance:
+                            result = request(port, health_path, proof_token)
+                            if result.get("instance") == instance and (
+                                not role or result.get("role") == role
+                            ):
+                                if (
+                                    role == "backend"
+                                    and result.get("database") != chosen["database"]
+                                ):
+                                    raise RuntimeError(
+                                        "Backend database does not match the inspected selection"
+                                    )
+                                if (
+                                    role == "backend"
+                                    and result.get("config_file") != chosen["env_file"]
+                                ):
+                                    raise RuntimeError(
+                                        "Backend configuration source does not match selection"
+                                    )
+                                if role == "frontend" and result.get("build_id") != chosen.get(
+                                    "frontend_build_id"
+                                ):
+                                    raise RuntimeError(
+                                        "Frontend build does not match the inspected selection"
+                                    )
                                 health.append({"port": port, **result})
                                 break
                         except (OSError, ValueError, urllib.error.URLError):
@@ -289,6 +365,12 @@ def run_supervisor(folder, chosen, ports, *, timeout=8):
                     server.handle_request()
         finally:
             server.server_close()
+            if application and services and services[0].process.poll() is None:
+                try:
+                    request(ports[0], "/_travelflow_shutdown", proof_token, "POST")
+                    services[0].process.wait(timeout=12)
+                except (OSError, ValueError, urllib.error.URLError, subprocess.TimeoutExpired):
+                    pass
             for service in reversed(services):
                 service.stop()
             value = record(folder)
@@ -296,14 +378,18 @@ def run_supervisor(folder, chosen, ports, *, timeout=8):
                 (folder / "runtime.json").unlink(missing_ok=True)
 
 
-def start(folder, chosen, ports, *, timeout=12):
+def start(folder, chosen, ports, *, timeout=None):
     validate(folder, chosen, ports)
+    timeout = timeout or (150 if chosen["profile"] != "synthetic-probe" else 12)
     reap(folder)
     running = current(folder)
     if running:
         if running.get("protocol_version") != PROTOCOL_VERSION:
             raise RuntimeError("Use the matching supervisor version before reusing this instance")
-        if running["selection"] != chosen or [s["port"] for s in running["services"]] != ports:
+        if (
+            identity(running["selection"]) != identity(chosen)
+            or [s["port"] for s in running["services"]] != ports
+        ):
             raise RuntimeError("Another selection already owns this state directory")
         return {**running, "reused": True}
     command = [
@@ -311,7 +397,9 @@ def start(folder, chosen, ports, *, timeout=12):
         "-m",
         "desktop",
         "_serve",
-        "--probe",
+        {"synthetic-probe": "--probe", "application-qa": "--qa", "application": "--app"}[
+            chosen["profile"]
+        ],
         "--state-dir",
         str(folder),
         "--database",
@@ -319,6 +407,10 @@ def start(folder, chosen, ports, *, timeout=12):
         "--ports",
         *map(str, ports),
     ]
+    if chosen.get("env_file") and chosen["profile"] == "application":
+        command += ["--env-file", chosen["env_file"]]
+    if chosen.get("initialize_database"):
+        command += ["--allow-new-database"]
     with open(folder / "manager.log", "ab") as log:
         manager = subprocess.Popen(
             command,
@@ -338,7 +430,10 @@ def start(folder, chosen, ports, *, timeout=12):
                 raise RuntimeError(
                     "Use the matching supervisor version before reusing this instance"
                 )
-            if result["selection"] != chosen or [s["port"] for s in result["services"]] != ports:
+            if (
+                identity(result["selection"]) != identity(chosen)
+                or [s["port"] for s in result["services"]] != ports
+            ):
                 raise RuntimeError("Another selection won the startup lock")
             reused = result.get("manager_pid") != manager.pid
             if reused:
@@ -377,7 +472,9 @@ def stop(folder):
     owner = OwnerExit(owner_status["manager_pid"])
     try:
         request(value["port"], "/stop", value["token"], "POST")
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + (
+            30 if owner_status["selection"]["profile"] != "synthetic-probe" else 10
+        )
         while time.monotonic() < deadline:
             if not (folder / "runtime.json").exists():
                 owner.wait(max(0, deadline - time.monotonic()))
@@ -387,3 +484,21 @@ def stop(folder):
         raise RuntimeError("Stop not confirmed; state retained for diagnosis")
     finally:
         owner.close()
+
+
+@contextmanager
+def database_lock(chosen):
+    path = Path(chosen["database"])
+    if not path.parent.is_dir():
+        raise RuntimeError("Database parent directory is missing")
+    lock = path.with_name(path.name + ".travelflow.lock")
+    # Coordinate managed instances using the same tested byte-lock implementation.
+    with file_lock(lock):
+        owner_file = path.with_name(path.name + ".travelflow-owner.json")
+        owner = {k: v for k, v in identity(chosen).items() if k != "env_file"}
+        if owner_file.exists() and json.loads(owner_file.read_text(encoding="utf-8")) != owner:
+            raise RuntimeError(
+                "Database belongs to a different runtime mode/project; migration must be reviewed"
+            )
+        write_json(owner_file, owner)
+        yield

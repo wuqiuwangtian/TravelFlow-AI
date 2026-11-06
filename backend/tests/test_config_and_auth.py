@@ -98,3 +98,21 @@ async def test_invalid_structured_response_is_repaired_once(monkeypatch):
     result = await provider.structured([], Output)
     assert result.value == 3
     assert calls == ["schema", "json_mode"]
+
+
+def test_named_config_source_survives_cache_reload(tmp_path, monkeypatch):
+    from app.core.config import get_settings
+
+    config = tmp_path / "isolated.env"
+    config.write_text("LLM_MODEL=desktop-fixture-one\n", encoding="utf-8")
+    monkeypatch.setenv("APP_ENV_FILE", str(config))
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert get_settings().llm_model == "desktop-fixture-one"
+        assert get_settings().env_file_path == config
+        config.write_text("LLM_MODEL=desktop-fixture-two\n", encoding="utf-8")
+        get_settings.cache_clear()
+        assert get_settings().llm_model == "desktop-fixture-two"
+    finally:
+        get_settings.cache_clear()

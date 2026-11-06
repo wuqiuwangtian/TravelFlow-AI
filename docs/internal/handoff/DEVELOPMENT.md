@@ -133,7 +133,7 @@ SDK工具缓存仍在本机 `~/.cache/travelflow-p0-android/`，用户已授权�
 
 ## D0运行管理核心验证
 
-仓库根目录使用Python 3.13+，无新增运行依赖。`desktop/`是可复用进程管理核心，当前仅开放隔离`--probe`配置：启动两个虚构HTTP服务及真实子孙进程，不加载.env、不调用外部服务、不打开或创建SQLite。数据库参数只是显式的路径标识，必须位于自己的隔离状态目录，不能将此结果当作真实账本／配置解析已完成。当前仍为开发命令，不是日常用户的免终端入口。
+仓库根目录使用Python 3.13+，无新增运行依赖。`desktop/`是可复用进程管理核心，`--probe`仍保留为独立核心验证配置：启动两个虚构HTTP服务及真实子孙进程，不加载.env、不调用外部服务、不打开或创建SQLite。数据库参数只是显式的路径标识，必须位于自己的隔离状态目录，不能将此结果当作真实账本／配置解析已完成。当前仍为开发命令，不是日常用户的免终端入口。
 
 ```sh
 python -m desktop inspect --state-dir .desktop-run --database .desktop-run/probe.sqlite
@@ -148,4 +148,55 @@ python -m desktop stop --state-dir .desktop-run
 
 验收命令：`python -m unittest discover -s desktop/tests -v`。九项使用随机空闲端口、中文／空格临时路径、真实Python子孙进程及虚构数据，覆盖重复／并发启动、端口占用、启动部分失败、跨选择拒绝、失效状态不杀无关PID、控制鉴权／Origin、管理器异常退出。Windows测试使用只读系统查询确认进程状态，不用os.kill(pid, 0)作存活探测。CI新增ubuntu-latest／windows-latest独立任务；远端结果按提交核对，不把Linux本机通过写成Windows原生通过。
 
-剩余工作：接入实际Python／Next并实现可验证的服务实例标识、配置与真实数据目录识别、首次准备和日常启动分离；随后验证Windows／WSL统一管理入口、模式切换和UI，真实应用与WSL互操作仍未覆盖。当前探针不表示完整D0、桌面安装包或免终端已完成，不改已有start.sh／start.bat使用方式。
+实际应用接入见下节；统一管理入口、跨模式切换和UI仍待验证。probe不表示完整D0、桌面安装包或免终端已完成，不改已有start.sh／start.bat使用方式。
+
+
+## D0实际应用准备与验收
+
+本阶段提供源代码方式的开发管理命令，尚无免终端界面或安装包。Python 3.13+、uv、pnpm及Node是准备前提（CI使用Python3.13／Node22）。在仓库根目录执行：
+
+```sh
+python -m desktop prepare
+python -m desktop doctor
+```
+
+prepare才运行冻结依赖安装和Webpack生产构建；start不安装依赖、不编译。Python环境按模式保存于backend/.venv-desktop-*，构建保存于frontend/.next-desktop-*，桌面专用tsconfig另存忽略位置，不修改已跟踪tsconfig或默认.next路径。doctor核对解释器、Node版本／平台、构建ID和前端源码摘要；源码变化后需先停止，再prepare。准备／应用运行期间互斥保护同一模式的构建目录。
+
+node_modules属于工作副本，不能在Windows和WSL中交替安装共享。首次准备会在忽略目录登记Node平台／架构，跨平台重装被拒绝；请为Windows原生与WSL各用一份源码检出。两种模式不共用Python二进制或构建产物，也不自动复制配置和SQLite。旧start.sh／start.bat实例不受新管理器协调，准备或运行前需先停止；当前未承诺对未受管理的实例进行全面检测。
+
+### 隔离QA配置
+
+此模式运行真实API、Graph与SQLite，模型／检索／地图沿用固定验收替身，清空子进程继承的供应商Key。不会读个人.env，配置写回目标仅为自己的qa.env；不要在QA界面输入真实Key。数据库仅允许在该隔离状态目录内，正常停止后保留，用于重启验收。
+
+```sh
+python -m desktop inspect --qa --state-dir .desktop-run/qa
+python -m desktop start --qa --state-dir .desktop-run/qa --ports 18520 18521
+python -m desktop status --state-dir .desktop-run/qa
+python -m desktop stop --state-dir .desktop-run/qa
+```
+
+就绪后可打开 `http://127.0.0.1:18521`；第一个端口为Python，第二个为Next。新建虚构旅程后停止、原参数重启，应保留相同会话ID。服务记录的database来自实际连接的PRAGMA database_list，不只依据配置字符串猜测；前端启动就绪还核对本次实例及生产构建ID。状态中的selection是启动前选择，实际打开情况见services中的database_opened。普通启动未启用管理配置时，前端内部健康接口返回404；启用后仅接受私有服务证明token，token不进入浏览器。
+
+### 明确选择真实应用配置
+
+普通应用配置使用正式app.main，不包含测试路由或服务替身。配置准备遵循[README](../../../README.md)，prepare不会生成或覆盖个人配置。以下命令由使用者主动选择已有配置／数据，不是本轮个人数据库验收步骤：
+
+```sh
+python -m desktop inspect --app --env-file backend/.env --state-dir .desktop-run/app
+python -m desktop start --app --env-file backend/.env --state-dir .desktop-run/app --ports 8000 3100
+python -m desktop stop --state-dir .desktop-run/app
+```
+
+先核对inspect显示的绝对数据库地址、配置来源和database_exists。相对数据库路径始终相对backend解析；--database可显式覆盖。数据库不存在默认拒绝，只有使用者核对路径后明确传--allow-new-database才允许初始化，且父目录须存在；目录不能冒充数据库文件。APP_ENV_FILE进程变量选择配置读取文件，设置页写回该文件、cache_clear后仍从同文件重载；状态不输出配置内容。前端进程不继承后端Key／配置地址，代理目标在启动时绑定当前后端端口，本机请求绕过环境代理。
+
+管理器为所选数据库加协作锁及.travelflow-owner.json模式／项目标记，拒绝不同模式／项目／QA类型静默接管；不提供自动迁移。该保护只协调遵守管理器协议的实例，不能代替旧脚本退出或正式备份。现阶段两模式切换、升级／恢复、已有主库迁移仍需后续评审，不直接共享活跃SQLite。应用停止先认证请求后端完成生命周期关闭，随后回收进程组并确认管理器退出；关闭超时会报告未确认，不冒充已停止。端口预检只检查活动连接，最终仍以私有实例证明确认，避免把TCP TIME_WAIT当作仍有服务。
+
+### 回归入口与当前边界
+
+```sh
+python -m unittest discover -s desktop/tests -v
+```
+
+默认跳过真实应用测试，便于仅有Python的环境检查核心与预检。先prepare，再在POSIX设置 `TRAVELFLOW_RUN_APP_TESTS=1`、Windows PowerShell设置 `$env:TRAVELFLOW_RUN_APP_TESTS='1'`，运行同一命令即验收真实代理、SQLite路径／重启持久化、运行中禁止准备、正式后端缺失库拒绝和显式初始化（均用临时库与空白配置，不调用真实供应商）。CI的Desktop application矩阵在Linux／Windows分别准备并开启该门禁。
+
+当前只核对启动就绪和进程存活，不宣称持续业务健康监测、写入中崩溃恢复或免终端已经完成。统一Windows／WSL入口、原生路径选择、停止交互、固定浏览器Origin以保留草稿，以及数据切换／迁移评审仍是D0后续；D1继续备份与故障恢复。本轮未验证真实模型／地图调用，没有更改移动仓库或共享账目契约。

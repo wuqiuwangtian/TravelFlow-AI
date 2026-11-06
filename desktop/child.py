@@ -18,7 +18,8 @@ def main():
     child = subprocess.Popen(command, stdin=subprocess.DEVNULL)
 
     def parent_gone():
-        sys.stdin.buffer.read()
+        while os.read(sys.stdin.fileno(), 4096):
+            pass
         if os.name != "nt":
             os.killpg(os.getpgrp(), signal.SIGTERM)
         # Windows job ownership performs cleanup when the manager handle closes.

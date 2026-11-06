@@ -113,6 +113,15 @@ class RuntimeTests(unittest.TestCase):
         self.assertIsNone(current(self.folder))
         self.assertTrue(stop(self.folder)["stopped"])
 
+    def test_immediate_restart_keeps_ports_without_claiming_time_wait_is_a_service(self):
+        first = self.launch()
+        stop(self.folder)
+        second = self.launch()
+        self.assertNotEqual(first["instance"], second["instance"])
+        self.assertEqual(
+            [s["port"] for s in first["services"]], [s["port"] for s in second["services"]]
+        )
+
     def test_wrong_capability_and_foreign_origin_cannot_stop_instance(self):
         result = self.launch()
         meta = record(self.folder)

@@ -133,6 +133,35 @@ jobs:
       - name: Isolated process ownership and runtime lifecycle
         run: python -m unittest discover -s desktop/tests -v
 
+  desktop-application:
+    name: Desktop application (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Explicit preparation (mode-specific environment and build)
+        run: uv run --no-project --python 3.13 python -m desktop prepare
+      - name: Real Python, Next proxy, SQLite and restart acceptance
+        env:
+          TRAVELFLOW_RUN_APP_TESTS: "1"
+        run: uv run --no-project --python 3.13 python -m unittest discover -s desktop/tests -v
+
   release-check:
     name: 发布校验（文档链接 + 版本元数据）
     runs-on: ubuntu-latest
