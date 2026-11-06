@@ -180,6 +180,9 @@ def validate(folder, chosen, ports):
         raise ValueError(
             "The synthetic probe database descriptor must stay inside its isolated state directory"
         )
+    # Refuse startup on kernels where a later stop could not confirm owner exit.
+    capability = OwnerExit(os.getpid())
+    capability.close()
 
 
 def run_supervisor(folder, chosen, ports, *, timeout=8):
@@ -337,7 +340,17 @@ def start(folder, chosen, ports, *, timeout=12):
                 )
             if result["selection"] != chosen or [s["port"] for s in result["services"]] != ports:
                 raise RuntimeError("Another selection won the startup lock")
-            return {**result, "reused": manager.poll() is not None}
+            reused = result.get("manager_pid") != manager.pid
+            if reused:
+                # The losing launcher must release its log/lock handles before success.
+                try:
+                    manager.wait(timeout=3)
+                except subprocess.TimeoutExpired as error:
+                    raise RuntimeError(
+                        "Concurrent launcher exit not confirmed; inspect status"
+                    ) from error
+                reap(folder)
+            return {**result, "reused": reused}
         if manager.poll() not in (None, 2):
             raise RuntimeError(
                 "Supervisor did not start; inspect manager.log in the isolated state directory"
