@@ -9,6 +9,7 @@
 | [电脑—手机改进里程碑](MOBILE_CONTINUITY_PLAN.md) | 个人Android＋Windows／WSL本地独立运行、免终端与直接同步的专项计划；框架及连接工具待P0验证 |
 | [跨端契约](../../contracts/README.md) | 本仓库维护权威版本；移动仓库按固定Git提交导入快照，独立构建与验证 |
 | [移动功能迁移矩阵](MOBILE_CAPABILITIES.md) | 84个当前接口的目标执行层与迁移边界，CI检查声明覆盖，不作为已移植证明 |
+| [D0运行管理核心](handoff/DEVELOPMENT.md#d0运行管理核心验证) | 隔离进程归属／状态／启停验证与当前未接入边界；不加载个人业务配置 |
 | [开发与隔离验收](./handoff/DEVELOPMENT.md) | 环境、检查命令、测试服务与 Windows 核对方法 |
 | [项目约定](../../AGENTS.md) | AI 开工与协作规则；前端另读其目录约定 |
 | [设计约束](../../DESIGN_BRIEF.md)、[共享规范](../design/SYSTEM.md) | 已确认体验与实现规范；历史样稿不是待重新选型任务 |

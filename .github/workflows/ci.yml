@@ -36,10 +36,10 @@ jobs:
         run: uv sync --frozen
 
       - name: 代码风格检查
-        run: uv run ruff format --check app scripts
+        run: uv run ruff format --check app scripts ../desktop
 
       - name: 静态检查
-        run: uv run ruff check app scripts
+        run: uv run ruff check app scripts ../desktop
 
       - name: 类型检查
         run: uv run mypy app
@@ -116,6 +116,22 @@ jobs:
           name: browser-test-results
           path: frontend/test-results/
           retention-days: 7
+
+  desktop-runtime:
+    name: Desktop runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Isolated process ownership and runtime lifecycle
+        run: python -m unittest discover -s desktop/tests -v
 
   release-check:
     name: 发布校验（文档链接 + 版本元数据）

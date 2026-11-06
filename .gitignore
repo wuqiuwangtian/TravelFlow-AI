@@ -38,3 +38,6 @@ __pycache__/
 
 # 本机开发笔记（目录不存在时此条无影响）
 .dev-notes/
+
+# Isolated desktop supervisor state (control token and private logs)
+.desktop-run/
