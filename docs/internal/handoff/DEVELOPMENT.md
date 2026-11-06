@@ -144,7 +144,7 @@ python -m desktop stop --state-dir .desktop-run
 
 `inspect`不创建状态目录；start返回ready与两个服务的实例标识，再次用相同参数start复用同一实例。status不输出控制token。stop通过本机控制通道确认实例，再等待自己拥有的进程组退出；它不从状态文件读取PID来杀进程。外来端口被占用会失败，不结束原服务。停止后selection.json保留模式／项目／路径选择，换数据库／运行模式要用新的隔离状态目录，不能静默覆盖原选择。状态目录已忽略，不提交或分享runtime.json及日志；默认POSIX控制文件为0600，Windows继承ACL尚需正式应用接入前核对。
 
-状态与日志位于传入目录；探针只绑定127.0.0.1，控制接口要求私有token及正确Host，拒绝不匹配Origin，禁用本机请求的环境代理和重定向。状态文件失效时stop明确拒绝，保留诊断，不报告已经停止。正常stop、第二个服务启动失败、管理器异常退出均需清理其实际子孙进程。POSIX采用独立进程组及父管道关闭检测；Windows采用[Job Object](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)，受控包装进程先加入Job再获准派生子进程，使用kill-on-close，不靠猜测PID或taskkill。
+状态与日志位于传入目录；探针只绑定127.0.0.1，控制接口要求私有token及正确Host，拒绝不匹配Origin，禁用本机请求的环境代理和重定向。状态文件失效时stop明确拒绝，保留诊断，不报告已经停止。正常stop、第二个服务启动失败、管理器异常退出均需清理其实际子孙进程。正常stop还等待已认证管理器的内核进程句柄／Linux pidfd确认退出，防止Windows日志句柄仍被占用就提前报成功；不依靠反复猜测PID。Linux内核须支持pidfd，缺少该能力会拒绝确认退出，不声明兼容尚未验证的老内核。POSIX采用独立进程组及父管道关闭检测；Windows采用[Job Object](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)，受控包装进程先加入Job再获准派生子进程，使用kill-on-close，不靠猜测PID或taskkill。
 
 验收命令：`python -m unittest discover -s desktop/tests -v`。九项使用随机空闲端口、中文／空格临时路径、真实Python子孙进程及虚构数据，覆盖重复／并发启动、端口占用、启动部分失败、跨选择拒绝、失效状态不杀无关PID、控制鉴权／Origin、管理器异常退出。Windows测试使用只读系统查询确认进程状态，不用os.kill(pid, 0)作存活探测。CI新增ubuntu-latest／windows-latest独立任务；远端结果按提交核对，不把Linux本机通过写成Windows原生通过。
 

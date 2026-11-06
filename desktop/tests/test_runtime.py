@@ -76,7 +76,12 @@ class RuntimeTests(unittest.TestCase):
         try:
             stop(self.folder)
         finally:
-            # Logs are available in assertion failures before the fixture is removed.
+            # A broken stop implementation must fail the test without leaking test services.
+            running = current(self.folder)
+            if running:
+                meta = record(self.folder)
+                request(meta["port"], "/stop", meta["token"], "POST")
+                self.assert_gone([running["manager_pid"]])
             self.temporary.cleanup()
 
     def launch(self):
@@ -104,7 +109,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn(record(self.folder)["token"], json.dumps(result))
         self.assertFalse(Path(self.chosen["database"]).exists())
         self.assertTrue(stop(self.folder)["stopped"])
-        self.assert_gone(pids)
+        self.assert_gone([result["manager_pid"], *pids])
         self.assertIsNone(current(self.folder))
         self.assertTrue(stop(self.folder)["stopped"])
 
@@ -282,6 +287,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(child.returncode, 0, err.decode(errors="replace"))
             results.append(json.loads(out))
         self.assertEqual(results[0]["instance"], results[1]["instance"])
+        self.assertTrue(stop(self.folder)["stopped"])
+        self.assert_gone([results[0]["manager_pid"]])
 
 
 if __name__ == "__main__":

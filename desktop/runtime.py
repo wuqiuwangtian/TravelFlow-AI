@@ -17,9 +17,10 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from desktop.processes import OwnedProcess
+from desktop.processes import OwnedProcess, OwnerExit
 
 ROOT = Path(__file__).resolve().parents[1]
+PROTOCOL_VERSION = 1
 _LAUNCHED = {}
 
 
@@ -83,7 +84,7 @@ def instance_lock(folder):
         if os.name == "nt":
             import msvcrt
 
-            if not stream.read(1):
+            if os.fstat(stream.fileno()).st_size == 0:
                 stream.write(b"0")
                 stream.flush()
             stream.seek(0)
@@ -218,6 +219,8 @@ def run_supervisor(folder, chosen, ports, *, timeout=8):
                 if self.command == "GET" and self.path == "/status":
                     value = {
                         "instance": instance,
+                        "manager_pid": os.getpid(),
+                        "protocol_version": PROTOCOL_VERSION,
                         "selection": chosen,
                         "services": health,
                         "ready": len(health) == len(ports)
@@ -295,6 +298,8 @@ def start(folder, chosen, ports, *, timeout=12):
     reap(folder)
     running = current(folder)
     if running:
+        if running.get("protocol_version") != PROTOCOL_VERSION:
+            raise RuntimeError("Use the matching supervisor version before reusing this instance")
         if running["selection"] != chosen or [s["port"] for s in running["services"]] != ports:
             raise RuntimeError("Another selection already owns this state directory")
         return {**running, "reused": True}
@@ -326,6 +331,10 @@ def start(folder, chosen, ports, *, timeout=12):
     while time.monotonic() < deadline:
         result = current(folder)
         if result:
+            if result.get("protocol_version") != PROTOCOL_VERSION:
+                raise RuntimeError(
+                    "Use the matching supervisor version before reusing this instance"
+                )
             if result["selection"] != chosen or [s["port"] for s in result["services"]] != ports:
                 raise RuntimeError("Another selection won the startup lock")
             return {**result, "reused": manager.poll() is not None}
@@ -343,13 +352,25 @@ def stop(folder):
     if not value:
         reap(folder)
         return {"stopped": True, "was_running": False}
-    if not current(folder):
+    owner_status = current(folder)
+    if not owner_status:
         raise RuntimeError("Owner is not verified; state retained and no PID was terminated")
-    request(value["port"], "/stop", value["token"], "POST")
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if not (folder / "runtime.json").exists():
-            reap(folder, wait=True)
-            return {"stopped": True, "was_running": True}
-        time.sleep(0.05)
-    raise RuntimeError("Stop not confirmed; state retained for diagnosis")
+    if (
+        owner_status.get("protocol_version") != PROTOCOL_VERSION
+        or not isinstance(owner_status.get("manager_pid"), int)
+        or owner_status["manager_pid"] <= 1
+    ):
+        raise RuntimeError("Unsupported supervisor protocol; use its matching version to stop it")
+    owner = OwnerExit(owner_status["manager_pid"])
+    try:
+        request(value["port"], "/stop", value["token"], "POST")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if not (folder / "runtime.json").exists():
+                owner.wait(max(0, deadline - time.monotonic()))
+                reap(folder, wait=True)
+                return {"stopped": True, "was_running": True}
+            time.sleep(0.05)
+        raise RuntimeError("Stop not confirmed; state retained for diagnosis")
+    finally:
+        owner.close()

@@ -129,3 +129,52 @@ class OwnedProcess:
             else:
                 self.process.kill()
             self.process.wait(timeout=4)
+
+
+class OwnerExit:
+    """Wait on a verified control peer's kernel identity; never signal it."""
+
+    def __init__(self, pid):
+        self.handle = None
+        self.api = None
+        if os.name == "nt":
+            from ctypes import wintypes as w
+
+            self.api = ctypes.WinDLL("kernel32", use_last_error=True)
+            self.api.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]
+            self.api.OpenProcess.restype = w.HANDLE
+            self.api.WaitForSingleObject.argtypes = [w.HANDLE, w.DWORD]
+            self.api.WaitForSingleObject.restype = w.DWORD
+            self.api.CloseHandle.argtypes = [w.HANDLE]
+            self.api.CloseHandle.restype = w.BOOL
+            self.handle = self.api.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE only
+            if not self.handle:
+                error = ctypes.get_last_error()
+                self.handle = None
+                if error != 87:  # Already exited
+                    raise ctypes.WinError(error)
+        elif hasattr(os, "pidfd_open"):
+            with contextlib.suppress(ProcessLookupError):
+                self.handle = os.pidfd_open(pid)
+        else:
+            raise RuntimeError("This prototype requires Linux pidfd or Windows process handles")
+
+    def wait(self, timeout):
+        if self.handle is None:
+            return
+        if self.api:
+            if self.api.WaitForSingleObject(self.handle, int(timeout * 1000)) != 0:
+                raise RuntimeError("Owner exit was not confirmed")
+        else:
+            import select
+
+            if not select.select([self.handle], [], [], timeout)[0]:
+                raise RuntimeError("Owner exit was not confirmed")
+
+    def close(self):
+        if self.handle is not None:
+            if self.api:
+                self.api.CloseHandle(self.handle)
+            else:
+                os.close(self.handle)
+            self.handle = None
