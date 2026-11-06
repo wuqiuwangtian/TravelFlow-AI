@@ -212,6 +212,22 @@ def identity(chosen):
     }
 
 
+def check_services(ports, specs, health, instance, token):
+    """Recheck live identities without replacing startup paths with untrusted responses."""
+    checked = []
+    for port, spec, original in zip(ports, specs, health, strict=True):
+        try:
+            actual = request(port, spec[3], token)
+            keys = ("instance", "role", "database", "config_file", "build_id", "backend_url")
+            healthy = actual.get("instance") == instance and all(
+                actual.get(key) == original.get(key) for key in keys
+            )
+        except (OSError, ValueError, TypeError, AttributeError, urllib.error.URLError):
+            healthy = False
+        checked.append({**original, "healthy": healthy})
+    return checked
+
+
 def run_supervisor(folder, chosen, ports, *, timeout=None):
     validate(folder, chosen, ports)
     application = chosen["profile"] != "synthetic-probe"
@@ -241,6 +257,8 @@ def run_supervisor(folder, chosen, ports, *, timeout=None):
         stopping = threading.Event()
         services = []
         health = []
+        checked_at = None
+        monitor = None
 
         class Handler(BaseHTTPRequestHandler):
             def setup(self):
@@ -267,8 +285,10 @@ def run_supervisor(folder, chosen, ports, *, timeout=None):
                         "protocol_version": PROTOCOL_VERSION,
                         "selection": chosen,
                         "services": health,
+                        "checked_at": checked_at,
                         "ready": len(health) == len(ports)
-                        and all(s.process.poll() is None for s in services),
+                        and all(s.process.poll() is None for s in services)
+                        and all(s.get("healthy", True) for s in health),
                     }
                 elif self.command == "POST" and self.path == "/stop":
                     stopping.set()
@@ -357,6 +377,16 @@ def run_supervisor(folder, chosen, ports, *, timeout=None):
                         time.sleep(0.05)
                     else:
                         raise RuntimeError("Owned probe health identity was not confirmed")
+                checked_at = time.time()
+
+                def monitor_health():
+                    nonlocal health, checked_at
+                    while not stopping.wait(2):
+                        health = check_services(ports, specs, health, instance, proof_token)
+                        checked_at = time.time()
+
+                monitor = threading.Thread(target=monitor_health, daemon=True)
+                monitor.start()
                 write_json(
                     folder / "runtime.json",
                     {"port": server.server_port, "token": token, "instance": instance},
@@ -364,6 +394,9 @@ def run_supervisor(folder, chosen, ports, *, timeout=None):
                 while not stopping.is_set() and all(s.process.poll() is None for s in services):
                     server.handle_request()
         finally:
+            stopping.set()
+            if monitor:
+                monitor.join(timeout=3)
             server.server_close()
             if application and services and services[0].process.poll() is None:
                 try:

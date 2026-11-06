@@ -46,3 +46,6 @@ frontend/.next-desktop-*/
 frontend/.next-desktop-*-tsconfig.json
 *.travelflow.lock
 *.travelflow-owner.json
+
+# Local management UI browser acceptance evidence
+/output/playwright/

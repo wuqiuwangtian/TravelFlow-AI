@@ -1,4 +1,4 @@
-"""Developer entry for the isolated D0 process-management proof."""
+"""Source-mode desktop application and management commands."""
 
 import argparse
 import json
@@ -7,8 +7,10 @@ import sys
 from pathlib import Path
 
 from desktop.runtime import (
+    ROOT,
     AlreadyRunning,
     current,
+    mode,
     prepare,
     run_supervisor,
     selection,
@@ -20,9 +22,20 @@ from desktop.runtime import (
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "action", choices=["prepare", "doctor", "inspect", "start", "status", "stop", "_serve"]
+        "action",
+        choices=[
+            "console",
+            "_console",
+            "prepare",
+            "doctor",
+            "inspect",
+            "start",
+            "status",
+            "stop",
+            "_serve",
+        ],
     )
-    parser.add_argument("--state-dir", type=Path, default=Path(".desktop-run"))
+    parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--database", type=Path)
     parser.add_argument("--ports", type=int, nargs=2)
     profile = parser.add_mutually_exclusive_group()
@@ -39,10 +52,25 @@ def main():
     if (args.probe or args.qa) and (args.env_file or args.allow_new_database):
         parser.error("Only --app accepts --env-file or --allow-new-database")
     try:
-        folder = args.state_dir.resolve()
-        if args.action in ("start", "_serve"):
+        folder = (
+            args.state_dir
+            or (
+                ROOT / ".desktop-run" / ("console-" + mode())
+                if args.action == "console"
+                else Path(".desktop-run")
+            )
+        ).resolve()
+        if args.action in ("start", "_serve", "console", "_console"):
             folder = prepare(folder)
-        if args.action in ("prepare", "doctor"):
+        if args.action in ("console", "_console"):
+            from desktop.console import open_console, serve_console
+
+            if args.action == "_console":
+                serve_console(folder)
+                return 0
+            open_console(folder)
+            result = {"opened": True}
+        elif args.action in ("prepare", "doctor"):
             from desktop.application import doctor, prepare_application
 
             result = prepare_application() if args.action == "prepare" else doctor()
@@ -91,7 +119,7 @@ def main():
         print(json.dumps(result, ensure_ascii=True))
         return 0 if args.action not in ("prepare", "doctor") or result["ready"] else 1
     except AlreadyRunning:
-        if args.action != "_serve":
+        if args.action not in ("_serve", "_console"):
             print(
                 "Project is in use; stop the managed instance before preparation", file=sys.stderr
             )

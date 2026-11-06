@@ -4,12 +4,14 @@ import json
 import os
 import socket
 import tempfile
+import time
 import unittest
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
 from desktop.application import application_selection, doctor, prepare_application
+from desktop.console import close_console, console_request, open_console
 from desktop.runtime import AlreadyRunning, current, prepare, request, start, stop
 
 
@@ -81,6 +83,89 @@ class RealApplicationTests(unittest.TestCase):
         self.launch(chosen)
         again = api(self.ports[1], "/api/backend/api/sessions")["items"]
         self.assertTrue(any(item["id"] == created["session"]["id"] for item in again))
+
+    def wait_console(self, record):
+        deadline = time.monotonic() + 160
+        while time.monotonic() < deadline:
+            snapshot = console_request(record, "/api/state")
+            if not snapshot["busy"]:
+                return snapshot
+            time.sleep(0.1)
+        self.fail("Console operation did not finish")
+
+    def test_console_confirm_start_stop_reopen_and_persisted_trip(self):
+        folder = self.folder / "console"
+        record = open_console(folder, browser=False)
+        payload = {"profile": "application-qa", "ports": self.ports}
+        try:
+            console_request(record, "/api/inspect", payload)
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            self.assertFalse(Path(snapshot["preview"]["selection"]["database"]).exists())
+            console_request(
+                record, "/api/start", {"confirmation": snapshot["preview"]["confirmation"]}
+            )
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            self.assertTrue(snapshot["runtime"]["ready"])
+            first_check = snapshot["runtime"]["checked_at"]
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                checked = console_request(record, "/api/state")["runtime"]
+                if checked["checked_at"] > first_check:
+                    break
+                time.sleep(0.1)
+            self.assertGreater(checked["checked_at"], first_check)
+            self.assertTrue(all(service["healthy"] for service in checked["services"]))
+            created = api(self.ports[1], "/api/backend/api/sessions", {"title": "Console虚构旅程"})
+            close_console(folder)
+            record = open_console(folder, browser=False)
+            snapshot = console_request(record, "/api/state")
+            self.assertIsNone(snapshot["runtime"])
+            self.assertEqual(snapshot["preferences"], payload)
+            self.assertIsNone(snapshot["preview"])
+            console_request(record, "/api/inspect", payload)
+            snapshot = self.wait_console(record)
+            console_request(
+                record, "/api/start", {"confirmation": snapshot["preview"]["confirmation"]}
+            )
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            items = api(self.ports[1], "/api/backend/api/sessions")["items"]
+            self.assertTrue(any(item["id"] == created["session"]["id"] for item in items))
+        finally:
+            close_console(folder)
+
+    def test_console_rejects_config_changed_since_preview(self):
+        folder = self.folder / "console"
+        record = open_console(folder, browser=False)
+        config = self.folder / "isolated.env"
+        config.write_text("LLM_API_KEY=\nSEARCH_API_KEY=\nAMAP_API_KEY=\n", encoding="utf-8")
+        database = self.folder / "new.sqlite"
+        try:
+            console_request(
+                record,
+                "/api/inspect",
+                {
+                    "profile": "application",
+                    "env_file": str(config),
+                    "database": str(database),
+                    "ports": self.ports,
+                },
+            )
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            config.write_text("LLM_MODEL=changed-fixture\n", encoding="utf-8")
+            console_request(
+                record,
+                "/api/start",
+                {"confirmation": snapshot["preview"]["confirmation"], "initialize_database": True},
+            )
+            snapshot = self.wait_console(record)
+            self.assertIn("重新预览", snapshot["error"])
+            self.assertFalse(database.exists())
+        finally:
+            close_console(folder)
 
     def test_preparation_is_rejected_while_managed_build_is_running(self):
         result = self.launch(self.chosen())
