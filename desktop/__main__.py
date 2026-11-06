@@ -25,7 +25,9 @@ def main():
         "action",
         choices=[
             "console",
+            "console-stop",
             "_console",
+            "_connect",
             "prepare",
             "doctor",
             "inspect",
@@ -36,6 +38,7 @@ def main():
         ],
     )
     parser.add_argument("--state-dir", type=Path)
+    parser.add_argument("--nonce")
     parser.add_argument("--database", type=Path)
     parser.add_argument("--ports", type=int, nargs=2)
     profile = parser.add_mutually_exclusive_group()
@@ -56,13 +59,29 @@ def main():
             args.state_dir
             or (
                 ROOT / ".desktop-run" / ("console-" + mode())
-                if args.action == "console"
+                if args.action in ("console", "console-stop", "_connect")
                 else Path(".desktop-run")
             )
         ).resolve()
-        if args.action in ("start", "_serve", "console", "_console"):
+        if args.action in ("start", "_serve", "console", "_console", "_connect"):
             folder = prepare(folder)
-        if args.action in ("console", "_console"):
+        if args.action == "_connect":
+            from desktop.bridge import connect_payload
+
+            try:
+                result = connect_payload(folder, args.nonce)
+            except (OSError, ValueError, RuntimeError) as error:
+                print(json.dumps({"bridge_version": 1, "nonce": args.nonce, "error": str(error)}))
+                return 1
+        elif args.action == "console-stop":
+            from desktop.console import close_console, live_record
+
+            was_running = bool(live_record(folder))
+            if (folder / "console.json").exists() and not was_running:
+                raise RuntimeError("管理器状态无法确认；已保留现场，不会按旧PID停止进程。")
+            close_console(folder)
+            result = {"stopped": True, "was_running": was_running}
+        elif args.action in ("console", "_console"):
             from desktop.console import open_console, serve_console
 
             if args.action == "_console":

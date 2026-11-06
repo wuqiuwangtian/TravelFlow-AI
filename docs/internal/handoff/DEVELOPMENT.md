@@ -206,8 +206,8 @@ python -m unittest discover -s desktop/tests -v
 
 管理页面由Python标准库直接提供，不依赖Next／业务后端先启动。先安装Python3.13+；首次准备仍需要uv、Node、pnpm。原型使用现有共享三主题变量，没有引入桌面框架，也未替换旧start.sh／start.bat。
 
-- Windows原生：安装Python并关联.pyw后，可双击仓库根目录的[TravelFlow.pyw](../../../TravelFlow.pyw)。它启动隐藏管理进程并打开默认浏览器；出错显示系统消息。此入口要求Windows独立源码检出与本机工具链，不能拿它启动WSL工作副本。
-- Linux／WSL开发入口：仓库根目录运行 `python -m desktop console`，需要该环境可调用的默认浏览器。WSL调用Windows浏览器、发行版选择及免终端快捷方式尚未整合；打不开浏览器会明确报错，管理器保留，配置好浏览器后重复打开会复用。
+- Windows统一入口：安装含Tk的Python并关联.pyw后，可双击仓库根目录的[TravelFlow.pyw](../../../TravelFlow.pyw)，先选择环境再打开管理页，详见下节。Windows原生业务仍要求独立本机源码与工具链，WSL选项使用所选发行版自己的源码和解释器。
+- Linux／WSL开发入口：仓库根目录运行 `python -m desktop console`，需要该环境可调用的默认浏览器。此直接命令仍依赖该环境的浏览器配置；Windows侧统一入口可以桥接WSL并交给Windows默认浏览器，见下节。打不开浏览器会明确报错，管理器保留，配置好浏览器后可重开。
 - 默认管理目录是忽略位置 `.desktop-run/console-<mode>`；开发验收可加 `--state-dir /absolute/isolated/path`。重复打开复用同一管理进程；浏览器标签关闭不停止应用，无系统开机自启。
 
 页面操作：选择真实应用或隔离体验 → 需要时点击“准备环境与构建” → 预览配置与数据 → 核对模式、绝对配置／SQLite地址和端口 → 勾选确认 → 启动 → 从“打开旅行助手”进入现有网页。真实应用必须指定已有配置文件；缺失数据库还需明确勾选创建，预览后配置文件内容或构建变化须重新预览。编辑表单或另一个页面产生新预览会清除旧确认，不能沿用旧回执启动新选择。隔离体验的自定义地址禁用，采用独立QA文件，勿在体验页输入真实Key。
@@ -220,4 +220,23 @@ python -m unittest discover -s desktop/tests -v
 
 安全边界：仅绑定127.0.0.1；管理API要求独立随机凭据及正确Host／Origin，不开放CORS，静态页设置CSP与no-store。管理入口凭据仅通过URL片段交给浏览器，立即清除地址栏并保存在会话存储；服务管理与业务身份凭据不会进入浏览器。不要分享带片段的初始链接、console.json或状态目录；Windows ACL验证仍未完成。该入口不是远程管理或跨端同步服务。
 
-复跑沿用上一节桌面测试命令；开启TRAVELFLOW_RUN_APP_TESTS后包含管理API→实际应用→SQLite→退出／重开持久化、预览后配置变化拒绝启动。原生Windows CI验证管理API／进程与实际应用，不等于验证了文件关联双击和默认浏览器。浏览器实际点击证据与当前结果见[项目现状](../PROJECT_STATUS.md#d0可视运行管理原型2026-11-06)。D0还需统一Windows／WSL入口与原生路径交互、休眠及故障验证，安装包、常驻策略与默认模式仍待用户看过原型后决定。
+复跑沿用上一节桌面测试命令；开启TRAVELFLOW_RUN_APP_TESTS后包含管理API→实际应用→SQLite→退出／重开持久化、预览后配置变化拒绝启动。原生Windows CI验证管理API／进程与实际应用，不等于验证了文件关联双击和默认浏览器。浏览器实际点击证据与当前结果见[项目现状](../PROJECT_STATUS.md#d0可视运行管理原型2026-11-06)。统一环境选择与Windows路径对话框已接入下节；WSL业务文件选择、休眠及故障验证仍需补齐，安装包、常驻策略与默认模式仍待用户看过原型后决定。
+
+
+## D0统一环境选择与原生路径
+
+Windows双击TravelFlow.pyw先打开轻量Tk系统窗口（不引入桌面应用框架／第三方依赖），运行模式初始为空，不因保存过选择就自动执行。选择Windows原生或WSL Linux，核对源码目录、发行版与已有Python3.13+解释器，再点击打开管理页。连接在后台执行，期间禁用重复操作；失败留在窗口内说明原因，恢复控件，不改用其他环境。关闭选择窗口不停止已打开的管理器，仍到管理页停止退出。
+
+- Windows原生项目必须是独立本机磁盘源码目录；拒绝把WSL共享目录当成Windows源码使用。选择窗口本身可以从WSL共享目录运行，但原生业务目标不能共用这份WSL源码／node_modules。
+- WSL必须明确选择已安装发行版；列举不安装发行版，连接时才启动所选环境。源码可填Linux绝对路径，也可用系统浏览选择同一发行版的 `\\wsl.localhost\<distribution>\...` 或 `\\wsl$\<distribution>\...`，路径转换保留Linux大小写，跨发行版目录被拒绝。Windows驱动器目录不被自动猜成/mnt路径。解释器可填名称／Linux绝对路径，浏览同一发行版的Python文件时也转换成Linux路径。
+- 目标源码须含本轮启动桥接，目标Python须3.13+，不隐式下载解释器、安装依赖或克隆源码。失败只显示受控错误，不记录原始桥接stdout；stdout包含一次本地管理凭据，禁止复制进文档／日志。内部桥接版本1，管理API版本2，与contracts业务契约无关。
+
+WSL调用使用[官方命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)的显式发行版／工作目录和[--exec语义](https://github.com/microsoft/WSL/blob/master/localization/strings/en-US/Resources.resw)，全程传参数数组，不拼bash／PowerShell／cmd命令。内部_connect校验请求nonce、目标Python版本及实际源码根目录；启动器再校验模式／源码、管理实例身份和本机HTTP连接后，才用Windows默认浏览器打开本机URL。只传本机地址，不开放远程端口或修改防火墙／WSL配置；WSL本机端口转发不通会报告未确认，不回退Windows。WSL非交互启动不读取shell配置，桥接仅把已存在的 ~/.local/bin 与 ~/.local/share/pnpm加入目标管理器PATH；nvm等自定义工具链仍需使用者配置，不自动选择版本。
+
+启动器仅把上次成功连接的模式、源码地址、发行版和解释器保存在忽略位置.desktop-run/launcher.json，不保存凭据、配置内容或数据库，也不把其当默认模式。切换只是打开另一环境的管理页，不复制数据、不自动启动业务；先停止原环境，再在新管理页明确预览。别名／链接导致实际源码位置不同会拒绝，需选择实际根目录；本轮不提供主库迁移。
+
+Windows原生管理页增加“选择已有配置文件／数据库”，使用独立Tk子进程的[原生文件名对话框](https://docs.python.org/3.13/library/dialog.html#native-load-save-dialogs)，不读取所选文件内容、不创建文件。回执仅更新本标签页草稿并清除旧确认；取消保留原值，仍须预览后才启动。隔离体验不启用自定义文件选择；WSL／Linux业务数据仍手填本环境地址，不声称已完成跨系统数据文件对话框。缺少Tk时有明确错误，保留手动输入；选择等待上限300秒，不由此终止业务服务。
+
+新入口拒绝复用旧版管理API，不强制结束进程。先用原管理页停止并退出；找不到页面时，在对应环境及源码目录运行 `python -m desktop console-stop`（自定义管理目录还需传同一--state-dir）。它通过旧管理通道认证并等待实际退出；不可认证时保留现场，不能按持久化PID终止或宣称已停止。新旧状态目录与个人配置均不删除。
+
+CI的Windows核心任务显式开启TRAVELFLOW_RUN_NATIVE_UI_TESTS，操作真实Tk控件、模拟文件对话框返回；Windows目标桥接另用中文／空格独立源码副本验证。Linux跳过Windows专属用例，不当作已验证。WSL真实互通不在GitHub托管机安装发行版，使用本机隔离源码副本单独验证；当前证据与未验证边界统一见项目现状。真实系统文件对话框的人工点击、.pyw文件关联／默认浏览器、休眠唤醒、Windows ACL、数据切换和恢复仍按D0后续验收，不因桥接通就收口。

@@ -13,7 +13,8 @@ let submitting = false;
 let ended = false;
 let refreshing = false;
 let lastConfirmation = null;
-const labels = { inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
+let pendingPick = null;
+const labels = { pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
 const modes = { "windows-native": "Windows 原生", wsl: "WSL Linux", linux: "Linux" };
 async function api(path, payload) {
   const response = await fetch(path, { cache: "no-store", headers: { "X-TravelFlow-Control": token, "Content-Type": "application/json" }, ...(payload ? { method: "POST", body: JSON.stringify(payload) } : {}) });
@@ -33,6 +34,20 @@ function render() {
   byId("state-dir").textContent = state.state_dir;
   byId("fields").disabled = busy;
   const qa = byId("profile").value === "application-qa";
+  byId("picker-actions").hidden = !state.native_picker;
+  for (const id of ["pick-env", "pick-db"]) {
+    byId(id).hidden = !state.native_picker;
+    byId(id).disabled = busy || qa;
+  }
+  if (pendingPick && state.picked?.request_id === pendingPick) {
+    if (state.picked.path) {
+      byId(state.picked.kind === "env_file" ? "env-file" : "database").value = state.picked.path;
+      dirty = true;
+      byId("confirm").checked = false;
+      byId("initialize").checked = false;
+    }
+    pendingPick = null;
+  }
   byId("env-file").disabled = qa;
   byId("database").disabled = qa;
   if (state.preview?.confirmation !== lastConfirmation) {
@@ -121,3 +136,14 @@ for (const id of ["confirm", "initialize"]) byId(id).addEventListener("change", 
 byId("theme").addEventListener("change", () => { document.documentElement.dataset.theme = byId("theme").value; });
 refresh();
 setInterval(refresh, 2000);
+
+for (const [id, kind] of [["pick-env", "env_file"], ["pick-db", "database"]]) {
+  byId(id).addEventListener("click", async () => {
+    if (submitting || state?.busy) return;
+    submitting = true; render();
+    pendingPick = crypto.randomUUID();
+    try { await api("/api/pick", { kind, request_id: pendingPick }); await refresh(); }
+    catch (error) { pendingPick = null; state.error = error.message; }
+    finally { submitting = false; render(); }
+  });
+}

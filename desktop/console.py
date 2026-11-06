@@ -30,6 +30,7 @@ from desktop.runtime import (
     write_json,
 )
 
+CONSOLE_VERSION = 2
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -77,6 +78,7 @@ class Console:
         self.exit_ready = False
         self.error = None
         self.preview = None
+        self.picked = None
         self.confirmation = None
         self.preferences = {}
         self.active = None
@@ -92,6 +94,7 @@ class Console:
     def snapshot(self):
         with self.lock:
             data = {
+                "console_version": CONSOLE_VERSION,
                 "mode": mode(),
                 "project": str(ROOT),
                 "state_dir": str(self.folder),
@@ -100,6 +103,8 @@ class Console:
                 "error": self.error,
                 "preview": self.preview,
                 "preferences": self.preferences,
+                "picked": self.picked,
+                "native_picker": os.name == "nt",
             }
             active = self.active
         data["runtime"] = current(active) if active else None
@@ -198,7 +203,7 @@ class Console:
             stop(self.active)
 
     def submit(self, action, payload):
-        if action not in ("inspect", "prepare", "start", "stop", "exit"):
+        if action not in ("inspect", "prepare", "start", "stop", "exit", "pick"):
             raise ValueError("未知操作。")
         with self.lock:
             if self.busy or self.exit_ready or self.exiting.is_set():
@@ -217,6 +222,19 @@ class Console:
                         self.preview = self.confirmation = None
                 elif action == "start":
                     self.launch(payload)
+                elif action == "pick":
+                    from desktop.picker import pick_file
+
+                    request_id = payload.get("request_id")
+                    if not isinstance(request_id, str) or not 16 <= len(request_id) <= 64:
+                        raise ValueError("文件选择请求标识无效。")
+                    path = pick_file(payload.get("kind"))
+                    with self.lock:
+                        self.picked = {
+                            "request_id": request_id,
+                            "kind": payload["kind"],
+                            "path": path,
+                        }
                 else:
                     self.stop_application()
                     if action == "exit":
@@ -284,7 +302,11 @@ def serve_console(folder):
                     self.send(403, b"{}")
                     return
                 if self.command == "GET" and self.path == "/api/ping":
-                    result = {"instance": instance, "pid": os.getpid()}
+                    result = {
+                        "instance": instance,
+                        "pid": os.getpid(),
+                        "console_version": CONSOLE_VERSION,
+                    }
                 elif self.command == "GET" and self.path == "/api/state":
                     result = state.snapshot()
                 elif self.command == "POST" and self.path == "/api/close":
@@ -349,6 +371,11 @@ def open_console(folder, *, browser=True):
             _LAUNCHED.remove(child)
     folder = prepare(folder)
     existing = live_record(folder)
+    if existing and console_request(existing).get("console_version") != CONSOLE_VERSION:
+        raise RuntimeError(
+            "管理器来自旧版本；请在原管理页停止退出，"
+            "或在该环境运行python -m desktop console-stop，然后重开入口。"
+        )
     process = None
     if not existing:
         with open(folder / "console.log", "ab") as log:

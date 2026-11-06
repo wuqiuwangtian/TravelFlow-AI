@@ -131,6 +131,8 @@ jobs:
         with:
           python-version: "3.13"
       - name: Isolated process ownership and runtime lifecycle
+        env:
+          TRAVELFLOW_RUN_NATIVE_UI_TESTS: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: python -m unittest discover -s desktop/tests -v
 
   desktop-application:
