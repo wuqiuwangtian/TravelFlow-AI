@@ -15,7 +15,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from desktop.processes import OwnerExit
+from desktop.processes import OwnerExit, supervisor_python
 from desktop.runtime import (
     ROOT,
     current,
@@ -242,7 +242,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_manager_crash_cleans_descendants_without_pid_state_signals(self):
         command = [
-            sys.executable,
+            supervisor_python(),
             "-m",
             "desktop",
             "_serve",
@@ -266,6 +266,7 @@ class RuntimeTests(unittest.TestCase):
                         break
                     time.sleep(0.05)
                 self.assertIsNotNone(result)
+                self.assertEqual(result["manager_pid"], manager.pid)
                 pids = [
                     item[key]
                     for item in result["services"]
