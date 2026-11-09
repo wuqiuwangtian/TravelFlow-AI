@@ -10,7 +10,6 @@ import re
 import secrets
 import subprocess
 import threading
-import webbrowser
 
 from desktop.processes import supervisor_python
 from desktop.runtime import ROOT, write_json
@@ -90,7 +89,7 @@ def command(profile, nonce, state_dir=None, picker_python=None):
 
 
 def connect(profile, *, browser=True, state_dir=None):
-    from desktop.console import CONSOLE_VERSION, console_request
+    from desktop.console import CONSOLE_VERSION, console_request, open_browser
 
     nonce = secrets.token_hex(16)
     args, cwd = command(profile, nonce, state_dir, supervisor_python() if os.name == "nt" else None)
@@ -147,9 +146,7 @@ def connect(profile, *, browser=True, state_dir=None):
             "管理器已在目标环境启动，但本机连接未确认。请核对WSL本机端口转发后重试；不会改用其他环境。"
         ) from error
     if browser:
-        url = f"http://127.0.0.1:{record['port']}/#{record['token']}"
-        if not webbrowser.open(url):
-            raise RuntimeError("管理器已运行，但默认浏览器未打开；请配置浏览器后重新打开入口。")
+        open_browser(record)
     return record
 
 

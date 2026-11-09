@@ -511,6 +511,19 @@ def serve_console(folder):
             (folder / "console.json").unlink(missing_ok=True)
 
 
+def open_browser(record):
+    """Report browser handoff failures without exposing the private launch URL."""
+    url = f"http://127.0.0.1:{record['port']}/#{record['token']}"
+    try:
+        opened = webbrowser.open(url)
+    except (OSError, webbrowser.Error):
+        opened = False
+    if not opened:
+        raise RuntimeError(
+            "管理器已运行，但默认浏览器未打开；请配置本机浏览器后重新打开入口。"
+        ) from None
+
+
 def open_console(folder, *, browser=True):
     for child in _LAUNCHED[:]:
         if child.poll() is not None:
@@ -549,9 +562,7 @@ def open_console(folder, *, browser=True):
         else:
             raise RuntimeError("管理页面尚未就绪，请查看console.log后重试。")
     if browser:
-        url = f"http://127.0.0.1:{existing['port']}/#{existing['token']}"
-        if not webbrowser.open(url):
-            raise RuntimeError("无法打开默认浏览器；管理器已运行，请配置本机浏览器后重新打开入口。")
+        open_browser(existing)
     return existing
 
 

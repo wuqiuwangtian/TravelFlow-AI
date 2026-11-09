@@ -7,6 +7,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -49,6 +50,32 @@ class ConsoleTests(unittest.TestCase):
             console_request(record, "/api/close", {})
         self.assertEqual(raised.exception.code, 409)
         raised.exception.close()
+
+    def test_browser_failure_preserves_manager_and_retry_reuses_identity(self):
+        record = open_console(self.folder, browser=False)
+        for failure in (
+            False,
+            webbrowser.Error("private-launch-value"),
+            OSError("private-launch-value"),
+        ):
+            options = (
+                {"side_effect": failure}
+                if isinstance(failure, Exception)
+                else {"return_value": failure}
+            )
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch("desktop.console.webbrowser.open", **options),
+            ):
+                with self.assertRaises(RuntimeError) as raised:
+                    open_console(self.folder)
+                self.assertNotIn("private-launch-value", str(raised.exception))
+                self.assertNotIn(record["token"], str(raised.exception))
+                self.assertEqual(console_request(record)["instance"], record["instance"])
+                self.assertIsNone(console_request(record, "/api/state")["runtime"])
+        with patch("desktop.console.webbrowser.open", return_value=True) as opening:
+            self.assertEqual(open_console(self.folder)["instance"], record["instance"])
+            opening.assert_called_once_with(f"http://127.0.0.1:{record['port']}/#{record['token']}")
 
     def test_preview_and_failed_confirmation_never_open_database(self):
         state = Console(self.folder)

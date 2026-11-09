@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+import webbrowser
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -81,13 +82,63 @@ class LauncherTests(unittest.TestCase):
                     "desktop.launcher.subprocess.run",
                     return_value=SimpleNamespace(returncode=0, stdout=json.dumps(value).encode()),
                 ),
-                patch("desktop.launcher.webbrowser.open") as browser,
+                patch("desktop.console.webbrowser.open") as browser,
                 patch("desktop.console.console_request") as request,
             ):
                 with self.assertRaises(RuntimeError):
                     connect(profile)
                 browser.assert_not_called()
                 request.assert_not_called()
+
+    def test_browser_controller_failure_is_reported_without_private_exception(self):
+        from desktop.console import CONSOLE_VERSION
+
+        nonce = "a" * 32
+        profile = {
+            "mode": "wsl",
+            "distribution": "Fixture",
+            "project": "/fixture",
+            "python": "python3",
+        }
+        record = {"port": 18021, "token": "b" * 64, "instance": "c" * 32}
+        reply = {
+            "bridge_version": 1,
+            "nonce": nonce,
+            "mode": "wsl",
+            "project": "/fixture",
+            "record": record,
+        }
+        for failure in (
+            False,
+            webbrowser.Error("private-launch-value"),
+            OSError("private-launch-value"),
+        ):
+            options = (
+                {"side_effect": failure}
+                if isinstance(failure, Exception)
+                else {"return_value": failure}
+            )
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch("desktop.launcher.secrets.token_hex", return_value=nonce),
+                patch(
+                    "desktop.launcher.subprocess.run",
+                    return_value=SimpleNamespace(returncode=0, stdout=json.dumps(reply).encode()),
+                ) as running,
+                patch(
+                    "desktop.console.console_request",
+                    side_effect=[
+                        {"console_version": CONSOLE_VERSION, "instance": record["instance"]},
+                        {"project": "/fixture", "mode": "wsl"},
+                    ],
+                ),
+                patch("desktop.console.webbrowser.open", **options),
+            ):
+                with self.assertRaises(RuntimeError) as raised:
+                    connect(profile)
+                self.assertNotIn("private-launch-value", str(raised.exception))
+                self.assertNotIn(record["token"], str(raised.exception))
+                self.assertEqual(running.call_count, 1)
 
     def test_bridge_reports_old_interpreter_without_loading_console(self):
         with (
@@ -200,6 +251,43 @@ class NativeWindowTests(unittest.TestCase):
         self.assertIn("配置", choosing.call_args.kwargs["title"])
         with patch("tkinter.filedialog.askopenfilename", return_value=""):
             self.assertEqual(dialog("database"), "")
+
+    def test_browser_error_releases_real_launcher_controls_for_retry(self):
+        import tkinter as tk
+
+        from desktop.console import open_browser
+        from desktop.launcher import build_launcher
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                patch(
+                    "desktop.console.webbrowser.open",
+                    side_effect=webbrowser.Error("private-launch-value"),
+                ),
+                patch(
+                    "desktop.launcher.connect",
+                    side_effect=lambda _: open_browser({"port": 18021, "token": "b" * 64}),
+                ),
+            ):
+                settings = Path(directory) / "launcher.json"
+                ui = build_launcher(root, settings)
+                ui["variables"]["mode"].set("Windows 原生")
+                ui["widgets"][0].event_generate("<<ComboboxSelected>>")
+                ui["variables"]["project"].set(directory)
+                ui["launch_button"].invoke()
+                deadline = time.monotonic() + 5
+                while "默认浏览器未打开" not in ui["status"].get() and time.monotonic() < deadline:
+                    root.update()
+                    time.sleep(0.02)
+                self.assertIn("默认浏览器未打开", ui["status"].get())
+                self.assertNotIn("private-launch-value", ui["status"].get())
+                self.assertFalse(ui["launch_button"].instate(["disabled"]))
+                self.assertFalse(settings.exists())
+        finally:
+            root.destroy()
 
     def test_real_controls_require_mode_and_report_worker_failure(self):
         import tkinter as tk
