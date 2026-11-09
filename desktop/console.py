@@ -20,17 +20,23 @@ from desktop.runtime import (
     ROOT,
     AlreadyRunning,
     NoRedirect,
+    archive_metadata,
     current,
     file_lock,
     identity,
+    lock_held,
     mode,
     prepare,
     start,
     stop,
+    unconfirmed,
     write_json,
 )
+from desktop.runtime import (
+    recover as recover_runtime,
+)
 
-CONSOLE_VERSION = 2
+CONSOLE_VERSION = 3
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -82,14 +88,124 @@ class Console:
         self.confirmation = None
         self.preferences = {}
         self.active = None
-        try:
-            saved = json.loads((folder / "preferences.json").read_text(encoding="utf-8"))
-            self.preferences = saved["preferences"]
-            active = Path(saved["active"]).resolve()
-            if active.is_relative_to(folder):
-                self.active = active
-        except (OSError, ValueError, KeyError, TypeError):
-            pass
+        self.state_error = None
+        self.recovery = None
+        path = folder / "preferences.json"
+        if path.exists() or path.is_symlink():
+            try:
+                if path.is_symlink():
+                    raise ValueError("Unexpected preferences link")
+                saved = json.loads(path.read_text(encoding="utf-8"))
+                settings, active = saved["preferences"], Path(saved["active"])
+                if (
+                    not isinstance(settings, dict)
+                    or settings.get("profile") not in ("application", "application-qa")
+                    or not isinstance(settings.get("ports"), list)
+                    or len(settings["ports"]) != 2
+                    or len(set(settings["ports"])) != 2
+                    or any(
+                        type(port) is not int or not 0 < port < 65536 for port in settings["ports"]
+                    )
+                    or any(
+                        not isinstance(settings.get(key, ""), str)
+                        for key in ("env_file", "database")
+                    )
+                    or not active.is_absolute()
+                    or not active.resolve().is_relative_to(folder)
+                    or active.resolve() == folder
+                ):
+                    raise ValueError("Invalid preferences")
+                self.preferences = {
+                    key: settings[key]
+                    for key in ("profile", "ports", "env_file", "database")
+                    if key in settings
+                }
+                self.active = active.resolve()
+            except (OSError, ValueError, KeyError, TypeError):
+                self.state_error = (
+                    "上次运行选择无法读取或不完整；已保留原文件，请先核对并恢复运行状态。"
+                )
+        if not self.state_error:
+            try:
+                if any(
+                    candidate != self.active and unconfirmed(candidate)
+                    for candidate in self.candidates()
+                ):
+                    self.state_error = "发现尚未接续的实例状态；请先核对并恢复，不会自动打开新库。"
+            except (OSError, ValueError, RuntimeError):
+                self.state_error = "实例状态目录异常；已保留现场，请核对后恢复。"
+
+    def candidates(self):
+        folders = [self.folder / "qa"]
+        parent = self.folder / "instances"
+        if not parent.resolve().is_relative_to(self.folder):
+            raise RuntimeError("实例目录指向管理范围之外；请保留现场并核对路径。")
+        if parent.is_dir():
+            folders += list(parent.iterdir())
+        if self.active:
+            folders.append(self.active)
+        result = set()
+        for path in folders:
+            if path.is_dir():
+                if not path.resolve().is_relative_to(self.folder) or path.resolve() == self.folder:
+                    raise RuntimeError("实例路径不在管理范围内；不会读取或接管它。")
+                result.add(path.resolve())
+        return sorted(result)
+
+    def recover(self):
+        live, stale = [], []
+        for folder in self.candidates():
+            value = current(folder)
+            if value:
+                chosen = value.get("selection", {})
+                if (
+                    chosen.get("project") != str(ROOT)
+                    or chosen.get("mode") != mode()
+                    or chosen.get("profile") not in ("application", "application-qa")
+                ):
+                    raise RuntimeError("实例归属不符，保留状态，不会自动接管。")
+                live.append((folder, value))
+            elif lock_held(folder):
+                raise RuntimeError(
+                    "仍有实例持有运行锁，可能正在启动或繁忙；请等待，不会清除其状态。"
+                )
+            elif unconfirmed(folder):
+                stale.append(folder)
+        if len(live) > 1:
+            raise RuntimeError("发现多个可认证实例，请逐一核对；本次没有更改运行选择。")
+        archives = [recover_runtime(folder)["archived_state"] for folder in stale]
+        if live:
+            active, value = live[0]
+            chosen = value["selection"]
+            settings = {
+                "profile": chosen["profile"],
+                "ports": [service["port"] for service in value["services"]],
+                "env_file": chosen["env_file"] if chosen["profile"] == "application" else "",
+                "database": chosen["database"] if chosen["profile"] == "application" else "",
+            }
+        else:
+            active = self.active if not self.state_error else None
+            settings = self.preferences if not self.state_error else {}
+        if self.state_error or (live and active != self.active):
+            archives.append(archive_metadata(self.folder, [self.folder / "preferences.json"]))
+            if active:
+                write_json(
+                    self.folder / "preferences.json",
+                    {"preferences": settings, "active": str(active)},
+                )
+        with self.lock:
+            self.active, self.preferences, self.state_error = active, settings, None
+            self.preview = self.confirmation = None
+            self.recovery = {
+                "id": secrets.token_hex(16),
+                "archives": [path for path in archives if path],
+                "reattached": bool(live),
+                "message": "已找回原运行选择，请核对当前状态。"
+                if live
+                else "旧控制状态已保留；请重新预览并确认数据后启动。"
+                if any(archives)
+                else "未发现需要恢复的旧控制状态；请核对配置后启动。",
+            }
 
     def snapshot(self):
         with self.lock:
@@ -105,11 +221,13 @@ class Console:
                 "preferences": self.preferences,
                 "picked": self.picked,
                 "native_picker": os.name == "nt",
+                "state_error": self.state_error,
+                "recovery": self.recovery,
             }
             active = self.active
         data["runtime"] = current(active) if active else None
         data["runtime_unverified"] = bool(
-            active and (active / "runtime.json").exists() and not data["runtime"]
+            self.state_error or (active and not data["runtime"] and unconfirmed(active))
         )
         return data
 
@@ -162,9 +280,19 @@ class Console:
         }
         with self.lock:
             self.preview = public
-            self.confirmation = (dict(payload), runtime_dir, fingerprint)
+            self.confirmation = (
+                {
+                    key: payload[key]
+                    for key in ("profile", "env_file", "database", "ports")
+                    if key in payload
+                },
+                runtime_dir,
+                fingerprint,
+            )
 
     def launch(self, payload):
+        if self.state_error:
+            raise RuntimeError(self.state_error)
         with self.lock:
             preview, confirmation = self.preview, self.confirmation
         if not preview or payload.get("confirmation") != preview["confirmation"]:
@@ -182,8 +310,14 @@ class Console:
             if payload.get("initialize_database") is not True:
                 raise ValueError("数据库不存在；核对预览后，勾选明确创建新数据库。")
             chosen["initialize_database"] = True
-        if self.active and self.active != folder and current(self.active):
-            raise ValueError("请先停止当前应用，再切换配置或数据。")
+        if self.active:
+            running = current(self.active)
+            if not running and unconfirmed(self.active):
+                raise RuntimeError(
+                    "上次启动或运行状态尚未确认，请先核对并恢复；不会改写原运行选择。"
+                )
+            if self.active != folder and running:
+                raise ValueError("请先停止当前应用，再切换配置或数据。")
         # Persist the target before launch so a failed/slow startup remains stoppable on reopen.
         prepare(folder)
         with self.lock:
@@ -195,15 +329,17 @@ class Console:
         start(folder, chosen, preview["ports"])
 
     def stop_application(self):
+        if self.state_error:
+            raise RuntimeError(self.state_error)
         if self.active:
-            if (self.active / "runtime.json").exists() and not current(self.active):
+            if unconfirmed(self.active) and not current(self.active):
                 raise RuntimeError(
                     "已有实例状态无法确认；保留现场，请核对运行日志，不会按旧PID终止进程。"
                 )
             stop(self.active)
 
     def submit(self, action, payload):
-        if action not in ("inspect", "prepare", "start", "stop", "exit", "pick"):
+        if action not in ("inspect", "prepare", "start", "stop", "exit", "pick", "recover"):
             raise ValueError("未知操作。")
         with self.lock:
             if self.busy or self.exit_ready or self.exiting.is_set():
@@ -222,6 +358,8 @@ class Console:
                         self.preview = self.confirmation = None
                 elif action == "start":
                     self.launch(payload)
+                elif action == "recover":
+                    self.recover()
                 elif action == "pick":
                     from desktop.picker import pick_file
 
@@ -242,6 +380,11 @@ class Console:
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 with self.lock:
                     self.error = str(error)
+            except Exception as error:
+                with self.lock:
+                    self.error = (
+                        f"管理操作未完成（{type(error).__name__}）；已保留状态，请核对后重试。"
+                    )
             finally:
                 with self.lock:
                     self.busy = None

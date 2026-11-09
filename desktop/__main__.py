@@ -39,6 +39,7 @@ def main():
     )
     parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--nonce")
+    parser.add_argument("--launch-ticket")
     parser.add_argument("--database", type=Path)
     parser.add_argument("--ports", type=int, nargs=2)
     profile = parser.add_mutually_exclusive_group()
@@ -132,7 +133,7 @@ def main():
             else:
                 chosen = selection(args.database)
             if args.action == "_serve":
-                run_supervisor(folder, chosen, args.ports)
+                run_supervisor(folder, chosen, args.ports, launch_ticket=args.launch_ticket)
                 return 0
             result = start(folder, chosen, args.ports)
         print(json.dumps(result, ensure_ascii=True))

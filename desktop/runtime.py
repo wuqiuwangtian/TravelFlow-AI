@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import platform
+import re
 import secrets
 import socket
 import subprocess
@@ -83,6 +84,8 @@ def instance_lock(folder):
 
 @contextmanager
 def file_lock(path):
+    if path.is_symlink():
+        raise RuntimeError("运行锁路径是符号链接；已保留现场，不会打开其目标。")
     with open(path, "a+b") as stream:
         stream.seek(0)
         if os.name == "nt":
@@ -228,11 +231,78 @@ def check_services(ports, specs, health, instance, token):
     return checked
 
 
-def run_supervisor(folder, chosen, ports, *, timeout=None):
+def launch_ticket_path(folder, nonce):
+    if not re.fullmatch(r"[a-f0-9]{32}", nonce or ""):
+        raise ValueError("Invalid startup ticket")
+    return folder / ("pending-" + nonce + ".json")
+
+
+def lock_held(folder):
+    if not (folder / "manager.lock").exists():
+        return False
+    try:
+        with instance_lock(folder):
+            return False
+    except AlreadyRunning:
+        return True
+
+
+def unconfirmed(folder):
+    return (
+        (folder / "runtime.json").exists()
+        or (folder / "runtime.json").is_symlink()
+        or (folder / "manager.lock").is_symlink()
+        or any(folder.glob("pending-*.json"))
+        or lock_held(folder)
+    )
+
+
+def archive_metadata(folder, paths):
+    paths = [path for path in paths if path.exists() or path.is_symlink()]
+    if not paths:
+        return None
+    for path in paths:
+        if path.parent.resolve() != folder.resolve() or (
+            not path.is_file() and not path.is_symlink()
+        ):
+            raise ValueError("Unexpected control metadata; state retained")
+    target = folder / "recovery" / secrets.token_hex(16)
+    if not target.resolve().is_relative_to(folder.resolve()):
+        raise ValueError("Recovery archive must remain inside its state directory")
+    prepare(target)
+    for path in paths:
+        os.replace(path, target / path.name)
+    return str(target)
+
+
+def recover(folder):
+    """Archive control metadata only after proving there is no lock-owning supervisor."""
+    try:
+        with instance_lock(folder):
+            if current(folder):
+                raise RuntimeError("An authenticated instance is still running; state retained")
+            archived = archive_metadata(
+                folder, [folder / "runtime.json", *folder.glob("pending-*.json")]
+            )
+            return {"archived_state": archived}
+    except AlreadyRunning:
+        raise RuntimeError(
+            "实例仍持有运行锁，可能正在启动或繁忙；保留状态，请等待或核对日志。"
+        ) from None
+
+
+def run_supervisor(folder, chosen, ports, *, timeout=None, launch_ticket=None):
     validate(folder, chosen, ports)
     application = chosen["profile"] != "synthetic-probe"
     timeout = timeout or (60 if application else 8)
     with instance_lock(folder), ExitStack() as stack:
+        if launch_ticket:
+            ticket = launch_ticket_path(folder, launch_ticket)
+            if not ticket.is_file():
+                raise RuntimeError(
+                    "Startup request was cancelled; review recovered state before retrying"
+                )
+            ticket.unlink()
         if application:
             from desktop.application import build_lock
 
@@ -412,6 +482,16 @@ def run_supervisor(folder, chosen, ports, *, timeout=None):
 
 
 def start(folder, chosen, ports, *, timeout=None):
+    nonce = secrets.token_hex(16)
+    ticket = launch_ticket_path(folder, nonce)
+    write_json(ticket, {"selection": identity(chosen), "ports": ports})
+    try:
+        return _start(folder, chosen, ports, timeout=timeout, launch_ticket=nonce)
+    finally:
+        ticket.unlink(missing_ok=True)
+
+
+def _start(folder, chosen, ports, *, timeout=None, launch_ticket=None):
     validate(folder, chosen, ports)
     timeout = timeout or (150 if chosen["profile"] != "synthetic-probe" else 12)
     reap(folder)
@@ -430,6 +510,8 @@ def start(folder, chosen, ports, *, timeout=None):
         "-m",
         "desktop",
         "_serve",
+        "--launch-ticket",
+        launch_ticket,
         {"synthetic-probe": "--probe", "application-qa": "--qa", "application": "--app"}[
             chosen["profile"]
         ],
@@ -491,6 +573,8 @@ def start(folder, chosen, ports, *, timeout=None):
 def stop(folder):
     value = record(folder)
     if not value:
+        if unconfirmed(folder):
+            raise RuntimeError("启动或运行状态尚未确认；保留现场，请等待就绪或核对并恢复。")
         reap(folder)
         return {"stopped": True, "was_running": False}
     owner_status = current(folder)

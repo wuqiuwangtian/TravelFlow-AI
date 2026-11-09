@@ -3,6 +3,7 @@
 import json
 import os
 import socket
+import subprocess
 import tempfile
 import time
 import unittest
@@ -11,8 +12,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from desktop.application import application_selection, doctor, prepare_application
-from desktop.console import close_console, console_request, open_console
-from desktop.runtime import AlreadyRunning, current, prepare, request, start, stop
+from desktop.console import close_console, console_request, live_record, open_console
+from desktop.processes import supervisor_python
+from desktop.runtime import ROOT, AlreadyRunning, current, prepare, request, start, stop, write_json
 
 
 def free_ports():
@@ -166,6 +168,151 @@ class RealApplicationTests(unittest.TestCase):
             self.assertFalse(database.exists())
         finally:
             close_console(folder)
+
+    def owned_console(self, folder):
+        prepare(folder)
+        with open(folder / "owned-console.log", "ab") as log:
+            process = subprocess.Popen(
+                [supervisor_python(), "-m", "desktop", "_console", "--state-dir", str(folder)],
+                cwd=ROOT,
+                stdout=log,
+                stderr=log,
+            )
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            record = live_record(folder)
+            if record:
+                self.assertEqual(console_request(record)["pid"], process.pid)
+                return process, record
+            if process.poll() is not None:
+                break
+            time.sleep(0.05)
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=8)
+        self.fail((folder / "owned-console.log").read_text(errors="replace")[-5000:])
+
+    def test_console_crash_and_corrupt_preferences_reattach_existing_application(self):
+        folder = self.folder / "console"
+        processes = []
+        try:
+            process, record = self.owned_console(folder)
+            processes.append(process)
+            payload = {"profile": "application-qa", "ports": self.ports}
+            console_request(record, "/api/inspect", payload)
+            snapshot = self.wait_console(record)
+            console_request(
+                record, "/api/start", {"confirmation": snapshot["preview"]["confirmation"]}
+            )
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            instance = snapshot["runtime"]["instance"]
+            created = api(self.ports[1], "/api/backend/api/sessions", {"title": "恢复虚构旅程"})
+            for corrupt in (False, True):
+                if corrupt:
+                    (folder / "preferences.json").write_bytes(b"broken fixture preferences")
+                process.kill()  # Only a Popen handle created by this test.
+                process.wait(timeout=8)
+                process, record = self.owned_console(folder)
+                processes.append(process)
+                snapshot = console_request(record, "/api/state")
+                if corrupt:
+                    self.assertTrue(snapshot["state_error"])
+                    console_request(record, "/api/recover", {})
+                    snapshot = self.wait_console(record)
+                    self.assertIsNone(snapshot["error"])
+                    self.assertIsNone(snapshot["state_error"])
+                    self.assertIsNone(snapshot["preview"])
+                    self.assertTrue(snapshot["recovery"]["archives"])
+                self.assertEqual(snapshot["runtime"]["instance"], instance)
+                self.assertTrue(snapshot["runtime"]["ready"])
+                items = api(self.ports[1], "/api/backend/api/sessions")["items"]
+                self.assertTrue(any(item["id"] == created["session"]["id"] for item in items))
+        finally:
+            stop(folder / "qa")
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=8)
+
+    def test_dead_runtime_control_recovery_requires_fresh_preview_and_preserves_trip(self):
+        folder = prepare(self.folder / "console")
+        active = prepare(folder / "qa")
+        chosen = application_selection(active, "application-qa")
+        write_json(
+            folder / "preferences.json",
+            {
+                "preferences": {"profile": "application-qa", "ports": self.ports},
+                "active": str(active),
+            },
+        )
+        with open(folder / "owned-runtime.log", "ab") as log:
+            manager = subprocess.Popen(
+                [
+                    supervisor_python(),
+                    "-m",
+                    "desktop",
+                    "_serve",
+                    "--qa",
+                    "--state-dir",
+                    str(active),
+                    "--database",
+                    chosen["database"],
+                    "--ports",
+                    *map(str, self.ports),
+                ],
+                cwd=ROOT,
+                stdout=log,
+                stderr=log,
+            )
+        try:
+            deadline = time.monotonic() + 150
+            while time.monotonic() < deadline and not current(active):
+                if manager.poll() is not None:
+                    self.fail("Owned application supervisor exited during startup")
+                time.sleep(0.1)
+            ready = current(active)
+            self.assertTrue(
+                ready, (folder / "owned-runtime.log").read_text(errors="replace")[-5000:]
+            )
+            self.assertTrue(ready["ready"])
+            record = open_console(folder, browser=False)
+            payload = {"profile": "application-qa", "ports": self.ports}
+            console_request(record, "/api/inspect", payload)
+            snapshot = self.wait_console(record)
+            confirmation = snapshot["preview"]["confirmation"]
+            created = api(self.ports[1], "/api/backend/api/sessions", {"title": "崩溃前已提交旅程"})
+            selected = (active / "selection.json").read_bytes()
+            manager.kill()  # This test owns the actual supervisor process handle.
+            manager.wait(timeout=8)
+            self.assertTrue(console_request(record, "/api/state")["runtime_unverified"])
+            console_request(record, "/api/start", {"confirmation": confirmation})
+            snapshot = self.wait_console(record)
+            self.assertIn("恢复", snapshot["error"])
+            console_request(record, "/api/recover", {})
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            self.assertIsNone(snapshot["preview"])
+            self.assertTrue(snapshot["recovery"]["archives"])
+            self.assertFalse((active / "runtime.json").exists())
+            self.assertEqual((active / "selection.json").read_bytes(), selected)
+            self.assertTrue(Path(chosen["database"]).exists())
+            console_request(record, "/api/inspect", payload)
+            snapshot = self.wait_console(record)
+            console_request(
+                record, "/api/start", {"confirmation": snapshot["preview"]["confirmation"]}
+            )
+            snapshot = self.wait_console(record)
+            self.assertIsNone(snapshot["error"])
+            items = api(self.ports[1], "/api/backend/api/sessions")["items"]
+            self.assertTrue(any(item["id"] == created["session"]["id"] for item in items))
+        finally:
+            try:
+                close_console(folder)
+            finally:
+                if manager.poll() is None:
+                    manager.kill()
+                manager.wait(timeout=8)
 
     def test_preparation_is_rejected_while_managed_build_is_running(self):
         result = self.launch(self.chosen())

@@ -13,8 +13,9 @@ let submitting = false;
 let ended = false;
 let refreshing = false;
 let lastConfirmation = null;
+let lastRecovery = null;
 let pendingPick = null;
-const labels = { pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
+const labels = { recover: "正在核对实例归属与运行锁…", pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
 const modes = { "windows-native": "Windows 原生", wsl: "WSL Linux", linux: "Linux" };
 async function api(path, payload) {
   const response = await fetch(path, { cache: "no-store", headers: { "X-TravelFlow-Control": token, "Content-Type": "application/json" }, ...(payload ? { method: "POST", body: JSON.stringify(payload) } : {}) });
@@ -67,7 +68,11 @@ function render() {
     byId("preview-ready").textContent = preview.preparation.ready ? "已准备就绪" : preview.preparation.errors.join("；");
     byId("initialize-row").hidden = preview.database_exists || preview.selection.profile === "application-qa";
   }
-  byId("start").disabled = busy || !preview || !preview.preparation.ready || !byId("confirm").checked || (!byId("initialize-row").hidden && !byId("initialize").checked);
+  byId("start").disabled = busy || Boolean(state.state_error) || !preview || !preview.preparation.ready || !byId("confirm").checked || (!byId("initialize-row").hidden && !byId("initialize").checked);
+  byId("recover").hidden = false;
+  byId("recover").disabled = busy;
+  byId("recovery").hidden = !state.recovery;
+  byId("recovery").textContent = state.recovery ? state.recovery.message + (state.recovery.archives.length ? " 元数据保留位置：" + state.recovery.archives.join("；") : "") : "";
   const runtime = state.runtime;
   byId("stop").disabled = busy || (!runtime && !state.runtime_unverified);
   byId("runtime-details").hidden = !runtime;
@@ -77,19 +82,20 @@ function render() {
     const backend = runtime.services.find((service) => service.role === "backend");
     const frontend = runtime.services.find((service) => service.role === "frontend");
     const url = frontend ? `http://127.0.0.1:${frontend.port}` : "";
+    byId("actual-env").textContent = runtime.selection.env_file || "无配置文件";
     byId("actual-db").textContent = backend?.database || runtime.selection.database;
     byId("web-address").textContent = url;
     byId("open-app").href = url;
     byId("health-time").textContent = runtime.checked_at ? new Date(runtime.checked_at * 1000).toLocaleString() : "等待健康检查";
   }
-  showError(state.error);
+  showError(state.error || state.state_error);
 }
 async function refresh() {
   if (ended || refreshing) return;
   refreshing = true;
   try {
     state = await api("/api/state");
-    if (!loaded) {
+    if (!loaded || (state.recovery?.reattached && state.recovery.id !== lastRecovery && !dirty)) {
       const saved = state.preferences;
       byId("profile").value = saved.profile || "";
       byId("env-file").value = saved.env_file || "";
@@ -97,6 +103,7 @@ async function refresh() {
       if (saved.ports) { byId("backend-port").value = saved.ports[0]; byId("frontend-port").value = saved.ports[1]; }
       loaded = true;
     }
+    lastRecovery = state.recovery?.id;
     byId("connection").textContent = "已连接本机管理器";
     render();
     if (state.exit_ready) {
@@ -116,6 +123,7 @@ async function refresh() {
 async function action(name) {
   if (submitting || state?.busy) return;
   if (name === "prepare" && !window.confirm("将安装锁定依赖并构建应用，可能需要联网。是否开始准备？")) return;
+  if (name === "recover" && !window.confirm("将核对实例归属与运行锁，仅保留并归档可确认无持锁管理器的旧控制状态；不会移动数据库或自动重启。是否继续？")) return;
   if (name === "exit" && !window.confirm("将停止旅行助手并退出管理器。是否继续？")) return;
   submitting = true; render();
   byId("operation").textContent = labels[name];
@@ -130,7 +138,7 @@ async function action(name) {
   } catch (error) { state.error = error.message; showError(error.message); }
   finally { submitting = false; render(); }
 }
-for (const id of ["inspect", "prepare", "start", "stop", "exit"]) byId(id).addEventListener("click", () => action(id));
+for (const id of ["inspect", "prepare", "start", "stop", "exit", "recover"]) byId(id).addEventListener("click", () => action(id));
 for (const id of ["profile", "env-file", "database", "backend-port", "frontend-port"]) byId(id).addEventListener("input", () => { dirty = true; byId("confirm").checked = false; byId("initialize").checked = false; render(); });
 for (const id of ["confirm", "initialize"]) byId(id).addEventListener("change", render);
 byId("theme").addEventListener("change", () => { document.documentElement.dataset.theme = byId("theme").value; });
