@@ -36,7 +36,7 @@ from desktop.runtime import (
     recover as recover_runtime,
 )
 
-CONSOLE_VERSION = 3
+CONSOLE_VERSION = 4
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -208,6 +208,9 @@ class Console:
             }
 
     def snapshot(self):
+        from desktop.picker import picker_capability
+
+        native_picker, picker_hint = picker_capability(self.folder)
         with self.lock:
             data = {
                 "console_version": CONSOLE_VERSION,
@@ -220,7 +223,8 @@ class Console:
                 "preview": self.preview,
                 "preferences": self.preferences,
                 "picked": self.picked,
-                "native_picker": os.name == "nt",
+                "native_picker": native_picker,
+                "picker_hint": picker_hint,
                 "state_error": self.state_error,
                 "recovery": self.recovery,
             }
@@ -366,7 +370,7 @@ class Console:
                     request_id = payload.get("request_id")
                     if not isinstance(request_id, str) or not 16 <= len(request_id) <= 64:
                         raise ValueError("文件选择请求标识无效。")
-                    path = pick_file(payload.get("kind"))
+                    path = pick_file(payload.get("kind"), self.folder)
                     with self.lock:
                         self.picked = {
                             "request_id": request_id,

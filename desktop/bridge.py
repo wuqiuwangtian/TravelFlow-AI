@@ -8,7 +8,7 @@ from pathlib import Path
 from desktop.runtime import ROOT, mode
 
 
-def connect_payload(folder, nonce):
+def connect_payload(folder, nonce, picker_python=None, distribution=None):
     if not re.fullmatch(r"[a-f0-9]{32}", nonce or ""):
         raise ValueError("启动请求标识无效。")
     if sys.version_info < (3, 13):  # noqa: UP036 - user-selected bootstrap may be older
@@ -21,6 +21,10 @@ def connect_payload(folder, nonce):
         os.environ["PATH"] = os.pathsep.join(
             [str(path) for path in bins if path.is_dir()] + [os.environ.get("PATH", "")]
         )
+    if picker_python and mode() == "wsl":
+        from desktop.picker import configure_windows_picker
+
+        configure_windows_picker(folder, picker_python, distribution)
     from desktop.console import open_console
 
     record = open_console(folder, browser=False)

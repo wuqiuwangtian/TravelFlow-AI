@@ -35,6 +35,8 @@ function render() {
   byId("state-dir").textContent = state.state_dir;
   byId("fields").disabled = busy;
   const qa = byId("profile").value === "application-qa";
+  byId("picker-hint").hidden = !state.picker_hint;
+  byId("picker-hint").textContent = state.picker_hint || "";
   byId("picker-actions").hidden = !state.native_picker;
   for (const id of ["pick-env", "pick-db"]) {
     byId(id).hidden = !state.native_picker;

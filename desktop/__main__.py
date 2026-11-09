@@ -39,6 +39,8 @@ def main():
     )
     parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--nonce")
+    parser.add_argument("--picker-python")
+    parser.add_argument("--picker-distribution")
     parser.add_argument("--launch-ticket")
     parser.add_argument("--database", type=Path)
     parser.add_argument("--ports", type=int, nargs=2)
@@ -70,7 +72,9 @@ def main():
             from desktop.bridge import connect_payload
 
             try:
-                result = connect_payload(folder, args.nonce)
+                result = connect_payload(
+                    folder, args.nonce, args.picker_python, args.picker_distribution
+                )
             except (OSError, ValueError, RuntimeError) as error:
                 print(json.dumps({"bridge_version": 1, "nonce": args.nonce, "error": str(error)}))
                 return 1

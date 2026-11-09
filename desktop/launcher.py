@@ -60,7 +60,7 @@ def project_path(kind, value, distribution=""):
     return posixpath.normpath(value)
 
 
-def command(profile, nonce, state_dir=None):
+def command(profile, nonce, state_dir=None, picker_python=None):
     kind = profile.get("mode")
     distro = profile.get("distribution", "")
     if kind == "wsl" and (
@@ -83,6 +83,8 @@ def command(profile, nonce, state_dir=None):
     if state_dir:
         child += ["--state-dir", state_dir]
     if kind == "wsl":
+        if picker_python:
+            child += ["--picker-python", picker_python, "--picker-distribution", distro]
         return ["wsl.exe", "--distribution", distro, "--cd", project, "--exec", *child], None
     return child, project
 
@@ -91,7 +93,7 @@ def connect(profile, *, browser=True, state_dir=None):
     from desktop.console import CONSOLE_VERSION, console_request
 
     nonce = secrets.token_hex(16)
-    args, cwd = command(profile, nonce, state_dir)
+    args, cwd = command(profile, nonce, state_dir, supervisor_python() if os.name == "nt" else None)
     result = subprocess.run(
         args,
         cwd=cwd,
