@@ -15,6 +15,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from desktop.processes import OwnerExit
 from desktop.runtime import (
     ROOT,
     current,
@@ -104,7 +105,11 @@ class RuntimeTests(unittest.TestCase):
         repeated = self.launch()
         self.assertEqual(result["instance"], repeated["instance"])
         self.assertTrue(repeated["reused"])
-        pids = [item[key] for item in result["services"] for key in ("pid", "descendant_pid")]
+        pids = [
+            item[key]
+            for item in result["services"]
+            for key in ("pid", "descendant_pid", "gate_pid")
+        ]
         self.assertTrue(all(alive(pid) for pid in pids))
         self.assertNotIn(record(self.folder)["token"], json.dumps(result))
         self.assertFalse(Path(self.chosen["database"]).exists())
@@ -251,6 +256,7 @@ class RuntimeTests(unittest.TestCase):
         ]
         with open(self.folder / "crash-test.log", "wb") as log:
             manager = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=log)
+            owners = []
             try:
                 deadline = time.monotonic() + 10
                 result = None
@@ -261,15 +267,22 @@ class RuntimeTests(unittest.TestCase):
                     time.sleep(0.05)
                 self.assertIsNotNone(result)
                 pids = [
-                    item[key] for item in result["services"] for key in ("pid", "descendant_pid")
+                    item[key]
+                    for item in result["services"]
+                    for key in ("pid", "descendant_pid", "gate_pid")
                 ]
+                owners = [OwnerExit(pid) for pid in pids]
                 manager.kill()  # Owned Popen handle, not a persisted PID.
                 manager.wait(timeout=5)
+                for owner in owners:
+                    owner.wait(8)
                 self.assert_gone(pids)
             finally:
                 if manager.poll() is None:
                     manager.kill()
                     manager.wait(timeout=5)
+                for owner in owners:
+                    owner.close()
                 (self.folder / "runtime.json").unlink(missing_ok=True)
 
     def test_simultaneous_cli_starts_share_one_instance(self):

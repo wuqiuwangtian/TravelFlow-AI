@@ -440,7 +440,9 @@ def run_supervisor(folder, chosen, ports, *, timeout=None, launch_ticket=None):
                                     raise RuntimeError(
                                         "Frontend build does not match the inspected selection"
                                     )
-                                health.append({"port": port, **result})
+                                health.append(
+                                    {"port": port, **result, "gate_pid": service.process.pid}
+                                )
                                 break
                         except (OSError, ValueError, urllib.error.URLError):
                             pass
