@@ -289,3 +289,12 @@ Windows选择窗口与 `python -m desktop console` 共用浏览器交接：浏�
 
 
 Windows窗口回归注意：Tk变量须在创建它的主线程回收。多个窗口用例在同一进程执行时，仅destroy窗口不保证Python引用环立即释放；后台线程触发GC可能报 `main thread is not in main loop` 并拖延后续工作。NativeWindowTests在每个用例结束后由主线程gc.collect；启动窗口销毁事件同时取消自身after轮询，避免下一窗口事件循环触发已删除的旧命令。回归新增销毁后定时器为空断言，保留原有连接超时和按钮恢复检查，不通过延长等待绕过失败。
+
+
+### Windows侧WSL端口预检
+
+WSL监听健康不代表Windows浏览器可访问同一端口。通过Windows统一入口连接后，复用windows-picker.json中绑定当前项目／发行版的宿主Python，运行独立标准库host_ports.py，短暂绑定并释放127.0.0.1 TCP端口，不开放监听、不改系统保留范围或防火墙。未有已认证活实例时，预览与启动均检查；活实例复用不尝试抢占自身端口。10013提示系统保留或拒绝绑定，其他绑定错误提示占用／不可绑定；用户修改端口后重新预览确认，不自动选端口或迁移数据。宿主存在但探针失败时拒绝继续新启动；没有宿主桥接的纯WSL入口不执行此检查，不能宣称已验证Windows访问。
+
+复跑 `python -m unittest discover -s desktop/tests -p test_host_ports.py -v`，预期5项通过；完整桌面门禁继续沿用前述命令。人工核对：在管理页显式选择隔离体验，填写可用后端端口及一个Windows已保留网页端口，预览应显示错误码并拒绝继续；改为空闲网页端口后重新预览、确认、启动，再从Windows打开管理页给出的实际地址。Windows可只读运行 `netsh interface ipv4 show excludedportrange protocol=tcp` 核对系统排除范围。不要将某台电脑上的可用端口作为全平台默认值；端口绑定通过仍不能保证所有防火墙、转发或代理条件。
+
+本次实机3100落在3081–3180排除范围，WSL HTTP200而Windows拒绝连接，宿主绑定返回10013；更换端口后Windows HTTP200。管理API版本升级要求旧管理器正常退出重开，已有用户应用不被自动打断。

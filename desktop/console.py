@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from desktop.application import application_selection, doctor, prepare_application
+from desktop.host_ports import ensure_host_ports
 from desktop.processes import OwnerExit, supervisor_python
 from desktop.runtime import (
     ROOT,
@@ -36,7 +37,7 @@ from desktop.runtime import (
     recover as recover_runtime,
 )
 
-CONSOLE_VERSION = 4
+CONSOLE_VERSION = 5
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -253,6 +254,8 @@ class Console:
             raise ValueError("配置和数据库地址必须是文本。")
         if profile == "application-qa" and (env or database):
             raise ValueError("隔离体验使用自己的配置和数据，请清空自定义地址。")
+        if not self.active or not current(self.active):
+            ensure_host_ports(self.folder, ports)
         chosen = application_selection(
             self.folder / "qa",
             profile,
@@ -314,6 +317,7 @@ class Console:
             if payload.get("initialize_database") is not True:
                 raise ValueError("数据库不存在；核对预览后，勾选明确创建新数据库。")
             chosen["initialize_database"] = True
+        running = None
         if self.active:
             running = current(self.active)
             if not running and unconfirmed(self.active):
@@ -322,6 +326,8 @@ class Console:
                 )
             if self.active != folder and running:
                 raise ValueError("请先停止当前应用，再切换配置或数据。")
+        if not running:
+            ensure_host_ports(self.folder, preview["ports"])
         # Persist the target before launch so a failed/slow startup remains stoppable on reopen.
         prepare(folder)
         with self.lock:
