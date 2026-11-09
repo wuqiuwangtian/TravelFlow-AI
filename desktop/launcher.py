@@ -300,8 +300,10 @@ def build_launcher(root, settings=None):
     launch_button = ttk.Button(frame, text="打开所选环境的管理页", command=launch)
     launch_button.grid(row=6, column=0, columnspan=3, sticky="w")
 
+    poll_id = None
+
     def poll():
-        nonlocal busy, saved
+        nonlocal busy, saved, poll_id
         try:
             while True:
                 kind, value = events.get_nowait()
@@ -333,10 +335,18 @@ def build_launcher(root, settings=None):
                         status.set(value)
         except queue.Empty:
             pass
-        root.after(100, poll)
+        poll_id = root.after(100, poll)
+
+    def destroyed(event):
+        nonlocal poll_id
+        if event.widget is root and poll_id is not None:
+            root.after_cancel(poll_id)
+            poll_id = None
+
+    root.bind("<Destroy>", destroyed, add="+")
 
     # Remembering a previous choice never makes it the default execution mode.
-    root.after(100, poll)
+    poll_id = root.after(100, poll)
     root.protocol(
         "WM_DELETE_WINDOW",
         lambda: root.destroy() if not busy else status.set("连接正在进行，请等待结果后关闭。"),

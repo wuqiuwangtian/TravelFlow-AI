@@ -1,5 +1,6 @@
 """Source selection, private bridge validation and optional real Windows Tk controls."""
 
+import gc
 import json
 import os
 import shutil
@@ -242,6 +243,24 @@ class LauncherTests(unittest.TestCase):
     "Requires explicit Windows Tk acceptance",
 )
 class NativeWindowTests(unittest.TestCase):
+    def tearDown(self):
+        # Tk objects must be finalized on their owning thread, before later workers.
+        gc.collect()
+
+    def test_destroy_cancels_launcher_poll_callback(self):
+        import tkinter as tk
+
+        from desktop.launcher import build_launcher
+
+        root = tk.Tk()
+        root.withdraw()
+        with tempfile.TemporaryDirectory() as directory:
+            ui = build_launcher(root, Path(directory) / "launcher.json")
+            self.assertTrue(root.tk.call("after", "info"))
+            root.destroy()
+            self.assertFalse(root.tk.call("after", "info"))
+            del ui
+
     def test_native_dialog_returns_filename_without_opening_contents(self):
         from desktop.picker import dialog
 

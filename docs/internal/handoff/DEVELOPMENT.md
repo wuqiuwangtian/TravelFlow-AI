@@ -286,3 +286,6 @@ Windows选择窗口与 `python -m desktop console` 共用浏览器交接：浏�
 根目录运行 `python -m unittest discover -s desktop/tests -v`。浏览器失败回归使用返回值／异常替身，核对三种失败、实例身份保持、未启动业务及重试交接；Windows核心CI显式开启 `TRAVELFLOW_RUN_NATIVE_UI_TESTS=1`，另用真实Tk窗口核对失败提示与按钮恢复。真实浏览器是否显示页面仍需人工验收，webbrowser返回成功只表示交接成功。
 
 人工最短路径：Windows安装含Tk的Python并配置.pyw关联 → 从资源管理器双击根目录TravelFlow.pyw → 明确选择环境、该环境源码与Python3.13+ → 打开所选管理页 → 核对显示的环境／项目与实际数据位置。重复打开应回到同一管理器，不能静默换模式或新建主库；测试结束从管理页停止并退出。不要为故障验收修改个人默认浏览器或系统关联，失败路径使用隔离回归。本机仅对系统关联做只读检查，并用中文／空格临时.pyw通过Shell执行取得无终端标记；该探针未打开业务、未修改系统设置，不代替完整产品的人工操作。
+
+
+Windows窗口回归注意：Tk变量须在创建它的主线程回收。多个窗口用例在同一进程执行时，仅destroy窗口不保证Python引用环立即释放；后台线程触发GC可能报 `main thread is not in main loop` 并拖延后续工作。NativeWindowTests在每个用例结束后由主线程gc.collect；启动窗口销毁事件同时取消自身after轮询，避免下一窗口事件循环触发已删除的旧命令。回归新增销毁后定时器为空断言，保留原有连接超时和按钮恢复检查，不通过延长等待绕过失败。
