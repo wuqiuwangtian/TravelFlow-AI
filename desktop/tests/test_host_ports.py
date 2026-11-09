@@ -4,7 +4,7 @@ import json
 import socket
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -29,6 +29,7 @@ class HostPortTests(unittest.TestCase):
         for code in (10013, 10048, 0):
             with (
                 self.subTest(code=code),
+                patch("desktop.runtime.ROOT", PurePosixPath("/fixture source 中文")),
                 patch("desktop.picker.windows_picker", return_value=host),
                 patch(
                     "desktop.host_ports.subprocess.run",
@@ -57,6 +58,7 @@ class HostPortTests(unittest.TestCase):
             running.assert_not_called()
         for output in (b"private-host-value", b"[]", b'[{"port":8000,"code":0}]'):
             with (
+                patch("desktop.runtime.ROOT", PurePosixPath("/fixture source 中文")),
                 patch(
                     "desktop.picker.windows_picker",
                     return_value={"executable": "host", "distribution": "Fixture"},
@@ -64,11 +66,12 @@ class HostPortTests(unittest.TestCase):
                 patch(
                     "desktop.host_ports.subprocess.run",
                     return_value=SimpleNamespace(returncode=0, stdout=output),
-                ),
+                ) as running,
             ):
                 with self.assertRaises(RuntimeError) as raised:
                     ensure_host_ports(Path("unused"), [3100])
                 self.assertNotIn("private-host-value", str(raised.exception))
+                running.assert_called_once()
 
     def test_preview_and_launch_recheck_before_persisting_or_starting(self):
         with tempfile.TemporaryDirectory() as directory:
