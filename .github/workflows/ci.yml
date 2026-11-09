@@ -176,7 +176,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: 共享契约与源码启动失败保护回归
+      - name: 共享契约、源码启动与管理页连接回归
         run: node --test scripts/*.test.mjs
 
       - name: 检查共享契约摘要与已发布版本不变性
