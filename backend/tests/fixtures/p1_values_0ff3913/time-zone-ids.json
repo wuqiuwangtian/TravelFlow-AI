@@ -1,0 +1,12 @@
+{
+  "registry_format_version": 1,
+  "status": "candidate-name-registry",
+  "scope": "仅登记本轮隔离样例使用的时区拼写，区分大小写、不隐式转换别名；不是正式产品的全球时区支持清单。完整IANA命名来源、别名和版本策略另评审。",
+  "time_zone_ids": [
+    "America/New_York",
+    "Australia/Lord_Howe",
+    "Etc/GMT+12",
+    "Etc/GMT-14",
+    "UTC"
+  ]
+}

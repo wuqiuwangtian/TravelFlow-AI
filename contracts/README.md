@@ -11,4 +11,4 @@
 
 CI的push／PR分别使用推送前提交／目标分支提交作为基线，并拉取所需历史；手动workflow_dispatch使用当前提交重验，初始仓库推送没有旧版本可比较时仅检查摘要。`node --test scripts/check-contracts.test.mjs`覆盖重算摘要覆盖旧版本、增添旧版本文件、缺失基线与正常新增版本等回归。移动端无需修改快照或立即升级，现有0.1.0内容保持不变。
 
-P1写入语义仍在评审，电脑侧固定基线、S01–S12结论及3100d32的74项值候选复核见[P1跨仓数据评审](../docs/internal/P1_CROSS_REPO_REVIEW.md)。该文档未分配共享写入版本，未改变ledger-v1或移动vendor，联合验收仍待双方固定版本复核。
+P1写入语义仍在评审，电脑侧固定基线、S01–S12结论及多轮值候选／0ff3913修正复核见[P1跨仓数据评审](../docs/internal/P1_CROSS_REPO_REVIEW.md)。该文档未分配共享写入版本，未改变ledger-v1或移动vendor，联合验收仍待双方固定版本复核。

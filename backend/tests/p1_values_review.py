@@ -71,7 +71,7 @@ def local_string(value):
     return f"{value.year:04}-{value.month:02}-{value.day:02}T{value.hour:02}:{value.minute:02}"
 
 
-def desktop_reference(entry):
+def desktop_reference(entry, zone_ids=None):
     """Independent review reference, intentionally not exported as product code."""
     value, kind = entry["input"], entry["kind"]
     try:
@@ -129,6 +129,8 @@ def desktop_reference(entry):
                 "offset",
             )
             require(nonempty(zone_name) and not zone_name.startswith(("+", "-")), "zone")
+            if zone_ids is not None:
+                require(zone_name in zone_ids, "zone")
             try:
                 zone = ZoneInfo(zone_name)
             except (ValueError, ZoneInfoNotFoundError):
@@ -215,9 +217,15 @@ console.log(JSON.stringify({results,node:process.version,icu:process.versions.ic
 """
 
 
-def run_node(entries):
+def run_node(entries, module_path=None):
     result = subprocess.run(
-        ["node", "--input-type=module", "-e", NODE, (ROOT / "mobile_values.mjs").as_uri()],
+        [
+            "node",
+            "--input-type=module",
+            "-e",
+            NODE,
+            (module_path or ROOT / "mobile_values.mjs").as_uri(),
+        ],
         input=json.dumps(entries),
         text=True,
         capture_output=True,

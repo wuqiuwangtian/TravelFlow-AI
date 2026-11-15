@@ -39,3 +39,6 @@ backend/tests/fixtures/p1_mobile_review_cases.json text eol=lf
 
 # 3100d32值候选的固定来源副本保持原始blob字节。
 backend/tests/fixtures/p1_values_3100d32/** text eol=lf
+
+# 0ff3913预约修正证据及同组词表保持原始blob字节。
+backend/tests/fixtures/p1_values_0ff3913/** text eol=lf

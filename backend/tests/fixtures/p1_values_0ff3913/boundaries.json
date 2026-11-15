@@ -1,0 +1,261 @@
+{
+  "fixture_format_version": 1,
+  "status": "candidate-values",
+  "shared_contract_version": null,
+  "mobile_design_commit": "3100d329a6565eb91f1cd65c5c3a5fdd149fc5d2",
+  "desktop_review_commit": "d0cd2b64d60885f2c35fa829dd988620c976d2e9",
+  "scope": "电脑E01–E06及补充范围／命名反例的目标候选。时区词表只约束隔离原型，不定义产品支持范围；原始JSON精度／重复键仍未实现。",
+  "acceptance": {
+    "desktop_candidate_execution": "pending",
+    "android_native_execution": "not-implemented",
+    "storage_execution": "not-implemented"
+  },
+  "cases": [
+    {
+      "id": "E01",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "9999-12-31T10:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "9999-12-31T15:30:00.000Z",
+        "duration_minutes": 540,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "booking_range"
+      }
+    },
+    {
+      "id": "E02",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "0001-01-01T00:00",
+        "time_zone": "Etc/GMT+12",
+        "utc_offset": "+00:00",
+        "start_instant": "0001-01-01T00:00:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "booking_range"
+      }
+    },
+    {
+      "id": "E03",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "america/new_york",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "zone"
+      }
+    },
+    {
+      "id": "E04",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-10-04T01:45",
+        "time_zone": "Australia/Lord_Howe",
+        "utc_offset": "+10:30",
+        "start_instant": "2026-10-03T15:15:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-10-03T15:15:00.000Z",
+          "end_instant": "2026-10-03T17:15:00.000Z",
+          "end_local": "2026-10-04T04:15",
+          "end_utc_offset": "+11:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "E05",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "0001-01-01"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_date",
+          "paid_on": "0001-01-01"
+        }
+      }
+    },
+    {
+      "id": "E06",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "9999-12-31"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_date",
+          "paid_on": "9999-12-31"
+        }
+      }
+    },
+    {
+      "id": "E07",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/new_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "zone"
+      }
+    },
+    {
+      "id": "E08",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "US/Eastern",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "zone"
+      }
+    },
+    {
+      "id": "E09",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-11-15T12:00",
+        "time_zone": "Etc/GMT+12",
+        "utc_offset": "-12:00",
+        "start_instant": "2026-11-16T00:00:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-11-16T00:00:00.000Z",
+          "end_instant": "2026-11-16T00:01:00.000Z",
+          "end_local": "2026-11-15T12:01",
+          "end_utc_offset": "-12:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "E10",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "9999-12-31T23:30",
+        "time_zone": "Etc/GMT-14",
+        "utc_offset": "+14:00",
+        "start_instant": "9999-12-31T09:30:00.000Z",
+        "duration_minutes": 60,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "booking_range"
+      }
+    },
+    {
+      "id": "E11",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "0001-01-01T00:30",
+        "time_zone": "Etc/GMT-14",
+        "utc_offset": "+14:00",
+        "start_instant": "0000-12-31T10:30:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "booking_range"
+      }
+    },
+    {
+      "id": "E12",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "9999-12-31T23:30",
+        "time_zone": "Etc/GMT+12",
+        "utc_offset": "-12:00",
+        "start_instant": "+010000-01-01T11:30:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "booking_range"
+      }
+    },
+    {
+      "id": "E13",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "0001-01-01T12:00",
+        "time_zone": "UTC",
+        "utc_offset": "+00:00",
+        "start_instant": "0001-01-01T12:00:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "0001-01-01T12:00:00.000Z",
+          "end_instant": "0001-01-01T12:01:00.000Z",
+          "end_local": "0001-01-01T12:01",
+          "end_utc_offset": "+00:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "E14",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "9999-12-31T23:58",
+        "time_zone": "UTC",
+        "utc_offset": "+00:00",
+        "start_instant": "9999-12-31T23:58:00.000Z",
+        "duration_minutes": 1,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "9999-12-31T23:58:00.000Z",
+          "end_instant": "9999-12-31T23:59:00.000Z",
+          "end_local": "9999-12-31T23:59",
+          "end_utc_offset": "+00:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    }
+  ]
+}
