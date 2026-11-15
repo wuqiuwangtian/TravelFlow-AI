@@ -7,6 +7,7 @@
 | [项目现状](./PROJECT_STATUS.md#当前接续状态) | 当前版本、已完成能力、验证边界、阻塞与接续位置 |
 | [产品路线](./PRODUCT_ROADMAP.md#当前执行任务) | 有效产品目标、任务顺序与完成条件；任务状态只在这里维护 |
 | [电脑—手机改进里程碑](MOBILE_CONTINUITY_PLAN.md) | 个人Android＋Windows／WSL本地独立运行、免终端与直接同步的专项计划；框架及连接工具待P0验证 |
+| [P1跨仓数据评审](P1_CROSS_REPO_REVIEW.md) | 固定双方提交、S01–S12电脑侧结论、虚构数据实测、写入候选与待定产品取舍；不是已发布写入契约 |
 | [跨端契约](../../contracts/README.md) | 本仓库维护权威版本；移动仓库按固定Git提交导入快照，独立构建与验证 |
 | [移动功能迁移矩阵](MOBILE_CAPABILITIES.md) | 84个当前接口的目标执行层与迁移边界，CI检查声明覆盖，不作为已移植证明 |
 | [WSL文件选择](handoff/DEVELOPMENT.md#wsl业务文件选择)、[D0状态恢复](handoff/DEVELOPMENT.md#d0异常退出与运行状态恢复)、[统一入口](handoff/DEVELOPMENT.md#d0统一环境选择与原生路径)、[可视管理](handoff/DEVELOPMENT.md#d0可视运行管理原型)、[应用验收](handoff/DEVELOPMENT.md#d0实际应用准备与验收) | 浏览器管理原型、源码入口、模式隔离准备与显式数据选择；运行核心另有纯探针 |

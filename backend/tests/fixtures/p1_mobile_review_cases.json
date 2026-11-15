@@ -1,0 +1,497 @@
+{
+  "review_format_version": 1,
+  "status": "review-draft",
+  "shared_contract_version": null,
+  "reviewed_on": "2026-11-14",
+  "mobile_design_baseline": "f270fe9aacdf6ae695036cce0adc6fa01ac3dbfd",
+  "desktop_repository": "https://github.com/wuqiuwangtian/TravelFlow-AI",
+  "desktop_commit": "23236a6c46bf5f3c7ca8966250413aa2f4722dfb",
+  "acceptance": {
+    "desktop_joint_review": "pending",
+    "mobile_write_execution": "not-implemented"
+  },
+  "scope": "只读评审资料格式，不是写入／同步协议。source_reading是固定源码推导，未运行Python后端；检查器只核算现有TS只读汇总及纯日期算术。",
+  "sources": [
+    {
+      "id": "domain",
+      "path": "backend/app/domain/itinerary.py",
+      "blob_sha": "f76a82705b52b35c0f3dad194db4b054ac338a2d",
+      "symbols": [
+        "ExpenseInput",
+        "AdjustmentInput",
+        "Booking",
+        "Expense"
+      ]
+    },
+    {
+      "id": "travel",
+      "path": "backend/app/services/travel_service.py",
+      "blob_sha": "0240d8f657cb6b4bd6e94112bedbf6390de6009d",
+      "symbols": [
+        "add_expense",
+        "edit_expense",
+        "remove_expense"
+      ]
+    },
+    {
+      "id": "adjustment",
+      "path": "backend/app/services/adjustment_service.py",
+      "blob_sha": "f2ad0a8242b6bd1fb9a06ef87090cbbbd0acaf6c",
+      "symbols": [
+        "validate_adjustment",
+        "add_adjustment"
+      ]
+    },
+    {
+      "id": "routes",
+      "path": "backend/app/api/routes_itinerary.py",
+      "blob_sha": "15db979fda0efb045c609cf3997cd372a20177c2",
+      "symbols": [
+        "_editable",
+        "_save_revision",
+        "create_expense",
+        "create_adjustment",
+        "_validate_receipts"
+      ]
+    },
+    {
+      "id": "models",
+      "path": "backend/app/domain/models.py",
+      "blob_sha": "d952b40638cd2a67842a223b022266c804f587d1",
+      "symbols": [
+        "BranchInfo",
+        "VersionInfo"
+      ]
+    },
+    {
+      "id": "store",
+      "path": "backend/app/storage/session_store.py",
+      "blob_sha": "f5759ea7be32366d028babf29227c4892bdfd921",
+      "symbols": [
+        "create_version",
+        "save_plan"
+      ]
+    },
+    {
+      "id": "pydantic-extra",
+      "url": "https://docs.pydantic.dev/latest/api/config/#pydantic.config.ConfigDict.extra",
+      "scope": "Pydantic默认忽略未声明字段；固定电脑模型未覆盖此配置。未执行该版本Python模型。"
+    }
+  ],
+  "projection_cases": [
+    {
+      "id": "L01",
+      "design_cases": [
+        "M2"
+      ],
+      "input": {
+        "expenses": [
+          {
+            "id": "fictional-expense",
+            "amount_cents": 10001
+          }
+        ],
+        "adjustments": []
+      },
+      "expected": {
+        "paid_cents": 10001,
+        "refunded_cents": 0,
+        "reimbursed_cents": 0,
+        "pending_refund_cents": 0,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": 10001,
+        "net_outlay_cents": 10001,
+        "over_recovered_cents": 0
+      }
+    },
+    {
+      "id": "L02",
+      "design_cases": [
+        "M3"
+      ],
+      "input": {
+        "expenses": [
+          {
+            "id": "fictional-expense",
+            "amount_cents": 10000
+          }
+        ],
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "amount_cents": 3000,
+            "kind": "refund",
+            "status": "pending"
+          }
+        ]
+      },
+      "expected": {
+        "paid_cents": 10000,
+        "refunded_cents": 0,
+        "reimbursed_cents": 0,
+        "pending_refund_cents": 3000,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": 10000,
+        "net_outlay_cents": 10000,
+        "over_recovered_cents": 0
+      }
+    },
+    {
+      "id": "L03",
+      "design_cases": [
+        "M3"
+      ],
+      "input": {
+        "expenses": [
+          {
+            "id": "fictional-expense",
+            "amount_cents": 10000
+          }
+        ],
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "amount_cents": 3000,
+            "kind": "refund",
+            "status": "received"
+          }
+        ]
+      },
+      "expected": {
+        "paid_cents": 10000,
+        "refunded_cents": 3000,
+        "reimbursed_cents": 0,
+        "pending_refund_cents": 0,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": 7000,
+        "net_outlay_cents": 7000,
+        "over_recovered_cents": 0
+      }
+    },
+    {
+      "id": "L04",
+      "design_cases": [
+        "M4"
+      ],
+      "input": {
+        "expenses": [
+          {
+            "id": "fictional-expense",
+            "amount_cents": 10000
+          }
+        ],
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "amount_cents": 7000,
+            "kind": "refund",
+            "status": "received"
+          },
+          {
+            "expense_id": "fictional-expense",
+            "amount_cents": 6000,
+            "kind": "reimbursement",
+            "status": "received"
+          }
+        ]
+      },
+      "expected": {
+        "paid_cents": 10000,
+        "refunded_cents": 7000,
+        "reimbursed_cents": 6000,
+        "pending_refund_cents": 0,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": 3000,
+        "net_outlay_cents": -3000,
+        "over_recovered_cents": 3000
+      }
+    },
+    {
+      "id": "L05",
+      "design_cases": [
+        "M6"
+      ],
+      "input": {
+        "expenses": [],
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "amount_cents": 500,
+            "kind": "refund",
+            "status": "received"
+          }
+        ]
+      },
+      "expected": {
+        "paid_cents": 0,
+        "refunded_cents": 500,
+        "reimbursed_cents": 0,
+        "pending_refund_cents": 0,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": -500,
+        "net_outlay_cents": -500,
+        "over_recovered_cents": 0
+      }
+    },
+    {
+      "id": "L06",
+      "design_cases": [
+        "M7"
+      ],
+      "input": {
+        "expenses": [
+          {
+            "id": "fictional-expense",
+            "amount_cents": 9007199254740991
+          }
+        ],
+        "adjustments": []
+      },
+      "expected": {
+        "paid_cents": 9007199254740991,
+        "refunded_cents": 0,
+        "reimbursed_cents": 0,
+        "pending_refund_cents": 0,
+        "pending_reimbursement_cents": 0,
+        "net_expense_cents": 9007199254740991,
+        "net_outlay_cents": 9007199254740991,
+        "over_recovered_cents": 0
+      },
+      "note": "仅现有只读投影的大数边界，不许可正式录入此数值。"
+    }
+  ],
+  "calendar_cases": [
+    {
+      "id": "C01",
+      "design_cases": [
+        "D1"
+      ],
+      "instant": "2026-11-14T00:30:00+09:00",
+      "time_zone": "America/Los_Angeles",
+      "expected_local_date": "2026-11-13"
+    },
+    {
+      "id": "C02",
+      "design_cases": [
+        "D1"
+      ],
+      "instant": "2026-11-14T00:30:00+09:00",
+      "time_zone": "Asia/Tokyo",
+      "expected_local_date": "2026-11-14"
+    }
+  ],
+  "clock_cases": [
+    {
+      "id": "K01",
+      "design_cases": [
+        "D2"
+      ],
+      "start_time": "23:40",
+      "start_day_offset": 0,
+      "duration_minutes": 120,
+      "expected_end_time": "01:40",
+      "expected_end_day_offset": 1
+    },
+    {
+      "id": "K02",
+      "design_cases": [
+        "D2"
+      ],
+      "start_time": "23:40",
+      "start_day_offset": 1,
+      "duration_minutes": 120,
+      "expected_end_time": "01:40",
+      "expected_end_day_offset": 2
+    }
+  ],
+  "source_scenarios": [
+    {
+      "id": "S01",
+      "design_cases": [
+        "M7"
+      ],
+      "source_ids": [
+        "domain"
+      ],
+      "given": "录入金额99999999.99与100000000.00；只读金额9007199254740991分。",
+      "when": "比较录入与只读投影的边界。",
+      "source_reading": "固定模型Decimal(max_digits=10, decimal_places=2)的录入上界小于投影安全整数上界；旧投影大数样例不是录入许可。",
+      "proposal": "写入候选先对齐现有录入边界，汇总仍逐步检查安全整数。",
+      "open_question": "币种、整数或文本编码、旧超界记录与文本语法待双方共同固定。"
+    },
+    {
+      "id": "S02",
+      "design_cases": [
+        "D1"
+      ],
+      "source_ids": [
+        "domain"
+      ],
+      "given": "旧消费day=2、created_at存在但没有独立付款日；新消费11月14日付款，12月2日入住。",
+      "when": "新建预填、编辑旧记录，或改变设备时区／旅行日期。",
+      "source_reading": "Expense没有独立付款日／时区字段；不能由行程日或创建时间证明付款日。",
+      "proposal": "用户2026-11-14已确认：付款日期与行程日分开；新建消费默认填手机当前日期且可修改，保存后不随时区／行程调整自动改变；旧缺失付款日保留未知。编辑旧记录不自动补今天。产品规则已确认，字段与实现尚未共同确认。",
+      "open_question": "付款日字段编码、未知状态及旧端能力协商／拒绝策略需双方共同固定；默认填充实现与持久化未执行。"
+    },
+    {
+      "id": "S03",
+      "design_cases": [
+        "M1",
+        "M2"
+      ],
+      "source_ids": [
+        "domain",
+        "travel"
+      ],
+      "given": "创建request_id=fictional-create-001。",
+      "when": "记录创建、编辑、删除及它们各自重试。",
+      "source_reading": "ExpenseCreate.request_id被直接用作Expense.id；编辑／删除输入没有同等操作ID字段。",
+      "proposal": "实体身份与操作身份分开，所有修改都有稳定操作ID。",
+      "open_question": "去重域、旧ID映射、回执编码／保留待两端评审。"
+    },
+    {
+      "id": "S04",
+      "design_cases": [
+        "M1"
+      ],
+      "source_ids": [
+        "routes",
+        "travel"
+      ],
+      "given": "v1提交创建，保存为v2；无关进度更新后最新为v3，同一消费内容未变、凭证校验仍可通过。",
+      "when": "用原v1与原request_id重试相同创建。",
+      "source_reading": "路由读取latest，add_expense返回False后直接返回latest，即v3，不是保存的原v2操作回执。",
+      "proposal": "返回原操作提交结果；当前分支头若需要显示应单独读，不能把两者混为一个字段。",
+      "open_question": "原结果与当前状态各自的响应格式及保留期未定。"
+    },
+    {
+      "id": "S05",
+      "design_cases": [
+        "M2"
+      ],
+      "source_ids": [
+        "travel",
+        "routes"
+      ],
+      "given": "创建10001分后，用户已明确更正为10002分。",
+      "when": "重试原创建ID与原10001分内容。",
+      "source_reading": "add_expense按当前实体值比较，当前值不同导致ConflictError；不存在独立原创建回执。",
+      "proposal": "查询已提交操作回执，重试返回原创建结果，当前金额仍10002，不能把旧内容重新应用。",
+      "open_question": "旧接口兼容层与原操作回执可见信息需共同定义。"
+    },
+    {
+      "id": "S06",
+      "design_cases": [
+        "X1",
+        "M1"
+      ],
+      "source_ids": [
+        "travel",
+        "routes"
+      ],
+      "given": "无回款的消费已从最新版本显式删除；其他关联与凭证均有效。",
+      "when": "在当前最新版本上再次以旧request_id提交原创建内容。",
+      "source_reading": "当前列表已无该ID，add_expense可按新记录添加；所读路径没有通用删除记录阻止此ID复用。这是源码推导，不是已复现故障。",
+      "proposal": "原操作重放不重新应用，删除记录保护已删除实体；若要恢复，使用新显式恢复操作。",
+      "open_question": "跨设备删除／恢复及回执清理策略未定。"
+    },
+    {
+      "id": "S07",
+      "design_cases": [
+        "M1",
+        "H2"
+      ],
+      "source_ids": [
+        "routes",
+        "travel"
+      ],
+      "given": "客户端仍持v1，当前已是v3，当前没有相同request_id的消费。",
+      "when": "向旧v1提交创建。",
+      "source_reading": "在内存latest上尝试添加后，路由因版本不匹配抛ConflictError，不进入_save_revision；不能由S06推断旧版本重放也会持久复活。",
+      "proposal": "新操作先核对基线；已提交操作则先返回原回执，两个路径分开。",
+      "open_question": "冲突响应与候选重建规则需共同固定，未验证存储故障路径。"
+    },
+    {
+      "id": "S08",
+      "design_cases": [
+        "M1",
+        "F1"
+      ],
+      "source_ids": [
+        "routes"
+      ],
+      "given": "带票据的消费已提交，但重试时票据查找不再通过。",
+      "when": "重试同一创建。",
+      "source_reading": "create_expense在add_expense去重前调用_validate_receipts，可能先因票据不可用被拒绝。",
+      "proposal": "保留原操作已提交事实；附件当前不可用状态另报，不能把已保存误报为从未保存。",
+      "open_question": "确认回执与敏感内容读取权限分开，当前调用仍需权限校验；恢复展示待定义。"
+    },
+    {
+      "id": "S09",
+      "design_cases": [
+        "H1",
+        "H2",
+        "V1"
+      ],
+      "source_ids": [
+        "models",
+        "store"
+      ],
+      "given": "两个设备各有分支本地seq=12，checkpoint_id不同。",
+      "when": "判断谁更新或映射同步修订。",
+      "source_reading": "VersionInfo.seq是按本地分支MAX(seq)+1分配；checkpoint_id引用图状态，不是已定义的跨端因果身份。",
+      "proposal": "保留旧版本ID，以共同定义的父修订／操作关系建模，不按seq或时间戳大小覆盖。",
+      "open_question": "显式父修订、分叉／主方案、旧版本映射及设备恢复身份未定。"
+    },
+    {
+      "id": "S10",
+      "design_cases": [
+        "T1",
+        "H1"
+      ],
+      "source_ids": [
+        "routes",
+        "store"
+      ],
+      "given": "_save_revision更新图状态，再记录版本／保存计划／touch_session。",
+      "when": "任一步骤后进程退出或存储失败。",
+      "source_reading": "所读路径跨图状态及多个带commit的存储调用；源码不能证明它们与操作回执、待同步项属于同一个原子事务。",
+      "proposal": "共同设计提交与恢复边界；不能把原路由打包成一次桥调用就宣称原子。",
+      "open_question": "电脑侧与Android侧各自的恢复／持久化证据需补，尚未执行故障注入。"
+    },
+    {
+      "id": "S11",
+      "design_cases": [
+        "M3",
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "source_ids": [
+        "adjustment",
+        "travel"
+      ],
+      "given": "实付10000分，pending退款6000分；另有独立报销类别。",
+      "when": "追加同种退款5000，或把实付降到5000；对照旧孤立回款的只读汇总。",
+      "source_reading": "同种回款含pending不得超实付；更正实付也检查同种回款总和。退款与报销分别约束，旧孤立回款可读不代表新回款可无原消费。",
+      "proposal": "新写入保留现有约束，旧数据兼容与新写入有效性分开。",
+      "open_question": "旧超额／孤立数据导入与纠错状态不静默修复；待共同样例与错误分类。"
+    },
+    {
+      "id": "S12",
+      "design_cases": [
+        "D1",
+        "V1"
+      ],
+      "source_ids": [
+        "domain",
+        "pydantic-extra"
+      ],
+      "given": "新客户端把提议的付款日字段发给未声明该字段的旧ExpenseInput。",
+      "when": "假设旧接口能自动保留新字段。",
+      "source_reading": "Pydantic默认extra=ignore，所读模型无覆盖配置；据此推断旧输入可能忽略额外字段。未运行固定Python模型／HTTP验证。",
+      "proposal": "通过明确契约／能力协商后才写新语义；不支持时在写入前停止，不静默丢付款日。",
+      "open_question": "能力协商、旧版只读／拒绝策略与未知字段样例须两端确认。"
+    }
+  ]
+}

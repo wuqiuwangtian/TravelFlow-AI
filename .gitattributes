@@ -33,3 +33,6 @@
 
 # 跨仓契约按原始字节校验摘要，所有平台保持LF。
 contracts/** text eol=lf
+
+# 固定来源的P1评审样例按Git blob逐字节校验，保留LF。
+backend/tests/fixtures/p1_mobile_review_cases.json text eol=lf
