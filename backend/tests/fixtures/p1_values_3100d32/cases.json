@@ -1,0 +1,1121 @@
+{
+  "fixture_format_version": 1,
+  "status": "candidate-values",
+  "shared_contract_version": null,
+  "mobile_design_commit": "f0e8dd6a5034c38f1c6f7cfb6873f5b28dd6281d",
+  "desktop_review_commit": "81ff51574b13f3b7e54ea1e75f8ebd7a04630404",
+  "scope": "纯值片段与响应视图候选，不是完整消费命令、JSON字节解码器或正式业务实现；未共同定版。",
+  "acceptance": {
+    "desktop_candidate_execution": "pending",
+    "android_native_execution": "not-implemented",
+    "storage_execution": "not-implemented"
+  },
+  "cases": [
+    {
+      "id": "MT01",
+      "kind": "money_text",
+      "input": "0.01",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "amount_cents": 1
+        }
+      }
+    },
+    {
+      "id": "MT02",
+      "kind": "money_text",
+      "input": "1",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "amount_cents": 100
+        }
+      }
+    },
+    {
+      "id": "MT03",
+      "kind": "money_text",
+      "input": "1.2",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "amount_cents": 120
+        }
+      }
+    },
+    {
+      "id": "MT04",
+      "kind": "money_text",
+      "input": "100.01",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "amount_cents": 10001
+        }
+      }
+    },
+    {
+      "id": "MT05",
+      "kind": "money_text",
+      "input": "99999999.99",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "amount_cents": 9999999999
+        }
+      }
+    },
+    {
+      "id": "MT06",
+      "kind": "money_text",
+      "input": "0.00",
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MT07",
+      "kind": "money_text",
+      "input": ".50",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT08",
+      "kind": "money_text",
+      "input": "01.00",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT09",
+      "kind": "money_text",
+      "input": "1e2",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT10",
+      "kind": "money_text",
+      "input": " 1.00 ",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT11",
+      "kind": "money_text",
+      "input": "1.230",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT12",
+      "kind": "money_text",
+      "input": "100000000.00",
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MT13",
+      "kind": "money_text",
+      "input": 100,
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT14",
+      "kind": "money_text",
+      "input": "NaN",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT15",
+      "kind": "money_text",
+      "input": "1.00\n",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT16",
+      "kind": "money_text",
+      "input": "１.００",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT17",
+      "kind": "money_text",
+      "input": "-1.00",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MT18",
+      "kind": "money_text",
+      "input": "1.",
+      "expected": {
+        "accepted": false,
+        "error": "text_syntax"
+      }
+    },
+    {
+      "id": "MV01",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 1
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 1
+        }
+      }
+    },
+    {
+      "id": "MV02",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 9999999999
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 9999999999
+        }
+      }
+    },
+    {
+      "id": "MV03",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 100.0
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 100
+        }
+      }
+    },
+    {
+      "id": "MV04",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MV05",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 1.5
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MV06",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 10000000000
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MV07",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 0
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MV08",
+      "kind": "money_value",
+      "input": {
+        "currency": "USD",
+        "amount_cents": 100
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "MV09",
+      "kind": "money_value",
+      "input": {
+        "amount_cents": 100
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "MV10",
+      "kind": "money_value",
+      "input": {
+        "currency": null,
+        "amount_cents": 100
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "MV11",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": "100"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount_range"
+      }
+    },
+    {
+      "id": "MV12",
+      "kind": "money_value",
+      "input": {
+        "currency": "CNY",
+        "amount_cents": 100,
+        "paid_on": null
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "PD01",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "2026-11-15"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_date",
+          "paid_on": "2026-11-15"
+        }
+      }
+    },
+    {
+      "id": "PD02",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": null
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_unknown"
+        }
+      }
+    },
+    {
+      "id": "PD03",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {},
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "unchanged"
+        }
+      }
+    },
+    {
+      "id": "PD04",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": null
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_unknown"
+        }
+      }
+    },
+    {
+      "id": "PD05",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "2024-02-29"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_date",
+          "paid_on": "2024-02-29"
+        }
+      }
+    },
+    {
+      "id": "PD06",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": "2000-02-29"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "effect": "set_date",
+          "paid_on": "2000-02-29"
+        }
+      }
+    },
+    {
+      "id": "PD07",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {},
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "PD08",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "2026-02-29"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD09",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "1900-02-29"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD10",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": "2026-04-31"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD11",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": "2026-11-15T00:00:00Z"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD12",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": ""
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD13",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "2026-11-15\n"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD14",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "PD15",
+      "kind": "payment_date",
+      "mode": "edit",
+      "input": {
+        "paid_on": null,
+        "today": "2026-11-15"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "PD16",
+      "kind": "payment_date",
+      "mode": "create",
+      "input": {
+        "paid_on": "0000-01-01"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "BK01",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-03-08T06:30:00.000Z",
+          "end_instant": "2026-03-08T08:30:00.000Z",
+          "end_local": "2026-03-08T04:30",
+          "end_utc_offset": "-04:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "BK02",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-11-01T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-04:00",
+        "start_instant": "2026-11-01T05:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-11-01T05:30:00.000Z",
+          "end_instant": "2026-11-01T07:30:00.000Z",
+          "end_local": "2026-11-01T02:30",
+          "end_utc_offset": "-05:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "BK03",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-11-01T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-11-01T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-11-01T06:30:00.000Z",
+          "end_instant": "2026-11-01T08:30:00.000Z",
+          "end_local": "2026-11-01T03:30",
+          "end_utc_offset": "-05:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "BK04",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-11-15T23:40",
+        "time_zone": "UTC",
+        "utc_offset": "+00:00",
+        "start_instant": "2026-11-15T23:40:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "start_instant": "2026-11-15T23:40:00.000Z",
+          "end_instant": "2026-11-16T01:40:00.000Z",
+          "end_local": "2026-11-16T01:40",
+          "end_utc_offset": "+00:00",
+          "duration_semantics": "elapsed"
+        }
+      }
+    },
+    {
+      "id": "BK05",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T02:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T07:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "resolution"
+      }
+    },
+    {
+      "id": "BK06",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T02:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-04:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "resolution"
+      }
+    },
+    {
+      "id": "BK07",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-11-01T01:30",
+        "time_zone": "America/New_York",
+        "start_instant": "2026-11-01T05:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "BK08",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T05:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "instant"
+      }
+    },
+    {
+      "id": "BK09",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "Not/A_Zone",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "zone"
+      }
+    },
+    {
+      "id": "BK10",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 0,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "duration"
+      }
+    },
+    {
+      "id": "BK11",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": true,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "duration"
+      }
+    },
+    {
+      "id": "BK12",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "legacy_wall_clock"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "duration_semantics"
+      }
+    },
+    {
+      "id": "BK13",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-00:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "offset"
+      }
+    },
+    {
+      "id": "BK14",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-02-29T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "BK15",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "+05:00",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "zone"
+      }
+    },
+    {
+      "id": "BK16",
+      "kind": "elapsed_booking",
+      "input": {
+        "local_start": "2026-03-08T01:30",
+        "time_zone": "America/New_York",
+        "utc_offset": "-05:00",
+        "start_instant": "2026-03-08T06:30:00.000Z",
+        "duration_minutes": 120,
+        "duration_semantics": "elapsed",
+        "end_local": "2026-03-08T03:30"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RV01",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false,
+        "observed_head": {
+          "revision_id": "rev-3",
+          "entity_state": "present"
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "operation": {
+            "dataset_id": "fictional-dataset",
+            "source_device_id": "fictional-device",
+            "operation_id": "fictional-create-001"
+          },
+          "committed_revision_id": "rev-2",
+          "replayed": true,
+          "applied_on_this_call": false,
+          "observed_head": {
+            "revision_id": "rev-3",
+            "entity_state": "present"
+          }
+        }
+      }
+    },
+    {
+      "id": "RV02",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false,
+        "observed_head": {
+          "revision_id": "rev-4",
+          "entity_state": "deleted"
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "operation": {
+            "dataset_id": "fictional-dataset",
+            "source_device_id": "fictional-device",
+            "operation_id": "fictional-create-001"
+          },
+          "committed_revision_id": "rev-2",
+          "replayed": true,
+          "applied_on_this_call": false,
+          "observed_head": {
+            "revision_id": "rev-4",
+            "entity_state": "deleted"
+          }
+        }
+      }
+    },
+    {
+      "id": "RV03",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": false,
+        "applied_on_this_call": true,
+        "observed_head": {
+          "revision_id": "rev-2",
+          "entity_state": "present"
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "operation": {
+            "dataset_id": "fictional-dataset",
+            "source_device_id": "fictional-device",
+            "operation_id": "fictional-create-001"
+          },
+          "committed_revision_id": "rev-2",
+          "replayed": false,
+          "applied_on_this_call": true,
+          "observed_head": {
+            "revision_id": "rev-2",
+            "entity_state": "present"
+          }
+        }
+      }
+    },
+    {
+      "id": "RV04",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "operation": {
+            "dataset_id": "fictional-dataset",
+            "source_device_id": "fictional-device",
+            "operation_id": "fictional-create-001"
+          },
+          "committed_revision_id": "rev-2",
+          "replayed": true,
+          "applied_on_this_call": false
+        }
+      }
+    },
+    {
+      "id": "RV05",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false,
+        "observed_head": {
+          "revision_id": "rev-3",
+          "entity_state": "unknown"
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "value": {
+          "operation": {
+            "dataset_id": "fictional-dataset",
+            "source_device_id": "fictional-device",
+            "operation_id": "fictional-create-001"
+          },
+          "committed_revision_id": "rev-2",
+          "replayed": true,
+          "applied_on_this_call": false,
+          "observed_head": {
+            "revision_id": "rev-3",
+            "entity_state": "unknown"
+          }
+        }
+      }
+    },
+    {
+      "id": "RV06",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_semantics"
+      }
+    },
+    {
+      "id": "RV07",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": false,
+        "applied_on_this_call": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_semantics"
+      }
+    },
+    {
+      "id": "RV08",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RV09",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "",
+        "replayed": true,
+        "applied_on_this_call": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "identity"
+      }
+    },
+    {
+      "id": "RV10",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false,
+        "version_id": "ambiguous-version"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RV11",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": true,
+        "applied_on_this_call": false,
+        "observed_head": {
+          "revision_id": "rev-3",
+          "entity_state": "restored_automatically"
+        }
+      },
+      "expected": {
+        "accepted": false,
+        "error": "head"
+      }
+    },
+    {
+      "id": "RV12",
+      "kind": "receipt_view",
+      "input": {
+        "operation": {
+          "dataset_id": "fictional-dataset",
+          "source_device_id": "fictional-device",
+          "operation_id": "fictional-create-001"
+        },
+        "committed_revision_id": "rev-2",
+        "replayed": 1,
+        "applied_on_this_call": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_semantics"
+      }
+    }
+  ]
+}

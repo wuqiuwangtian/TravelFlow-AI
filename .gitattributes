@@ -36,3 +36,6 @@ contracts/** text eol=lf
 
 # 固定来源的P1评审样例按Git blob逐字节校验，保留LF。
 backend/tests/fixtures/p1_mobile_review_cases.json text eol=lf
+
+# 3100d32值候选的固定来源副本保持原始blob字节。
+backend/tests/fixtures/p1_values_3100d32/** text eol=lf
