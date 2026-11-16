@@ -1,0 +1,751 @@
+{
+  "fixture_format_version": 1,
+  "status": "candidate-raw-json",
+  "shared_contract_version": null,
+  "mobile_baseline_commit": "0ff39138a81c386a8eaf2a14a9d867ffd73bcf64",
+  "desktop_review_commit": "d30e41b236a9876280c69b6bccf4c96ea86b5243",
+  "scope": "独立宿主原型：严格UTF-8、JSON语法、解码后逐对象重复键、Unicode标量及精确CNY整数分片段；不是完整命令／JCS或应用入口。",
+  "acceptance": {
+    "desktop_joint_review": "pending",
+    "android_native_execution": "not-implemented",
+    "storage_execution": "not-implemented",
+    "canonical_bytes": "not-implemented"
+  },
+  "cases": [
+    {
+      "id": "RJ01",
+      "description": "整数分",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":100}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 100
+        }
+      }
+    },
+    {
+      "id": "RJ02",
+      "description": "整数值的小数形式，不按文本输入语法拒绝",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":100.0}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 100
+        }
+      }
+    },
+    {
+      "id": "RJ03",
+      "description": "整数值指数形式",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":1e2}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 100
+        }
+      }
+    },
+    {
+      "id": "RJ04",
+      "description": "小数与指数合成整数",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":1.2300e2}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 123
+        }
+      }
+    },
+    {
+      "id": "RJ05",
+      "description": "上限",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":9999999999}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 9999999999
+        }
+      }
+    },
+    {
+      "id": "RJ06",
+      "description": "上限带小数零",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":9999999999.0}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 9999999999
+        }
+      }
+    },
+    {
+      "id": "RJ07",
+      "description": "先缩放后在范围内",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":99999999990e-1}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 9999999999
+        }
+      }
+    },
+    {
+      "id": "RJ08",
+      "description": "一分的小数指数形式",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":0.0100e2}",
+      "expected": {
+        "accepted": true,
+        "value": {
+          "currency": "CNY",
+          "amount_cents": 1
+        }
+      }
+    },
+    {
+      "id": "RJ09",
+      "description": "RAW1：舍入后像上限，原值有非零小数",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":9999999999.0000000001}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ10",
+      "description": "舍入后像100，原值仍非整数",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":100.00000000000000001}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ11",
+      "description": "超出上限",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":10000000000}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ12",
+      "description": "巨量指数不转换为Infinity",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":1e400}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ13",
+      "description": "极小非零不转换为0",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":1e-400}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ14",
+      "description": "负数",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":-1}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ15",
+      "description": "零",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":0}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ16",
+      "description": "负零",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":-0.0}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ17",
+      "description": "布尔不是整数",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":true}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ18",
+      "description": "字符串不是数值",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":\"100\"}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ19",
+      "description": "null不是数值",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":null}",
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "RJ20",
+      "description": "必须声明CNY",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"USD\",\"amount_cents\":100}",
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "RJ21",
+      "description": "缺少金额不是默认零",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\"}",
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RJ22",
+      "description": "片段不接受未评审的额外字段",
+      "profile": "cny-amount",
+      "raw_json": "{\"currency\":\"CNY\",\"amount_cents\":100,\"paid_on\":null}",
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RJ23",
+      "description": "非对象不能当金额命令",
+      "profile": "cny-amount",
+      "raw_json": "[]",
+      "expected": {
+        "accepted": false,
+        "error": "shape"
+      }
+    },
+    {
+      "id": "RJ24",
+      "description": "RAW2：不同金额的重复键",
+      "profile": "json",
+      "raw_json": "{\"amount_cents\":1,\"amount_cents\":2}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ25",
+      "description": "相同值的重复键也拒绝",
+      "profile": "json",
+      "raw_json": "{\"a\":1,\"a\":1}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ26",
+      "description": "嵌套对象重复键",
+      "profile": "json",
+      "raw_json": "{\"x\":{\"a\":true,\"a\":true}}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ27",
+      "description": "数组成员内部重复键",
+      "profile": "json",
+      "raw_json": "[{\"a\":null,\"a\":null}]",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ28",
+      "description": "转义后同名必须拒绝",
+      "profile": "json",
+      "raw_json": "{\"a\":1,\"\\u0061\":2}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ29",
+      "description": "真实字符与代理对转义后同名",
+      "profile": "json",
+      "raw_json": "{\"😀\":1,\"\\ud83d\\ude00\":2}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ30",
+      "description": "原型特殊名称也按普通键检查重复",
+      "profile": "json",
+      "raw_json": "{\"__proto__\":1,\"__proto__\":1}",
+      "expected": {
+        "accepted": false,
+        "error": "duplicate_key"
+      }
+    },
+    {
+      "id": "RJ31",
+      "description": "同名分属不同对象合法",
+      "profile": "json",
+      "raw_json": "[{\"a\":1},{\"a\":2}]",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "array",
+          [
+            [
+              "object",
+              [
+                [
+                  "a",
+                  [
+                    "number",
+                    "1"
+                  ]
+                ]
+              ]
+            ],
+            [
+              "object",
+              [
+                [
+                  "a",
+                  [
+                    "number",
+                    "2"
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ32",
+      "description": "特殊名称保持为资料，不赋值到对象原型",
+      "profile": "json",
+      "raw_json": "{\"__proto__\":1,\"constructor\":2}",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "object",
+          [
+            [
+              "__proto__",
+              [
+                "number",
+                "1"
+              ]
+            ],
+            [
+              "constructor",
+              [
+                "number",
+                "2"
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ33",
+      "description": "键顺序按源码保留，诊断树不是规范化字节",
+      "profile": "json",
+      "raw_json": "{\"2\":null,\"1\":true,\"a\":false}",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "object",
+          [
+            [
+              "2",
+              [
+                "null"
+              ]
+            ],
+            [
+              "1",
+              [
+                "boolean",
+                true
+              ]
+            ],
+            [
+              "a",
+              [
+                "boolean",
+                false
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ34",
+      "description": "数字原文保留，小数不普遍强制为整数",
+      "profile": "json",
+      "raw_json": "[9007199254740993,1e400,1e-400,2.370,-0]",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "array",
+          [
+            [
+              "number",
+              "9007199254740993"
+            ],
+            [
+              "number",
+              "1e400"
+            ],
+            [
+              "number",
+              "1e-400"
+            ],
+            [
+              "number",
+              "2.370"
+            ],
+            [
+              "number",
+              "-0"
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ35",
+      "description": "省略与null不同",
+      "profile": "json",
+      "raw_json": "{\"paid_on\":null}",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "object",
+          [
+            [
+              "paid_on",
+              [
+                "null"
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ36",
+      "description": "空对象不补默认字段",
+      "profile": "json",
+      "raw_json": "{}",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "object",
+          []
+        ]
+      }
+    },
+    {
+      "id": "RJ37",
+      "description": "合法代理对解析为单个Unicode字符",
+      "profile": "json",
+      "raw_json": "\"\\ud83d\\ude00\"",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "string",
+          "😀"
+        ]
+      }
+    },
+    {
+      "id": "RJ38",
+      "description": "字符串不进行NFC或大小写归一化",
+      "profile": "json",
+      "raw_json": "{\"é\":\"e\\u0301\",\"A\":\"a\"}",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "object",
+          [
+            [
+              "é",
+              [
+                "string",
+                "é"
+              ]
+            ],
+            [
+              "A",
+              [
+                "string",
+                "a"
+              ]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "RJ39",
+      "description": "未配对高代理项",
+      "profile": "json",
+      "raw_json": "\"\\ud800\"",
+      "expected": {
+        "accepted": false,
+        "error": "unicode"
+      }
+    },
+    {
+      "id": "RJ40",
+      "description": "未配对低代理项",
+      "profile": "json",
+      "raw_json": "\"\\udead\"",
+      "expected": {
+        "accepted": false,
+        "error": "unicode"
+      }
+    },
+    {
+      "id": "RJ41",
+      "description": "键名中的未配对代理项",
+      "profile": "json",
+      "raw_json": "{\"\\ud800\":1}",
+      "expected": {
+        "accepted": false,
+        "error": "unicode"
+      }
+    },
+    {
+      "id": "RJ42",
+      "description": "严格UTF8拒绝坏续字节",
+      "profile": "json",
+      "raw_utf8_hex": "22c32822",
+      "expected": {
+        "accepted": false,
+        "error": "encoding"
+      }
+    },
+    {
+      "id": "RJ43",
+      "description": "拒绝UTF8编码的代理项",
+      "profile": "json",
+      "raw_utf8_hex": "22eda08022",
+      "expected": {
+        "accepted": false,
+        "error": "encoding"
+      }
+    },
+    {
+      "id": "RJ44",
+      "description": "拒绝截断的多字节UTF8",
+      "profile": "json",
+      "raw_utf8_hex": "22e282",
+      "expected": {
+        "accepted": false,
+        "error": "encoding"
+      }
+    },
+    {
+      "id": "RJ45",
+      "description": "拒绝BOM，不静默去除",
+      "profile": "json",
+      "raw_utf8_hex": "efbbbf7b7d",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ46",
+      "description": "JSONC注释不是JSON",
+      "profile": "json",
+      "raw_json": "{\"a\":1/*comment*/}",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ47",
+      "description": "尾随逗号",
+      "profile": "json",
+      "raw_json": "[1,]",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ48",
+      "description": "空文档",
+      "profile": "json",
+      "raw_json": "",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ49",
+      "description": "第二个根值",
+      "profile": "json",
+      "raw_json": "{} []",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ50",
+      "description": "NaN不是JSON数值",
+      "profile": "json",
+      "raw_json": "NaN",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ51",
+      "description": "Infinity不是JSON数值",
+      "profile": "json",
+      "raw_json": "Infinity",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ52",
+      "description": "前导零不是JSON数值",
+      "profile": "json",
+      "raw_json": "[01]",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ53",
+      "description": "小数点后缺少数字",
+      "profile": "json",
+      "raw_json": "1.",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ54",
+      "description": "正号不是JSON数值",
+      "profile": "json",
+      "raw_json": "+1",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ55",
+      "description": "字符串中的字面制表符",
+      "profile": "json",
+      "raw_json": "\"a\tb\"",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ56",
+      "description": "先拒绝语法错误，不消费带重复键的恢复树",
+      "profile": "json",
+      "raw_json": "{\"a\":1,\"a\":1,}",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    },
+    {
+      "id": "RJ57",
+      "description": "只接受JSON规定的外围空白",
+      "profile": "json",
+      "raw_json": " \t\r\ntrue\n",
+      "expected": {
+        "accepted": true,
+        "tree": [
+          "boolean",
+          true
+        ]
+      }
+    },
+    {
+      "id": "RJ58",
+      "description": "非JSON空白不自动trim",
+      "profile": "json",
+      "raw_json": " {}",
+      "expected": {
+        "accepted": false,
+        "error": "json"
+      }
+    }
+  ]
+}
