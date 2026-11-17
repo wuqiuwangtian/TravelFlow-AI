@@ -45,3 +45,6 @@ backend/tests/fixtures/p1_values_0ff3913/** text eol=lf
 
 # 6ab3a38原始JSON评审证据按原始blob固定LF。
 backend/tests/fixtures/p1_json_6ab3a38/** text eol=lf
+
+# eee6cda7消费补丁候选固定来源副本保持原始blob字节。
+backend/tests/fixtures/p1_patch_eee6cda7/** text eol=lf

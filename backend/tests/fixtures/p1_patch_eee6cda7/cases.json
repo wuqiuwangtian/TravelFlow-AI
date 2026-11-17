@@ -1,0 +1,1138 @@
+{
+  "fixture_format_version": 1,
+  "status": "candidate-expense-patch",
+  "shared_contract_version": null,
+  "mobile_baseline_commit": "30077dbe4417c13a70e284a3203e3aecfdc1318b",
+  "desktop_review_commit": "e060bab3d13d62e666624cf7500adc051df389c1",
+  "scope": "纯已解码片段：基线与上下文为可信虚构资料；补丁联合校验及计划结果，不是完整命令／鉴权／回执执行器。expected.entity_changes是独立预期缩写，不从patch推导。",
+  "acceptance": {
+    "desktop_joint_review": "pending",
+    "storage_execution": "not-implemented",
+    "android_native_execution": "not-implemented"
+  },
+  "baseline": {
+    "base": {
+      "id": "fictional-expense",
+      "title": "午餐",
+      "amount_cents": 10000,
+      "currency": "CNY",
+      "paid_on": "2026-11-16",
+      "category": "meal",
+      "day": 1,
+      "activity_id": "activity-1",
+      "notes": "原备注",
+      "receipt_ids": [
+        "11111111111111111111111111111111"
+      ],
+      "budget_item_id": "budget-1",
+      "settles_budget": true,
+      "created_at": "2026-11-15T00:00:00.000Z",
+      "updated_at": "2026-11-16T00:00:00.000Z"
+    },
+    "context": {
+      "days": [
+        1
+      ],
+      "actual_activity_ids": [
+        "activity-1"
+      ],
+      "budget_rows": [
+        {
+          "id": "budget-1",
+          "category": "meal",
+          "source": "custom"
+        }
+      ],
+      "available_receipt_ids": [
+        "22222222222222222222222222222222",
+        "33333333333333333333333333333333"
+      ],
+      "other_receipt_ids": [
+        "22222222222222222222222222222222"
+      ],
+      "adjustments": []
+    }
+  },
+  "cases": [
+    {
+      "id": "EP01",
+      "description": "只改备注：不补默认，不查询未动的旧票据",
+      "patch": {
+        "notes": "更正备注"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "更正备注"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP02",
+      "description": "空补丁：操作仍需回执，业务修订不变",
+      "patch": {},
+      "expected": {
+        "accepted": true,
+        "entity_changes": {},
+        "controls": {},
+        "planned_business_revision": "unchanged",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP03",
+      "description": "同值备注",
+      "patch": {
+        "notes": "原备注"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {},
+        "controls": {},
+        "planned_business_revision": "unchanged",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP04",
+      "description": "只提交共用控制true不改业务实体",
+      "patch": {
+        "allow_shared_receipts": true
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {},
+        "controls": {
+          "allow_shared_receipts": true
+        },
+        "planned_business_revision": "unchanged",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP05",
+      "description": "只提交共用控制false也不改业务实体",
+      "patch": {
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {},
+        "controls": {
+          "allow_shared_receipts": false
+        },
+        "planned_business_revision": "unchanged",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP06",
+      "description": "整数值10000.0与旧金额相同",
+      "patch": {
+        "amount_cents": 10000
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {},
+        "controls": {},
+        "planned_business_revision": "unchanged",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP07",
+      "description": "不能解除预算时暗补settles_budget=false",
+      "patch": {
+        "budget_item_id": null
+      },
+      "expected": {
+        "accepted": false,
+        "error": "budget_link"
+      }
+    },
+    {
+      "id": "EP08",
+      "description": "显式同时解除预算与结算",
+      "patch": {
+        "budget_item_id": null,
+        "settles_budget": false
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "budget_item_id": null,
+          "settles_budget": false
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP09",
+      "description": "只改类别不能遗留不匹配预算",
+      "patch": {
+        "category": "other"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "budget_link"
+      }
+    },
+    {
+      "id": "EP10",
+      "description": "分类更改同时明确解除预算",
+      "patch": {
+        "category": "other",
+        "budget_item_id": null,
+        "settles_budget": false
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "category": "other",
+          "budget_item_id": null,
+          "settles_budget": false
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP11",
+      "description": "不存在预算行",
+      "patch": {
+        "budget_item_id": "missing"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "budget_link"
+      }
+    },
+    {
+      "id": "EP12",
+      "description": "清除全部票据只是解除当前引用",
+      "patch": {
+        "receipt_ids": [],
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "receipt_ids": []
+        },
+        "controls": {
+          "allow_shared_receipts": false
+        },
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP13",
+      "description": "更改票据必须显式控制条件",
+      "patch": {
+        "receipt_ids": []
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_control"
+      }
+    },
+    {
+      "id": "EP14",
+      "description": "新增共用票据且未允许",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_shared"
+      }
+    },
+    {
+      "id": "EP15",
+      "description": "新增共用票据明确允许",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ],
+        "allow_shared_receipts": true
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "receipt_ids": [
+            "11111111111111111111111111111111",
+            "22222222222222222222222222222222"
+          ]
+        },
+        "controls": {
+          "allow_shared_receipts": true
+        },
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP16",
+      "description": "新增未共用票据不需开启共用",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "33333333333333333333333333333333"
+        ],
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "receipt_ids": [
+            "11111111111111111111111111111111",
+            "33333333333333333333333333333333"
+          ]
+        },
+        "controls": {
+          "allow_shared_receipts": false
+        },
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP17",
+      "description": "新增票据不可用",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "44444444444444444444444444444444"
+        ],
+        "allow_shared_receipts": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipt_unavailable"
+      }
+    },
+    {
+      "id": "EP18",
+      "description": "票据顺序变动是业务更正",
+      "patch": {
+        "receipt_ids": [
+          "22222222222222222222222222222222",
+          "11111111111111111111111111111111"
+        ],
+        "allow_shared_receipts": false
+      },
+      "base_overrides": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "22222222222222222222222222222222"
+        ]
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "receipt_ids": [
+            "22222222222222222222222222222222",
+            "11111111111111111111111111111111"
+          ]
+        },
+        "controls": {
+          "allow_shared_receipts": false
+        },
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP19",
+      "description": "重复票据不默默去重",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111",
+          "11111111111111111111111111111111"
+        ],
+        "allow_shared_receipts": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipts"
+      }
+    },
+    {
+      "id": "EP20",
+      "description": "null不代替空票据列表",
+      "patch": {
+        "receipt_ids": null,
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipts"
+      }
+    },
+    {
+      "id": "EP21",
+      "description": "共用控制不接受整数",
+      "patch": {
+        "allow_shared_receipts": 1
+      },
+      "expected": {
+        "accepted": false,
+        "error": "boolean"
+      }
+    },
+    {
+      "id": "EP22",
+      "description": "明确将付款日改为未知",
+      "patch": {
+        "paid_on": null
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "paid_on": null
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP23",
+      "description": "付款日合法最小年",
+      "patch": {
+        "paid_on": "0001-01-01"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "paid_on": "0001-01-01"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP24",
+      "description": "付款日合法最大年",
+      "patch": {
+        "paid_on": "9999-12-31"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "paid_on": "9999-12-31"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP25",
+      "description": "闰年合法日期",
+      "patch": {
+        "paid_on": "2028-02-29"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "paid_on": "2028-02-29"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP26",
+      "description": "非法日期",
+      "patch": {
+        "paid_on": "2026-02-29"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "EP27",
+      "description": "布尔不是日期",
+      "patch": {
+        "paid_on": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "EP28",
+      "description": "不存在公历0年",
+      "patch": {
+        "paid_on": "0000-01-01"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "date"
+      }
+    },
+    {
+      "id": "EP29",
+      "description": "旧缺币种和付款日：备注编辑保留字段缺失",
+      "patch": {
+        "notes": "补记"
+      },
+      "base_omit": [
+        "currency",
+        "paid_on"
+      ],
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "补记"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": false
+      }
+    },
+    {
+      "id": "EP30",
+      "description": "旧明确未知币种可更正金额且仍未知",
+      "patch": {
+        "amount_cents": 12000
+      },
+      "base_overrides": {
+        "currency": null
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "amount_cents": 12000
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": false
+      }
+    },
+    {
+      "id": "EP31",
+      "description": "旧缺币种金额更正不自动补null或CNY",
+      "patch": {
+        "amount_cents": 12000
+      },
+      "base_omit": [
+        "currency"
+      ],
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "amount_cents": 12000
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": false
+      }
+    },
+    {
+      "id": "EP32",
+      "description": "用户明确确认旧未知为CNY",
+      "patch": {
+        "currency": "CNY"
+      },
+      "base_overrides": {
+        "currency": null
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "currency": "CNY"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP33",
+      "description": "其他旧币种不动金额可改备注",
+      "patch": {
+        "notes": "补记"
+      },
+      "base_overrides": {
+        "currency": "USD"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "补记"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": false
+      }
+    },
+    {
+      "id": "EP34",
+      "description": "其他币种财务更正留待另评审",
+      "patch": {
+        "amount_cents": 12000
+      },
+      "base_overrides": {
+        "currency": "USD"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "EP35",
+      "description": "不把已知CNY退成未知",
+      "patch": {
+        "currency": null
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "EP36",
+      "description": "不自动转换币种大小写",
+      "patch": {
+        "currency": "cny"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency"
+      }
+    },
+    {
+      "id": "EP37",
+      "description": "降实付时检查同种含pending回款",
+      "patch": {
+        "amount_cents": 7000
+      },
+      "context_overrides": {
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "kind": "refund",
+            "status": "pending",
+            "amount_cents": 6000
+          },
+          {
+            "expense_id": "fictional-expense",
+            "kind": "refund",
+            "status": "received",
+            "amount_cents": 2000
+          }
+        ]
+      },
+      "expected": {
+        "accepted": false,
+        "error": "recovery_limit"
+      }
+    },
+    {
+      "id": "EP38",
+      "description": "实付等于同种含pending回款可用",
+      "patch": {
+        "amount_cents": 8000
+      },
+      "context_overrides": {
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "kind": "refund",
+            "status": "pending",
+            "amount_cents": 6000
+          },
+          {
+            "expense_id": "fictional-expense",
+            "kind": "refund",
+            "status": "received",
+            "amount_cents": 2000
+          }
+        ]
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "amount_cents": 8000
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP39",
+      "description": "退款与报销分别校验上限",
+      "patch": {
+        "amount_cents": 8000
+      },
+      "context_overrides": {
+        "adjustments": [
+          {
+            "expense_id": "fictional-expense",
+            "kind": "refund",
+            "status": "received",
+            "amount_cents": 7000
+          },
+          {
+            "expense_id": "fictional-expense",
+            "kind": "reimbursement",
+            "status": "pending",
+            "amount_cents": 6000
+          }
+        ]
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "amount_cents": 8000
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP40",
+      "description": "其他消费的回款不参与本条限额",
+      "patch": {
+        "amount_cents": 5000
+      },
+      "context_overrides": {
+        "adjustments": [
+          {
+            "expense_id": "another",
+            "kind": "refund",
+            "status": "received",
+            "amount_cents": 9999
+          }
+        ]
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "amount_cents": 5000
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP41",
+      "description": "不存在行程日",
+      "patch": {
+        "day": 2
+      },
+      "expected": {
+        "accepted": false,
+        "error": "day_link"
+      }
+    },
+    {
+      "id": "EP42",
+      "description": "行程日不接受布尔",
+      "patch": {
+        "day": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "day"
+      }
+    },
+    {
+      "id": "EP43",
+      "description": "非实际停留点不能关联",
+      "patch": {
+        "activity_id": "context-anchor"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "activity_link"
+      }
+    },
+    {
+      "id": "EP44",
+      "description": "明确解除活动关联",
+      "patch": {
+        "activity_id": null
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "activity_id": null
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP45",
+      "description": "禁止覆盖实体ID",
+      "patch": {
+        "id": "changed-id"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "unknown_field"
+      }
+    },
+    {
+      "id": "EP46",
+      "description": "禁止提交服务端审计时间",
+      "patch": {
+        "updated_at": "later"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "unknown_field"
+      }
+    },
+    {
+      "id": "EP47",
+      "description": "未知字段拒绝",
+      "patch": {
+        "unexpected": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "unknown_field"
+      }
+    },
+    {
+      "id": "EP48",
+      "description": "小数分拒绝",
+      "patch": {
+        "amount_cents": 1.5
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "EP49",
+      "description": "布尔分拒绝",
+      "patch": {
+        "amount_cents": true
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "EP50",
+      "description": "金额超限拒绝",
+      "patch": {
+        "amount_cents": 10000000000
+      },
+      "expected": {
+        "accepted": false,
+        "error": "amount"
+      }
+    },
+    {
+      "id": "EP51",
+      "description": "100个非BMP字符按100个标量计数",
+      "patch": {
+        "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP52",
+      "description": "101个非BMP字符超长",
+      "patch": {
+        "title": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text_length"
+      }
+    },
+    {
+      "id": "EP53",
+      "description": "标题文本不自动trim",
+      "patch": {
+        "title": " 午餐 "
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "title": " 午餐 "
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP54",
+      "description": "标题U001C控制字符拒绝",
+      "patch": {
+        "title": "\u001c"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text_control"
+      }
+    },
+    {
+      "id": "EP55",
+      "description": "标题U0085控制字符拒绝",
+      "patch": {
+        "title": ""
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text_control"
+      }
+    },
+    {
+      "id": "EP56",
+      "description": "标题BOM字符拒绝",
+      "patch": {
+        "title": "﻿"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text_control"
+      }
+    },
+    {
+      "id": "EP57",
+      "description": "标题全角空白拒绝",
+      "patch": {
+        "title": "　"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "title_blank"
+      }
+    },
+    {
+      "id": "EP58",
+      "description": "备注保留换行和tab",
+      "patch": {
+        "notes": "第一行\n\t第二行"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "第一行\n\t第二行"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP59",
+      "description": "备注其他控制字符拒绝",
+      "patch": {
+        "notes": "a\u0001b"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text_control"
+      }
+    },
+    {
+      "id": "EP60",
+      "description": "null不是备注清空",
+      "patch": {
+        "notes": null
+      },
+      "expected": {
+        "accepted": false,
+        "error": "text"
+      }
+    },
+    {
+      "id": "EP61",
+      "description": "空串明确清空备注",
+      "patch": {
+        "notes": ""
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": ""
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP62",
+      "description": "NFC不同序列保留为不同更正",
+      "patch": {
+        "title": "é"
+      },
+      "base_overrides": {
+        "title": "é"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "title": "é"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP63",
+      "description": "保留合法ZWJ组合字符",
+      "patch": {
+        "title": "👩‍💻"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "title": "👩‍💻"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP64",
+      "description": "旧标题控制字符不因备注更正被trim或改写",
+      "patch": {
+        "notes": "补记"
+      },
+      "base_overrides": {
+        "title": "\u001c"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "补记"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP65",
+      "description": "已知其他币种不能仅改标签冒充换汇",
+      "patch": {
+        "currency": "CNY"
+      },
+      "base_overrides": {
+        "currency": "USD"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "currency_conversion"
+      }
+    },
+    {
+      "id": "EP66",
+      "description": "不从业务payload随意剥除上下文同名键",
+      "patch": {
+        "observed_head": "r3"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "unknown_field"
+      }
+    },
+    {
+      "id": "EP67",
+      "description": "票据ID不能带尾部换行",
+      "patch": {
+        "receipt_ids": [
+          "11111111111111111111111111111111\n"
+        ],
+        "allow_shared_receipts": false
+      },
+      "expected": {
+        "accepted": false,
+        "error": "receipts"
+      }
+    },
+    {
+      "id": "EP68",
+      "description": "未配对代理项不能作为新标题",
+      "patch": {
+        "title": "\ud800"
+      },
+      "expected": {
+        "accepted": false,
+        "error": "unicode"
+      }
+    },
+    {
+      "id": "EP69",
+      "description": "1000个非BMP备注按标量长度接受",
+      "patch": {
+        "notes": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "expected": {
+        "accepted": true,
+        "entity_changes": {
+          "notes": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        },
+        "controls": {},
+        "planned_business_revision": "new",
+        "cny_totals_eligible": true
+      }
+    },
+    {
+      "id": "EP70",
+      "description": "派生消费预算行不能再次作为预算关联",
+      "patch": {
+        "budget_item_id": "expense-derived"
+      },
+      "context_overrides": {
+        "budget_rows": [
+          {
+            "id": "expense-derived",
+            "category": "meal",
+            "source": "custom"
+          }
+        ]
+      },
+      "expected": {
+        "accepted": false,
+        "error": "budget_link"
+      }
+    }
+  ]
+}
