@@ -23,6 +23,7 @@ from desktop.runtime import (
     AlreadyRunning,
     NoRedirect,
     archive_metadata,
+    check_database_owner,
     current,
     file_lock,
     identity,
@@ -38,7 +39,7 @@ from desktop.runtime import (
     recover as recover_runtime,
 )
 
-CONSOLE_VERSION = 6
+CONSOLE_VERSION = 7
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -314,6 +315,7 @@ class Console:
             raise ValueError("请先预览并确认本次配置和数据地址。")
         settings, folder, fingerprint = confirmation
         chosen = dict(preview["selection"])
+        check_database_owner(chosen)
         if (
             fingerprint
             and hashlib.sha256(Path(chosen["env_file"]).read_bytes()).hexdigest() != fingerprint

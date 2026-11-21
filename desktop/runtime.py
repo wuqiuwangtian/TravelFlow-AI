@@ -188,6 +188,8 @@ def validate(folder, chosen, ports):
             "The synthetic probe database descriptor must stay inside its isolated state directory"
         )
     if profile != "synthetic-probe":
+        # Surface ownership errors to the launcher before spawning a supervisor.
+        check_database_owner(chosen)
         from desktop.application import doctor
 
         info = doctor()
@@ -615,19 +617,41 @@ def stop(folder):
         owner.close()
 
 
+def check_database_owner(chosen, *, missing_ok=True):
+    path = Path(chosen["database"])
+    record = path.with_name(path.name + ".travelflow-owner.json")
+    owner = {k: v for k, v in identity(chosen).items() if k != "env_file"}
+    if record.is_symlink() or (record.exists() and not record.is_file()):
+        raise RuntimeError("数据库归属记录异常，请保留现场并核对数据位置。")
+    try:
+        previous = json.loads(record.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if missing_ok:
+            return record, owner
+        raise RuntimeError("数据库归属记录在启动期间变化，请重新核对。") from None
+    except ValueError:
+        raise RuntimeError("数据库归属记录尚未写完或已损坏，请稍后重试并核对数据位置。") from None
+    if previous != owner:
+        raise RuntimeError("数据库已归属其他运行方式或项目位置，请在原环境备份并恢复到新目录。")
+    return record, owner
+
+
 @contextmanager
 def database_lock(chosen):
     path = Path(chosen["database"])
     if not path.parent.is_dir():
         raise RuntimeError("Database parent directory is missing")
-    lock = path.with_name(path.name + ".travelflow.lock")
-    # Coordinate managed instances using the same tested byte-lock implementation.
-    with file_lock(lock):
-        owner_file = path.with_name(path.name + ".travelflow-owner.json")
-        owner = {k: v for k, v in identity(chosen).items() if k != "env_file"}
-        if owner_file.exists() and json.loads(owner_file.read_text(encoding="utf-8")) != owner:
-            raise RuntimeError(
-                "Database belongs to a different runtime mode/project; migration must be reviewed"
-            )
-        write_json(owner_file, owner)
+    # Report foreign ownership before touching a lock on the other filesystem.
+    record, owner = check_database_owner(chosen)
+    with file_lock(path.with_name(path.name + ".travelflow.lock")):
+        # Windows byte locks and WSL flock can both succeed on the same NTFS file.
+        try:
+            stream = record.open("x", encoding="utf-8")
+        except FileExistsError:
+            check_database_owner(chosen, missing_ok=False)
+        else:
+            with stream:
+                json.dump(owner, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
         yield

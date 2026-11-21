@@ -4,14 +4,18 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
 from desktop.console import Console
 from desktop.runtime import (
     ROOT,
+    database_lock,
     identity,
     instance_lock,
     launch_ticket_path,
@@ -27,6 +31,71 @@ class RecoveryTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="travelflow recovery 中文 ")
         self.folder = prepare(Path(self.temporary.name))
+
+    def test_simultaneous_first_claim_with_independent_native_locks(self):
+        chosen = selection(self.folder / "fiction.sqlite")
+        other = {**chosen, "mode": "other-mode"}
+        writing, release = threading.Event(), threading.Event()
+        dump = json.dump
+
+        def pause_first_claim(value, stream):
+            if value["mode"] == chosen["mode"]:
+                writing.set()
+                if not release.wait(5):
+                    raise TimeoutError("Test did not release first claim")
+            dump(value, stream)
+
+        def claim(value):
+            with database_lock(value):
+                return True
+
+        with (
+            patch("desktop.runtime.file_lock", return_value=nullcontext()),
+            patch("desktop.runtime.json.dump", side_effect=pause_first_claim),
+            ThreadPoolExecutor(max_workers=1) as pool,
+        ):
+            first = pool.submit(claim, chosen)
+            try:
+                self.assertTrue(writing.wait(5))
+                with self.assertRaises(RuntimeError):
+                    claim(other)
+            finally:
+                release.set()
+            self.assertTrue(first.result(timeout=5))
+        with self.assertRaises(RuntimeError):
+            claim(other)
+        self.assertTrue(claim(chosen))
+        self.assertFalse(Path(chosen["database"]).exists())
+
+    def test_existing_and_incomplete_database_owner_records_are_preserved(self):
+        chosen = selection(self.folder / "fixture.sqlite")
+        owner = self.folder / "fixture.sqlite.travelflow-owner.json"
+        legacy = json.dumps(identity(chosen), indent=2).encode()
+        owner.write_bytes(legacy)
+        with database_lock(chosen):
+            self.assertEqual(owner.read_bytes(), legacy)
+        owner.write_bytes(b"{")
+        with self.assertRaises(RuntimeError), database_lock(chosen):
+            self.fail("Incomplete ownership record admitted a writer")
+        self.assertEqual(owner.read_bytes(), b"{")
+
+    def test_foreign_database_rejected_before_replacing_console_preferences(self):
+        qa = prepare(self.folder / "qa")
+        settings = self.preferences(qa)
+        previous = settings.read_bytes()
+        foreign = qa / "foreign.sqlite"
+        foreign.write_bytes(b"fixture")
+        with database_lock({**selection(foreign), "mode": "foreign", "profile": "application-qa"}):
+            pass
+        state = Console(self.folder)
+        with patch("desktop.console.doctor", return_value={"build_id": "fixture"}):
+            state.inspect(
+                {"profile": "application-qa", "database": str(foreign), "ports": [18081, 18082]}
+            )
+            with self.assertRaisesRegex(RuntimeError, "归属其他"):
+                state.launch({"confirmation": state.preview["confirmation"]})
+        self.assertEqual(settings.read_bytes(), previous)
+        self.assertEqual(foreign.read_bytes(), b"fixture")
 
     def tearDown(self):
         self.temporary.cleanup()
