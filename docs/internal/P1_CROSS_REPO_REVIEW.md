@@ -1,6 +1,6 @@
 # P1跨仓数据契约电脑侧评审
 
-评审日期：2026-11-15起，最新复核2026-11-17。当前eee6cda7消费部分更正复核见[第12节](#12-移动eee6cda7消费部分更正与独立查询边界复核)，第1–11节保留前轮固定证据。状态：多轮电脑侧隔离评审完成、双方方向复核有记录，**共享写入契约仍未共同定版**，共享写入契约版本未分配。本页中的“接受”仅代表电脑侧同意该设计方向；“建议修改”是候选差异，不代表生产实现已修复或双方已通过。当前[0.1.0只读投影](../../contracts/ledger-v1/SPEC.md)保持原样。
+评审日期：2026-11-15起，最新复核2026-11-21。固定宿主候选的统一验收见[第13节](#13-移动dcba911统一宿主验收)，第1–12节保留前轮证据。状态：多轮电脑侧隔离评审完成、双方方向复核有记录，**共享写入契约仍未共同定版**，共享写入契约版本未分配。本页中的“接受”仅代表电脑侧同意该设计方向；“建议修改”是候选差异，不代表生产实现已修复或双方已通过。当前[0.1.0只读投影](../../contracts/ledger-v1/SPEC.md)保持原样。
 
 范围：按用户转达的移动侧设计第7节核对四组要求、S01–S12及相关保护样例。仅修改评审资料和隔离核对用例；未注册写接口、建正式表、迁移个人数据、调用真实供应商、修改移动仓库或发布。D0需要用户配合的测试暂缓，缺口不视为通过。
 
@@ -468,3 +468,62 @@ git diff --check
 下一份候选先补齐**完整原始控制命令、独立回执查询、能力响应和资源配置**，使上述预算有精确定义和恰好／多1、解码／数值展开前拒绝及拒绝不写库的证据；消费创建及回款／预约／进度等仍须完整正反例。可信基线／关联context的取得、当前授权与查锁由执行层验证，不纳入本轮纯函数的假证明。之后才选择规范化字节／摘要，再进入ID／历史映射、权威事务及恢复实现。没有将本仓隔离参考晋升生产模块。
 
 本轮没有新增必须用户立即决定的产品问题，五项已确认决定继续承接；已知外币财务转换、旧记录恢复与最终字符域等仍待维护者给出具体方案和影响，涉及产品取舍再确认。0.1.0、移动vendor与电脑生产行为不变；联合写入验收仍pending，D0人工测试继续暂缓。
+
+## 13. 移动dcba911统一宿主验收
+
+2026-11-21，电脑侧接受 `p1-host-intent-c14n-1` 作为有界整数命令与独立回执查询的**共同编码候选**。移动方指定的12个入口在电脑上全部通过。独立电脑编码对103例的接受／拒绝、完整UTF-8字节与摘要均无差异，18组关系一致。固定批次的跨端对照到此收口。正式版本、桌面历史文件适配、原生事务及同步另行验收。[移动第22节统一入口](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/dcba911b66566da242f26dd27c8d0b17c006b48d/docs/internal/P1_LOCAL_DATA_DESIGN.md#L665)
+
+| 固定依据 | 完整标识 |
+| --- | --- |
+| 电脑开工提交 | `5b221ae188d715afef0f31ed79eed9dbcc44ff3d`，main工作区干净，远端main一致，与移动第18节引用相同 |
+| 移动独立临时检出 | `dcba911b66566da242f26dd27c8d0b17c006b48d`，设计文件blob `baf0a70783b26164d706a9c0a38ae3f579c4b705` |
+| 机器向量 | `docs/internal/fixtures/p1-canonical-cases.json`，blob `28d46d749cbf9d944c7cda35180d5f1df5bb5cd7`，电脑脚本运行前校验 |
+
+### 统一入口实跑结果
+
+在独立检出中冻结安装两个锁定开发依赖，使用Node v26.3.0、pnpm 12.6.0、Python 3.13.13、Node SQLite 3.53.1。只使用虚构资料和检查器管理的临时库。
+
+| 移动脚本（pnpm run） | 电脑上运行该脚本的结果 |
+| --- | --- |
+| check:contracts、check:ledger、check:p1-review | vendor 0.1.0来源与摘要通过，14项账本样例通过。评审容器的6项只读投影、2项日历和2项钟面计算通过，S01–S12为清单 |
+| check:p1-values、check:p1-json、check:p1-patch | 88项值（29接受／59拒绝）、75项原始JSON（25／50）、70项部分更正（33／37）均符合既定预期 |
+| check:p1-boundary、check:p1-families | 原始入口55、组合42、调度7项通过。四族46项含19接受、27拒绝。全局并行4、等待32，每范围并行1、等待16的证据限单JS运行时 |
+| check:p1-store、check:p1-history | 23项临时SQLite事务／回执／outbox及60项恢复／来源映射通过，含两个连接争锁、提交前后子进程退出与重开。历史导入中途失败用异常注入。真实文件、断电及Android原生恢复待验 |
+| check:p1-canonical、typecheck | 103个固定原始输入、18组关系、6项格式集成及类型检查通过，含13种控制命令和receipt.lookup |
+
+### 接收端独立证据与适配决定
+
+[电脑显式校验](../../backend/tests/p1_canonical_review.py)直接读取固定语料的raw_json／raw_utf8_hex，复用电脑已有严格token reader。先验证信封形状、命令和键、载荷字段集合及整数范围，再递归按UTF-16码元排列对象键，输出紧凑UTF-8并计算SHA-256。validated_intent及expected只用于比对结果。测试运行三个入口，分别核对整组向量与关系、六项格式拒绝和旧桌面模型往返。
+
+| 结论 | 验证结果、适用条件与取舍 |
+| --- | --- |
+| **接受编码候选** | CN001–022原语与CN041–103命令／查询的85个接受结果，逐一匹配规范化文本、原始字节和SHA-256。CN023–040的18个拒绝类别全部匹配。CN010／012覆盖数字键与UTF-16次序，CN041–046覆盖重排、整数字面量与等价转义，CN058／059保留恢复来源，CN099／100保留查询域，CN103覆盖偏移负零。18组关系同时核对字节与摘要 |
+| **接受有限输入适配，保留执行差异** | 电脑独立拒绝近整数、布尔金额、载荷中夹带的observed_head、解码后同名键、超长数字和错误channel。脚本只对固定样例做输入验证。完整业务规则、递归解析前的资源守卫、真实身份和调度接库仍分别依赖后续适配。当前临时库使用完整结构比较，能力应继续按实际组件声明；采用摘要时须保留profile、完整意图及可查证回执 |
+| **接受历史映射规则，建议从源记录读取** | 桌面versions.id是文本，版本记录含seq、checkpoint_id，分支另存parent_branch_id和fork_version_id。跨库映射须把来源数据集、旅行、分支、ID类型和值一起保存。分叉关系可保留，版本缺父证据时记unknown，引用缺失记unresolved，原记录显式null才记root。时间、seq、checkpoint_id均不足以单独证明版本父链或删除事件。[桌面存储结构](../../backend/app/storage/database.py) |
+| **实测旧模型会丢字段，文件适配待定** | 通过当前Itinerary执行虚构JSON读取与再导出，消费ID保留，输入中的currency=null、paid_on=null和额外来源字段均丢失。现有读取路径会做同类模型转换。首次导入应并存无损源记录与可解释视图，保留字段缺失／null、未知扩展、旧预约与审计来源。映射重试沿用原映射，只有显式删除证据才建立墓碑。[桌面读取路径](../../backend/app/storage/session_store.py) |
+| **接受能力不兼容时暂停交换，端到端待验** | 持久保留本地原操作键、意图、基线、出站待确认记录及相关附件引用。缺命令／字段能力、解析资料或超预算时标明原因，只暂停受影响的发送。对端支持独立查询且当前身份获准时，可用原键查回执。查询不可用或恢复未收敛保持待核实。能力恢复后按原键重试，确认原回执才标记已同步。禁止截短、改基线、换键或把查不到直接当成未保存。能力响应、调度和虚构SQLite各有宿主实测，此段跨设备流程待集成 |
+
+本轮未发现需要改变已确认产品规则或追加共享向量的差异。下一项是用虚构桌面源格式验证真实文件适配的无损映射，另按移动路线验证全量IANA资料与T1／F1原生恢复。契约0.1.0仍是现有权威只读版本，当前结果不触发发布。D0用户人工测试继续暂缓。
+
+### 复跑
+
+在电脑仓库根目录使用Node 22.16+、固定pnpm和已准备的backend开发环境。命令只在临时目录检出指定提交，电脑构建不引用相邻移动仓库。
+
+```bash
+mobile_review=$(mktemp -d)
+git -C "$mobile_review" init -q
+git -C "$mobile_review" fetch --depth=1 https://github.com/wuqiuwangtian/TravelFlow-Mobile.git dcba911b66566da242f26dd27c8d0b17c006b48d
+git -C "$mobile_review" checkout -q --detach FETCH_HEAD
+export P1_REVIEW_PYTHON="$PWD/backend/.venv/bin/python"
+(
+  set -e
+  cd "$mobile_review"
+  pnpm install --frozen-lockfile --ignore-scripts
+  for task in check:contracts check:ledger check:p1-review check:p1-values check:p1-json check:p1-patch check:p1-boundary check:p1-families check:p1-store check:p1-history check:p1-canonical typecheck
+  do
+    pnpm run "$task"
+  done
+)
+P1_CANONICAL_CASES="$mobile_review/docs/internal/fixtures/p1-canonical-cases.json" \
+  uv run --frozen --project backend python -m pytest -q -c backend/pyproject.toml backend/tests/p1_canonical_review.py
+```
