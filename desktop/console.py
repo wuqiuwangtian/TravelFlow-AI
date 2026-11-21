@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from desktop.application import application_selection, doctor, prepare_application
+from desktop.backup import absolute_path, create_backup, restore_backup
 from desktop.host_ports import ensure_host_ports
 from desktop.processes import OwnerExit, supervisor_python
 from desktop.runtime import (
@@ -37,7 +38,7 @@ from desktop.runtime import (
     recover as recover_runtime,
 )
 
-CONSOLE_VERSION = 5
+CONSOLE_VERSION = 6
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -85,6 +86,7 @@ class Console:
         self.exit_ready = False
         self.error = None
         self.preview = None
+        self.data_result = None
         self.picked = None
         self.confirmation = None
         self.preferences = {}
@@ -182,7 +184,10 @@ class Console:
                 "profile": chosen["profile"],
                 "ports": [service["port"] for service in value["services"]],
                 "env_file": chosen["env_file"] if chosen["profile"] == "application" else "",
-                "database": chosen["database"] if chosen["profile"] == "application" else "",
+                "database": chosen["database"]
+                if chosen["profile"] == "application"
+                or Path(chosen["database"]) != active / "qa.sqlite"
+                else "",
             }
         else:
             active = self.active if not self.state_error else None
@@ -224,6 +229,7 @@ class Console:
                 "preview": self.preview,
                 "preferences": self.preferences,
                 "picked": self.picked,
+                "data_result": self.data_result,
                 "native_picker": native_picker,
                 "picker_hint": picker_hint,
                 "state_error": self.state_error,
@@ -252,8 +258,10 @@ class Console:
         database = payload.get("database", "")
         if not isinstance(env, str) or not isinstance(database, str):
             raise ValueError("配置和数据库地址必须是文本。")
-        if profile == "application-qa" and (env or database):
-            raise ValueError("隔离体验使用自己的配置和数据，请清空自定义地址。")
+        if profile == "application-qa" and env:
+            raise ValueError("隔离体验使用独立配置，请清空配置文件地址。")
+        if profile == "application-qa" and database and not absolute_path(database).is_file():
+            raise ValueError("隔离体验自选数据库必须是已有文件。")
         if not self.active or not current(self.active):
             ensure_host_ports(self.folder, ports)
         chosen = application_selection(
@@ -313,6 +321,12 @@ class Console:
             raise ValueError("配置文件已变化，请重新预览。")
         if doctor()["build_id"] != chosen["frontend_build_id"]:
             raise ValueError("应用构建已变化，请重新预览。")
+        if (
+            chosen["profile"] == "application-qa"
+            and settings.get("database")
+            and not Path(chosen["database"]).is_file()
+        ):
+            raise ValueError("选定的隔离数据库已不存在，请重新预览。")
         if chosen["profile"] == "application" and not Path(chosen["database"]).is_file():
             if payload.get("initialize_database") is not True:
                 raise ValueError("数据库不存在；核对预览后，勾选明确创建新数据库。")
@@ -324,7 +338,9 @@ class Console:
                 raise RuntimeError(
                     "上次启动或运行状态尚未确认，请先核对并恢复；不会改写原运行选择。"
                 )
-            if self.active != folder and running:
+            if running and (
+                self.active != folder or identity(running["selection"]) != identity(chosen)
+            ):
                 raise ValueError("请先停止当前应用，再切换配置或数据。")
         if not running:
             ensure_host_ports(self.folder, preview["ports"])
@@ -349,12 +365,24 @@ class Console:
             stop(self.active)
 
     def submit(self, action, payload):
-        if action not in ("inspect", "prepare", "start", "stop", "exit", "pick", "recover"):
+        if action not in (
+            "inspect",
+            "prepare",
+            "start",
+            "stop",
+            "exit",
+            "pick",
+            "recover",
+            "backup",
+            "restore",
+        ):
             raise ValueError("未知操作。")
         with self.lock:
             if self.busy or self.exit_ready or self.exiting.is_set():
                 raise AlreadyRunning("操作正在进行，请等待完成。")
             self.busy, self.error = action, None
+            if action in ("backup", "restore"):
+                self.data_result = None
             if action == "inspect":
                 self.preview = self.confirmation = None
 
@@ -368,6 +396,17 @@ class Console:
                         self.preview = self.confirmation = None
                 elif action == "start":
                     self.launch(payload)
+                elif action in ("backup", "restore"):
+                    target = absolute_path(payload.get("target"))
+                    if action == "backup":
+                        preview = self.preview
+                        if not preview or preview["confirmation"] != payload.get("confirmation"):
+                            raise ValueError("请先重新预览本次要备份的数据库。")
+                        result = create_backup(Path(preview["selection"]["database"]), target)
+                    else:
+                        result = restore_backup(absolute_path(payload.get("package")), target)
+                    with self.lock:
+                        self.data_result = result
                 elif action == "recover":
                     self.recover()
                 elif action == "pick":

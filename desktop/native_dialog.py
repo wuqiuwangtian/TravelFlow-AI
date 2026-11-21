@@ -10,12 +10,19 @@ def dialog(kind, initialdir=None):
     import tkinter as tk
     from tkinter import filedialog
 
-    if kind not in ("env_file", "database"):
+    if kind not in ("env_file", "database", "backup_parent", "restore_parent", "restore_package"):
         raise ValueError("Unknown file selection kind")
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     try:
+        if kind in ("backup_parent", "restore_parent", "restore_package"):
+            return filedialog.askdirectory(
+                parent=root,
+                initialdir=initialdir,
+                mustexist=True,
+                title="选择已有备份目录" if kind == "restore_package" else "选择新目录的上级目录",
+            )
         options = {
             "parent": root,
             "title": "选择已有配置文件" if kind == "env_file" else "选择已有数据库（不会创建文件）",

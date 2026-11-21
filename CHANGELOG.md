@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+### 桌面运行管理
+
+- 支持将整个 SQLite 数据库备份到新目录，校验后恢复为独立副本。可在原运行模式下明确切换源库与副本。[使用方法](README.md)
+
 ### 安全修复
 
 - Next.js 与配套 ESLint 配置更新至 16.4.5，修复本次 7 份 Next.js 安全公告。后端将 FastAPI 间接依赖的 opentelemetry-api 锁定至 1.45.2。已安装的桌面环境在同步 main 后，停止当前业务并在对应 Windows 或 WSL 模式重新执行“准备环境与构建”，然后启动。[Next.js 补丁](https://github.com/vercel/next.js/releases/tag/v16.4.5) · [OpenTelemetry 公告](https://github.com/advisories/GHSA-mf5v-w3w3-f6cg)

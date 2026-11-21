@@ -102,7 +102,7 @@ class HostPortTests(unittest.TestCase):
             state = Console(folder)
             state.active = folder / "qa"
             with (
-                patch("desktop.console.current", return_value={"ready": True}),
+                patch("desktop.console.current", return_value={"ready": True}) as live,
                 patch(
                     "desktop.console.ensure_host_ports",
                     side_effect=AssertionError("must not bind live ports"),
@@ -110,5 +110,6 @@ class HostPortTests(unittest.TestCase):
                 patch("desktop.console.start") as starting,
             ):
                 state.inspect({"profile": "application-qa", "ports": [8000, 3100]})
+                live.return_value["selection"] = state.preview["selection"]
                 state.launch({"confirmation": state.preview["confirmation"]})
                 starting.assert_called_once()

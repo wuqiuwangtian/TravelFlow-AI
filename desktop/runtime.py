@@ -180,6 +180,9 @@ def validate(folder, chosen, ports):
     profile = chosen.get("profile")
     if profile not in ("synthetic-probe", "application-qa", "application"):
         raise ValueError("Unknown runtime profile")
+    selected = Path(chosen["database"])
+    if selected.name.lower() == "snapshot.sqlite" and (selected.parent / "manifest.json").exists():
+        raise ValueError("请先将备份恢复到新目录，再打开恢复副本。")
     if profile != "application" and not Path(chosen["database"]).is_relative_to(folder):
         raise ValueError(
             "The synthetic probe database descriptor must stay inside its isolated state directory"
@@ -314,12 +317,19 @@ def run_supervisor(folder, chosen, ports, *, timeout=None, launch_ticket=None):
                     "Build or database is already in use by another managed instance"
                 ) from error
         saved = folder / "selection.json"
-        if saved.exists() and identity(json.loads(saved.read_text(encoding="utf-8"))) != identity(
-            chosen
-        ):
-            raise RuntimeError(
-                "Runtime mode/project/database selection differs; use a different state directory"
-            )
+        if saved.exists():
+            previous = identity(json.loads(saved.read_text(encoding="utf-8")))
+            requested = identity(chosen)
+            # QA uses one locked supervisor directory and an explicit, contained database.
+            # The per-database owner record above still verifies project and mode.
+            if requested["profile"] == previous["profile"] == "application-qa":
+                previous.pop("database")
+                requested.pop("database")
+            if previous != requested:
+                raise RuntimeError(
+                    "Runtime mode/project/database selection differs; "
+                    "use a different state directory"
+                )
         free_ports(ports)
         write_json(saved, identity(chosen))
         instance = secrets.token_hex(16)

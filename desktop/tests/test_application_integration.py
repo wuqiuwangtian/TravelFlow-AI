@@ -1,5 +1,6 @@
 """Opt-in real Python/Next acceptance; no personal configuration or providers."""
 
+import hashlib
 import json
 import os
 import socket
@@ -15,6 +16,7 @@ from desktop.application import application_selection, doctor, prepare_applicati
 from desktop.console import close_console, console_request, live_record, open_console
 from desktop.processes import supervisor_python
 from desktop.runtime import ROOT, AlreadyRunning, current, prepare, request, start, stop, write_json
+from desktop.tests.test_backup import unpack_sample
 
 
 def free_ports():
@@ -135,6 +137,79 @@ class RealApplicationTests(unittest.TestCase):
             self.assertIsNone(snapshot["error"])
             items = api(self.ports[1], "/api/backend/api/sessions")["items"]
             self.assertTrue(any(item["id"] == created["session"]["id"] for item in items))
+        finally:
+            close_console(folder)
+
+    def test_d1_restore_history_attachments_edit_and_reopen(self):
+        folder = self.folder / "console"
+        qa = prepare(folder / "qa")
+        source = qa / "fiction.sqlite"
+        sample = unpack_sample(source)
+        record = open_console(folder, browser=False)
+        first, second, head = sample["main_versions"]
+        base = "/api/backend/api"
+        port = self.ports[1]
+
+        def command(action, **payload):
+            console_request(record, "/api/" + action, payload)
+            state = self.wait_console(record)
+            self.assertIsNone(state["error"], state["error"])
+            return state
+
+        def launch_database(path):
+            state = command(
+                "inspect", profile="application-qa", database=str(path), ports=self.ports
+            )
+            confirmation = state["preview"]["confirmation"]
+            running = command("start", confirmation=confirmation)["runtime"]
+            self.assertTrue(running["ready"])
+            self.assertEqual(running["selection"]["database"], str(path))
+            return confirmation
+
+        def versions(branch):
+            return [v["id"] for v in api(port, f"{base}/branches/{branch}/versions")["items"]]
+
+        try:
+            confirmation = launch_database(source)
+            package = self.folder / "backup"
+            command("backup", confirmation=confirmation, target=str(package))
+            result = command("restore", package=str(package), target=str(qa / "copy"))[
+                "data_result"
+            ]
+            copy = Path(result["path"])
+            command("stop")
+            launch_database(copy)
+            self.assertCountEqual(versions(sample["main_branch"]), sample["main_versions"])
+            self.assertEqual(versions(sample["fork_branch"]), sample["fork_versions"])
+            for vid in [first, *sample["fork_versions"]]:
+                self.assertFalse(api(port, f"{base}/versions/{vid}")["itinerary"]["expenses"])
+            for vid in (second, head):
+                expense = api(port, f"{base}/versions/{vid}")["itinerary"]["expenses"][0]
+                self.assertEqual(expense["amount_cents"], sample["amount_cents"])
+                self.assertEqual(expense["receipt_ids"], [sample["receipt"]])
+            recap = api(port, f"{base}/versions/{head}/recap")
+            self.assertEqual(recap["cover_photo_id"], sample["photo"])
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            for route, digest in sample["attachments_sha256"].items():
+                with opener.open(
+                    f"http://127.0.0.1:{port}{base}/versions/{head}/{route}", timeout=10
+                ) as response:
+                    self.assertEqual(hashlib.sha256(response.read()).hexdigest(), digest)
+            edited = api(
+                port,
+                f"{base}/versions/{head}/expenses",
+                {"title": "副本车费", "amount": "3.21", "request_id": "d1-restored-fare"},
+            )
+            new = edited["version"]["id"]
+            command("stop")
+            launch_database(copy)
+            self.assertIn(new, versions(sample["main_branch"]))
+            expenses = api(port, f"{base}/versions/{new}")["itinerary"]["expenses"]
+            self.assertCountEqual([e["amount_cents"] for e in expenses], [8635, 321])
+            command("stop")
+            launch_database(source)
+            self.assertCountEqual(versions(sample["main_branch"]), sample["main_versions"])
+            self.assertEqual(len(api(port, f"{base}/versions/{head}")["itinerary"]["expenses"]), 1)
         finally:
             close_console(folder)
 

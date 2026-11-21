@@ -16,7 +16,8 @@ let connected = false;
 let lastConfirmation = null;
 let lastRecovery = null;
 let pendingPick = null;
-const labels = { recover: "正在核对实例归属与运行锁…", pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
+let lastBackup = null;
+const labels = { backup: "正在备份并校验数据库…", restore: "正在校验并恢复副本…", recover: "正在核对实例归属与运行锁…", pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
 const modes = { "windows-native": "Windows 原生", wsl: "WSL Linux", linux: "Linux" };
 async function api(path, payload) {
   const controller = new AbortController();
@@ -33,7 +34,7 @@ async function api(path, payload) {
     throw error;
   } finally { clearTimeout(timer); }
 }
-function payload() { const qa = byId("profile").value === "application-qa"; return { profile: byId("profile").value, env_file: qa ? "" : byId("env-file").value.trim(), database: qa ? "" : byId("database").value.trim(), ports: [Number(byId("backend-port").value), Number(byId("frontend-port").value)] }; }
+function payload() { const qa = byId("profile").value === "application-qa"; return { profile: byId("profile").value, env_file: qa ? "" : byId("env-file").value.trim(), database: byId("database").value.trim(), ports: [Number(byId("backend-port").value), Number(byId("frontend-port").value)] }; }
 function showError(message) { byId("error").hidden = !message; byId("error").textContent = message || ""; }
 function render() {
   if (!state || ended) return;
@@ -48,10 +49,19 @@ function render() {
   byId("picker-actions").hidden = !state.native_picker;
   for (const id of ["pick-env", "pick-db"]) {
     byId(id).hidden = !state.native_picker;
-    byId(id).disabled = busy || qa;
+    byId(id).disabled = busy || (qa && id === "pick-env");
   }
+  for (const id of ["pick-backup-target", "pick-restore-package", "pick-restore-target"]) byId(id).hidden = !state.native_picker;
   if (pendingPick && state.picked?.request_id === pendingPick) {
-    if (state.picked.path) {
+    const { kind, path } = state.picked;
+    if (path && ["backup_parent", "restore_parent", "restore_package"].includes(kind)) {
+      const slash = state.mode === "windows-native" ? "\\" : "/";
+      const base = path.endsWith(slash) ? path : path + slash;
+      const date = new Date().toISOString().replace(/[:.]/g, "-");
+      if (kind === "restore_package") byId("restore-package").value = path;
+      else if (kind === "backup_parent") byId("backup-target").value = base + "TravelFlow-backup-" + date;
+      else byId("restore-target").value = base + "TravelFlow-copy-" + date;
+    } else if (path) {
       byId(state.picked.kind === "env_file" ? "env-file" : "database").value = state.picked.path;
       dirty = true;
       byId("confirm").checked = false;
@@ -60,7 +70,7 @@ function render() {
     pendingPick = null;
   }
   byId("env-file").disabled = qa;
-  byId("database").disabled = qa;
+
   if (state.preview?.confirmation !== lastConfirmation) {
     lastConfirmation = state.preview?.confirmation;
     byId("confirm").checked = false;
@@ -69,6 +79,18 @@ function render() {
   for (const id of ["inspect", "prepare", "exit"]) byId(id).disabled = busy;
   byId("operation").textContent = state.busy ? labels[state.busy] : "";
   const preview = dirty ? null : state.preview;
+  byId("copy-fields").disabled = busy;
+  byId("backup-source").textContent = preview?.selection.database || "请先预览配置与数据";
+  byId("backup").disabled = busy || !preview?.database_exists || !byId("backup-target").value.trim();
+  byId("restore").disabled = busy || !byId("restore-package").value.trim() || !byId("restore-target").value.trim();
+  const result = state.data_result;
+  byId("copy-result").textContent = result ? (result.kind === "backup" ? "备份已校验" : "副本已校验") + " · " + result.path : "";
+  byId("use-copy").hidden = result?.kind !== "restore";
+  byId("use-copy").disabled = busy;
+  if (result?.kind === "backup" && result.path !== lastBackup) {
+    lastBackup = result.path;
+    byId("restore-package").value = result.path;
+  }
   byId("preview").hidden = !preview;
   if (preview) {
     byId("preview-ports").textContent = `后端 ${preview.ports[0]} · 网页 ${preview.ports[1]}`;
@@ -141,7 +163,12 @@ async function action(name) {
   submitting = true; render();
   byId("operation").textContent = labels[name];
   try {
-    await api(`/api/${name}`, name === "inspect" ? payload() : name === "start" ? { confirmation: state.preview.confirmation, initialize_database: byId("initialize").checked } : {});
+    let body = {};
+    if (name === "inspect") body = payload();
+    if (name === "start") body = { confirmation: state.preview.confirmation, initialize_database: byId("initialize").checked };
+    if (name === "backup") body = { confirmation: state.preview.confirmation, target: byId("backup-target").value.trim() };
+    if (name === "restore") body = { package: byId("restore-package").value.trim(), target: byId("restore-target").value.trim() };
+    await api(`/api/${name}`, body);
     if (name === "inspect") { dirty = false; byId("confirm").checked = false; byId("initialize").checked = false; }
     if (name === "exit") {
       // Polling continues until shutdown is confirmed; acceptance is not completion.
@@ -151,8 +178,15 @@ async function action(name) {
   } catch (error) { state.error = error.message; showError(error.message); }
   finally { submitting = false; render(); }
 }
-for (const id of ["inspect", "prepare", "start", "stop", "exit", "recover"]) byId(id).addEventListener("click", () => action(id));
+for (const id of ["inspect", "prepare", "start", "stop", "exit", "recover", "backup", "restore"]) byId(id).addEventListener("click", () => action(id));
 for (const id of ["profile", "env-file", "database", "backend-port", "frontend-port"]) byId(id).addEventListener("input", () => { dirty = true; byId("confirm").checked = false; byId("initialize").checked = false; render(); });
+byId("profile").addEventListener("change", () => { byId("database").value = ""; render(); });
+byId("use-copy").addEventListener("click", () => {
+  byId("database").value = state.data_result.path;
+  byId("database").dispatchEvent(new Event("input"));
+  byId("inspect").focus();
+});
+for (const id of ["backup-target", "restore-package", "restore-target"]) byId(id).addEventListener("input", render);
 for (const id of ["confirm", "initialize"]) byId(id).addEventListener("change", render);
 byId("theme").addEventListener("change", () => { document.documentElement.dataset.theme = byId("theme").value; });
 refresh();
@@ -169,7 +203,7 @@ function recheckConnection() {
 document.addEventListener("visibilitychange", recheckConnection);
 window.addEventListener("focus", recheckConnection);
 
-for (const [id, kind] of [["pick-env", "env_file"], ["pick-db", "database"]]) {
+for (const [id, kind] of [["pick-env", "env_file"], ["pick-db", "database"], ["pick-backup-target", "backup_parent"], ["pick-restore-package", "restore_package"], ["pick-restore-target", "restore_parent"]]) {
   byId(id).addEventListener("click", async () => {
     if (!connected || submitting || state?.busy) return;
     submitting = true; render();

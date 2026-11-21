@@ -1,0 +1,24 @@
+{
+  "session": "92ba6a148a17",
+  "title": "北京三日游",
+  "main_branch": "f4f921d01f4e",
+  "fork_branch": "80a581ac74f9",
+  "main_versions": [
+    "409854fb9585",
+    "42ac255b7c33",
+    "9639db1eb3b8"
+  ],
+  "fork_versions": [
+    "ce99e5ec7352"
+  ],
+  "fork_from": "409854fb9585",
+  "receipt": "66a8ba9d2eab4300b2f86943ea2c01fe",
+  "photo": "7827bcc19b524e83b8bfd560be0ea667",
+  "amount_cents": 8635,
+  "attachments_sha256": {
+    "receipts/66a8ba9d2eab4300b2f86943ea2c01fe": "a9e451b30c9bf1068c75598b8d140e09c23066b976ca4ce95040e4773b8591bb",
+    "receipts/66a8ba9d2eab4300b2f86943ea2c01fe?original=true": "bd796aa2879a95e06c873b9939a002f2383de5eb9cbca306bb9494aaad52f348",
+    "travel-photos/7827bcc19b524e83b8bfd560be0ea667": "8a2e01028b2592c6c1e0931ac062d003ffc1caa278a6a496e3244a76302be837"
+  },
+  "database_sha256": "85efb0ae4663d7416d9495d9beb6b0d145a7559085799c5a37791a39c8911cc3"
+}

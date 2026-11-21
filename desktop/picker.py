@@ -133,7 +133,7 @@ def selected_wsl_file(value, distribution):
 
 
 def pick_file(kind, folder=None):
-    if kind not in ("env_file", "database"):
+    if kind not in ("env_file", "database", "backup_parent", "restore_parent", "restore_package"):
         raise ValueError("不支持的文件选择类型。")
     if os.name == "nt":
         command = [supervisor_python(), "-m", "desktop.native_dialog", kind]
@@ -169,4 +169,11 @@ def pick_file(kind, folder=None):
             raise ValueError()
     except (ValueError, KeyError, TypeError):
         raise RuntimeError("文件选择器回执无效，请手动填写地址。") from None
-    return path if os.name == "nt" else selected_wsl_file(path, distro)
+    if os.name == "nt" or not path:
+        return path
+    if kind in ("backup_parent", "restore_parent", "restore_package"):
+        selected = Path(wsl_selection_path(path, distro)).resolve()
+        if not selected.is_dir():
+            raise ValueError("所选目录在本环境中不存在。")
+        return str(selected)
+    return selected_wsl_file(path, distro)

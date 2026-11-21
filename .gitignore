@@ -17,6 +17,11 @@ data/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # 依赖与构建产物（体积大，可随时重新生成）
 .venv*/

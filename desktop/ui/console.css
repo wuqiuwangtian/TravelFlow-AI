@@ -19,3 +19,5 @@ dl { display: grid; grid-template-columns: 132px minmax(0,1fr); gap: 8px 16px; m
 #error { color: var(--tf-danger); background: var(--tf-danger-soft); border: 1px solid var(--tf-danger-line); border-radius: var(--tf-radius); padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; } #operation, #connection { color: var(--tf-muted); } [hidden] { display: none !important; }
 @media (max-width: 640px) { main { margin: 24px auto; padding: 0 16px 24px; } section { padding: 18px; } header { flex-wrap: wrap; } .grid { grid-template-columns: 1fr; } dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 10px; } input, select { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; transform: none !important; } }
+
+#copy-fields { display: grid; justify-items: start; gap: 12px; } #copy-fields label { width: 100%; } #backup-source, #copy-result { overflow-wrap: anywhere; }
