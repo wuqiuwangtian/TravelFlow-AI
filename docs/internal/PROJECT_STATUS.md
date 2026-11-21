@@ -6,7 +6,7 @@
 
 ## 当前接续状态
 
-- 2026-11-21，D1 整库备份与独立恢复已接入管理页。开工基线 `97837614e5389b736a714ff36e1f26a1c1dd9216`。本机 WSL 已用真实 Python／Next 和固定服务替身验证源库→副本→重启副本→重开源库，逐项核对两个分支、四个版本、账目和三份附件响应。Chromium 已操作管理页的预览、备份、恢复和回填。Windows 本机标准库已实测备份引擎，Windows 完整应用链以本提交的 Desktop application CI 为准。固定样例及复核步骤见 [D1 验收](handoff/DEVELOPMENT.md#d1-整库备份与独立恢复)。用户实机操作、移动读取回执、跨模式切换与物理断电均待验。桌面包版本只标识本机备份格式。
+- 2026-11-21，D1 整库备份与独立恢复已接入管理页。开工基线 `97837614e5389b736a714ff36e1f26a1c1dd9216`。本机 WSL 已用真实 Python／Next 和固定服务替身验证源库→副本→重启副本→重开源库，逐项核对两个分支、四个版本、账目和三份附件响应。Chromium 已操作管理页的预览、备份、恢复和回填。Windows 本机标准库已实测备份引擎，Windows 原生完整应用链也已通过[该提交的 CI](https://github.com/wuqiuwangtian/TravelFlow-AI/actions/runs/44875124951)。固定样例及复核步骤见 [D1 验收](handoff/DEVELOPMENT.md#d1-整库备份与独立恢复)。移动回执已复跑并接受，固定文件内容吻合，原型在文件标记检查时拒绝，目标库零写入。[跨仓复核](P1_CROSS_REPO_REVIEW.md#14-d1-固定桌面样例的移动读取回执)。用户实机操作、跨模式切换与物理断电仍待验。桌面包版本只标识本机备份格式。
 
 - 最近交付：`v1.0.0`（2026-11-02，提交 `e890a6e`）已作为 MIT 开源项目正式发布。仓库增加 LICENSE、第三方声明、社区与安全文件、发布校验与 GitHub Pages 项目主页；内部开发与验收材料归档到 `docs/internal/`。发布页见 <https://github.com/wuqiuwangtian/TravelFlow-AI/releases/tag/v1.0.0>，项目主页见 <https://wuqiuwangtian.github.io/TravelFlow-AI/>。
 - 2026-11-21 依赖维护。开工基线 `a8baa69545de5410a4993eee3d4b245e067f5c88`。Dependabot #7–20 来自 7 份 Next.js 公告分别命中清单与锁文件，#6 来自 FastAPI 间接依赖 opentelemetry-api。Next.js／配套 ESLint 配置升至 16.4.5，后端锁定 opentelemetry-api 1.45.2。隔离冻结安装、前端审计、类型和生产构建通过，后端 799 项测试通过。已安装环境的更新方式见[未发布更新日志](../../CHANGELOG.md)。D1 的验收和分工见[当前执行任务](PRODUCT_ROADMAP.md#当前执行任务)。

@@ -527,3 +527,17 @@ export P1_REVIEW_PYTHON="$PWD/backend/.venv/bin/python"
 P1_CANONICAL_CASES="$mobile_review/docs/internal/fixtures/p1-canonical-cases.json" \
   uv run --frozen --project backend python -m pytest -q -c backend/pyproject.toml backend/tests/p1_canonical_review.py
 ```
+
+## 14. D1 固定桌面样例的移动读取回执
+
+**接受本轮只读核对。** 桌面样例提交为 `801156fcbe8dcc96d99b0fb122e0fa97097f8af8`。移动回执提交为 `f16ca5828b73f47ab962e3f8513432b0d36357b2`，相对其父提交 `664a1dfdf0446555177cb92f7e719dcc1e35ec88` 只增加核对脚本与记录，读取器代码相同。[移动第 28 节与复跑命令](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/f16ca5828b73f47ab962e3f8513432b0d36357b2/docs/internal/P1_LOCAL_DATA_DESIGN.md#L753) · [桌面固定清单](../../desktop/tests/fixtures/d1/expected.json)
+
+电脑侧分别用 `git archive` 提取上述固定回执与桌面样例，在临时目录安装冻结依赖，以 Node 26.3.0 执行 `node scripts/check-p1-desktop-d1.mjs desktop/tests/fixtures/d1`，退出码为 0。核对分三层。
+
+| 检查位置 | 实测结果 |
+| --- | --- |
+| 对解压文件直接执行 SQL | 文件 SHA-256 与清单一致。主分支三版，备选从主分支第一版分出，仅一版。主分支第二、三版持有同一笔 8635 分消费及同一票据，第三版选用了封面照片。票据预览、原件、照片三个字节摘要全部匹配。 |
+| 移动原型读取器入口 | 分别给出两支的有效头版本，两次都返回 `source_fixture_only`。源码先核对 SQLite 的 `application_id`，样例为 0，原型要求 `0x54534631`，检查位于读事务及分支解析之前。读取器对这份样例的历史与附件映射仍待验证。 |
+| 拒绝后的状态 | 导入函数调用 0 次，临时目标库行变更 0，重开后受检表与原快照一致。源文件摘要保持一致，源目录未产生伴随文件。 |
+
+这个结果符合 D1 对“明确拒绝且保留数据”的验收要求。后续若评审桌面来源适配，建议用相同样例验证获准读取后的分支选择和历史映射；保留原样例的文件标记及现有原型入口约束。正式导入、Android 设备运行和双端同步均待各自验收。
