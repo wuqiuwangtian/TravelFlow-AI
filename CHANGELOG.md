@@ -8,6 +8,8 @@
 
 ### 安全修复
 
+- Next.js 与配套 ESLint 配置更新至 16.4.5，修复本次 7 份 Next.js 安全公告。后端将 FastAPI 间接依赖的 opentelemetry-api 锁定至 1.45.2。已安装的桌面环境在同步 main 后，停止当前业务并在对应 Windows 或 WSL 模式重新执行“准备环境与构建”，然后启动。[Next.js 补丁](https://github.com/vercel/next.js/releases/tag/v16.4.5) · [OpenTelemetry 公告](https://github.com/advisories/GHSA-mf5v-w3w3-f6cg)
+
 - 修复前端ESLint工具链的zod与minimatch依赖告警，限定范围覆盖到zod 4.6.6及minimatch 11.0.1；保留未受本次公告影响的minimatch 3.x。依据：[zod公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)、[minimatch公告](https://github.com/advisories/GHSA-g3hv-75wg-m249)。同步代码后在frontend执行 `pnpm install --frozen-lockfile`。
 - CI增加包含开发依赖的pnpm漏洞审计，中危及以上阻断。
 
