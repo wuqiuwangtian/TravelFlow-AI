@@ -1,0 +1,40 @@
+{
+  "command": {
+    "profile": "p1-host-control-1",
+    "kind": "expense.create",
+    "operation": {
+      "dataset_id": "fixture-dataset",
+      "source_device_id": "fixture-device",
+      "operation_id": "fixture-op-lunch"
+    },
+    "target": {
+      "travel_id": "fixture-travel",
+      "branch_id": "fixture-branch",
+      "entity_id": "fixture-lunch"
+    },
+    "expected_revision_id": "fixture-r0",
+    "payload": {
+      "title": "午餐",
+      "amount_cents": 8635,
+      "currency": "CNY",
+      "paid_on": null,
+      "category": "meal",
+      "day": null,
+      "activity_id": null,
+      "notes": "",
+      "receipt_ids": [],
+      "allow_shared_receipts": false,
+      "budget_item_id": null,
+      "settles_budget": false
+    }
+  },
+  "receipt_query": {
+    "profile": "p1-host-query-1",
+    "kind": "receipt.lookup",
+    "operation": {
+      "dataset_id": "fixture-dataset",
+      "source_device_id": "fixture-device",
+      "operation_id": "fixture-op-lunch"
+    }
+  }
+}

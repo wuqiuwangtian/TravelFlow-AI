@@ -541,3 +541,25 @@ P1_CANONICAL_CASES="$mobile_review/docs/internal/fixtures/p1-canonical-cases.jso
 | 拒绝后的状态 | 导入函数调用 0 次，临时目标库行变更 0，重开后受检表与原快照一致。源文件摘要保持一致，源目录未产生伴随文件。 |
 
 这个结果符合 D1 对“明确拒绝且保留数据”的验收要求。后续若评审桌面来源适配，建议用相同样例验证获准读取后的分支选择和历史映射；保留原样例的文件标记及现有原型入口约束。正式导入、Android 设备运行和双端同步均待各自验收。
+
+## 15. 第二阶段桌面候选：新增一笔消费
+
+首条命令沿用第 13 节已有的 control、规范化 profile 和 receipt-query。输入见[完整命令和回执查询](../../backend/tests/fixtures/p1_expense_create_candidate.json)。样例从独立虚构数据集的空账本、当前头 fixture-r0 开始，目标消费 ID 为 fixture-lunch。它与第一阶段已有消费的 D1 快照分别使用。首次记入 CNY 8635 分，付款日期未知，票据为空。正文使用整分；设备身份由接收端核对，不能只信任命令内的来源声明。
+
+### 双端待验收的行为
+
+按现有候选，操作键由 dataset_id、source_device_id、operation_id 组成；entity_id 标识消费。授权后查持久回执。遇到同键，按既定规范化 profile 比较完整意图（含目标、基线、控制与业务字段）。命中已提交的相同意图返回原效果和原结果版本。新操作才检查当前头和业务约束。新建成功必须把版本、账目、原意图与回执一起提交；产生本地待发操作时，待发记录也须同事务落盘。结果版本由实际提交产生，以下用 R 表示实测返回的版本 ID。
+
+| 固定输入或事件 | 可观察预期 |
+| --- | --- |
+| 首次执行样例，回复在提交后丢失 | 本机仍只有一笔 8635 分；以样例 receipt_query 查询，state 为 committed，回执 effect 为 changed，result_revision_id 为 R |
+| 重开后以原命令重试，包括 JSON 对象键重排；分支头可已推进 | 返回原 R；历史、账目、待发条目计数均不增加 |
+| 原键把 8635 改为 8636，或仅将 allow_shared_receipts 改为 true | intent_conflict；保留原账和原回执 |
+| 更换 operation_id 和 entity_id，保留旧基线，在 R 上提交 | baseline_conflict；不写入第二笔，也不自动换基线 |
+| 换 operation_id，使用当前头，但沿用已存在的 entity_id | entity_exists；不把这条新命令当作旧命令的重试 |
+| 只改金额为 0、true、1.25 或 10000000000 | 拒绝；无业务写入 |
+| 提交前中断，或查询时身份／权限不符 | 提交前中断无半份业务结果；身份不符不得泄露回执。无确认时保留原操作待核实 |
+
+[桌面检查](../../backend/tests/p1_expense_create_review.py)实测命令／查询编码、控制字段差异、金额边界，以及现有领域函数的金额与实体 ID 映射。旧入口把 request_id 当实体 ID，且模型无独立 currency／paid_on 字段。直接套用旧入口会混淆两个 ID，部分输入还会丢字段；接收适配须显式处理不支持的能力。本轮限定 CNY、paid_on=null 的样例，保持原意图完整。上表中的事务、回执恢复和对端确认仍需持久化执行器验证。
+
+桌面复跑：在仓库根目录运行 `backend/.venv/bin/python -m pytest -q -c backend/pyproject.toml backend/tests/p1_expense_create_review.py backend/tests/p1_command_semantics_review.py`。移动当前工作可继续；待其可用后再从本提交取相同样例独立复核。获得双方固定提交和返回值后再决定是否分配共享写入版本。
