@@ -333,6 +333,111 @@ with patch.object(ex, "_write_bytes_exact", slow_write):
         self.assertTrue(verified["verified"])
         self.assertTrue(verified["expected_checked"])
 
+    def test_plain_sqlite_with_companion_wal_or_journal_is_rejected(self):
+        wal_db = self.folder / "active-wal.sqlite"
+        _unpack_fixture_copy(wal_db)
+        out_wal = self.folder / "out-active-wal"
+        with closing(sqlite3.connect(wal_db)) as writer:
+            writer.execute("PRAGMA journal_mode=WAL")
+            writer.execute("UPDATE sessions SET title = '已提交未合并标题'")
+            writer.commit()
+            self.assertTrue(Path(f"{wal_db}-wal").exists())
+            with self.assertRaisesRegex(ValueError, "companion journal/WAL sidecar"):
+                export_exchange_bundle(wal_db, out_wal)
+        self.assertFalse(out_wal.exists())
+
+        journal_db = self.folder / "stale-journal.sqlite"
+        _unpack_fixture_copy(journal_db)
+        Path(f"{journal_db}-journal").write_bytes(b"stale-journal")
+        out_journal = self.folder / "out-stale-journal"
+        with self.assertRaisesRegex(ValueError, "companion journal/WAL sidecar"):
+            export_exchange_bundle(journal_db, out_journal)
+        self.assertFalse(out_journal.exists())
+
+    def test_crlf_itinerary_round_trips_and_verifies_by_raw_bytes(self):
+        crlf_db = self.folder / "crlf.sqlite"
+        _unpack_fixture_copy(crlf_db)
+        expected = json.loads(EXPECTED_JSON.read_text(encoding="utf-8"))
+        v2 = expected["main_versions"][1]
+
+        with closing(sqlite3.connect(crlf_db)) as db:
+            raw = db.execute("SELECT itinerary FROM plans WHERE version_id=?", (v2,)).fetchone()[0]
+            crlf_json = json.dumps(json.loads(raw), ensure_ascii=False, indent=2).replace(
+                "\n", "\r\n"
+            )
+            db.execute("UPDATE plans SET itinerary=? WHERE version_id=?", (crlf_json, v2))
+            db.commit()
+
+        bundle_dir = self.folder / "bundle-crlf"
+        export_exchange_bundle(crlf_db, bundle_dir)
+        verified = verify_exchange_bundle(bundle_dir)
+        self.assertTrue(verified["verified"])
+
+        exported_bytes = (bundle_dir / "itineraries" / f"{v2}.json").read_bytes()
+        self.assertIn(b"\r\n", exported_bytes)
+        self.assertEqual(exported_bytes, crlf_json.encode("utf-8"))
+
+    def test_verify_rejects_contradictory_branch_version_ownership_duplicates_and_ancestors(self):
+        expected = json.loads(EXPECTED_JSON.read_text(encoding="utf-8"))
+
+        def mutate_bundle(name, mutate_fn):
+            bundle_dir = self.folder / f"mut-{name}"
+            export_exchange_bundle(SAMPLE_GZ, bundle_dir)
+            exchange_path = bundle_dir / EXCHANGE
+            manifest_path = bundle_dir / MANIFEST
+            exchange = json.loads(exchange_path.read_bytes().decode("utf-8"))
+            manifest = json.loads(manifest_path.read_bytes().decode("utf-8"))
+            mutate_fn(exchange, manifest)
+            new_exchange_bytes = (
+                json.dumps(exchange, ensure_ascii=False, indent=2) + "\n"
+            ).encode("utf-8")
+            exchange_path.write_bytes(new_exchange_bytes)
+            manifest["files"][EXCHANGE] = {
+                "size": len(new_exchange_bytes),
+                "sha256": hashlib.sha256(new_exchange_bytes).hexdigest(),
+            }
+            manifest_path.write_bytes(
+                (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            )
+            return bundle_dir
+
+        def swap_version_branch(exchange, _manifest):
+            for ver in exchange["versions"]:
+                if ver["id"] == expected["main_versions"][1]:
+                    ver["branch_id"] = expected["fork_branch"]
+
+        def duplicate_version(exchange, manifest):
+            exchange["versions"].append(dict(exchange["versions"][0]))
+            manifest["summary"]["versions"] = len(exchange["versions"])
+
+        def orphan_version(exchange, _manifest):
+            for branch in exchange["branches"]:
+                if branch["id"] == expected["main_branch"]:
+                    branch["version_ids"].pop()
+
+        def bad_fork_ancestor(exchange, _manifest):
+            for ver in exchange["versions"]:
+                if ver["id"] == expected["fork_versions"][0]:
+                    ver["parent_relation"]["parent_version_id"] = expected["main_versions"][1]
+
+        def bad_seq_predecessor(exchange, _manifest):
+            for ver in exchange["versions"]:
+                if ver["id"] == expected["main_versions"][2]:
+                    ver["parent_relation"]["parent_version_id"] = expected["main_versions"][0]
+
+        cases = [
+            ("mismatched_branch_id", swap_version_branch, "contradicts branch"),
+            ("duplicate_version", duplicate_version, "Duplicate version id"),
+            ("orphan_version", orphan_version, "missing from their branch"),
+            ("bad_fork_ancestor", bad_fork_ancestor, "contradicts branch"),
+            ("bad_seq_predecessor", bad_seq_predecessor, "contradicts predecessor"),
+        ]
+        for name, mutator, pattern in cases:
+            with self.subTest(case=name):
+                mutated = mutate_bundle(name, mutator)
+                with self.assertRaisesRegex(ValueError, pattern):
+                    verify_exchange_bundle(mutated, expected_path=EXPECTED_JSON)
+
 
 if __name__ == "__main__":
     unittest.main()

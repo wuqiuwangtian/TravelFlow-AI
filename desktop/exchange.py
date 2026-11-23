@@ -202,6 +202,23 @@ def _exclusive_output_dir(target):
         raise
 
 
+SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
+def _reject_sqlite_sidecars(source, resolved):
+    checked = []
+    for candidate in (source, resolved):
+        for suffix in SQLITE_SIDECAR_SUFFIXES:
+            sidecar = Path(f"{candidate}{suffix}")
+            if sidecar not in checked:
+                checked.append(sidecar)
+                if os.path.lexists(sidecar):
+                    raise ValueError(
+                        "Source SQLite has companion journal/WAL sidecar "
+                        f"({sidecar.name}); export requires a closed isolated snapshot."
+                    )
+
+
 @contextmanager
 def _open_readonly_source(source):
     source = Path(source)
@@ -228,6 +245,7 @@ def _open_readonly_source(source):
                 raise ValueError(f"Failed to decompress gzip source: {error}") from error
             yield unpacked, "sqlite_gzip", hasher.hexdigest(), total
     else:
+        _reject_sqlite_sidecars(source, resolved)
         digest = _sha256_file(resolved)
         size = resolved.stat().st_size
         yield resolved, "sqlite", digest, size
@@ -733,9 +751,11 @@ def verify_exchange_bundle(bundle_dir, *, expected_path=None):
     manifest_path = bundle_root / MANIFEST
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("Bundle is incomplete: missing manifest.json.")
-    manifest = parse_strict_json(
-        manifest_path.read_text(encoding="utf-8"), label="manifest.json"
-    )
+    try:
+        manifest_text = manifest_path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("manifest.json is not valid UTF-8.") from error
+    manifest = parse_strict_json(manifest_text, label="manifest.json")
     if not isinstance(manifest, dict):
         raise ValueError("manifest.json must be a JSON object.")
     if manifest.get("format") != FORMAT or manifest.get("status") != STATUS:
@@ -762,18 +782,55 @@ def verify_exchange_bundle(bundle_dir, *, expected_path=None):
         if actual_sha != expected_sha:
             raise ValueError(f"SHA-256 mismatch for {rel_path}.")
 
-    exchange = parse_strict_json(
-        (bundle_root / EXCHANGE).read_text(encoding="utf-8"), label="exchange.json"
-    )
+    try:
+        exchange_text = (bundle_root / EXCHANGE).read_bytes().decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("exchange.json is not valid UTF-8.") from error
+    exchange = parse_strict_json(exchange_text, label="exchange.json")
     if not isinstance(exchange, dict):
         raise ValueError("exchange.json must be a JSON object.")
     if exchange.get("format") != FORMAT or exchange.get("status") != STATUS:
         raise ValueError("exchange.json format marker mismatch.")
 
+    raw_sessions = exchange.get("sessions")
+    raw_branches = exchange.get("branches")
+    raw_versions = exchange.get("versions")
+    raw_attachments = exchange.get("attachments")
+    if (
+        not isinstance(raw_sessions, list)
+        or not raw_sessions
+        or not isinstance(raw_branches, list)
+        or not isinstance(raw_versions, list)
+        or not isinstance(raw_attachments, list)
+    ):
+        raise ValueError("exchange.json top-level collections are invalid.")
+
+    sessions_by_id = {}
+    for session in raw_sessions:
+        if not isinstance(session, dict):
+            raise ValueError("Session entry must be an object.")
+        sid = _validate_safe_id(session.get("id"), label="session id")
+        if sid in sessions_by_id:
+            raise ValueError(f"Duplicate session id in exchange.json: {sid}")
+        sessions_by_id[sid] = session
+
+    branches_by_id = {}
+    for branch in raw_branches:
+        if not isinstance(branch, dict):
+            raise ValueError("Branch entry must be an object.")
+        bid = _validate_safe_id(branch.get("id"), label="branch id")
+        if bid in branches_by_id:
+            raise ValueError(f"Duplicate branch id in exchange.json: {bid}")
+        if branch.get("session_id") not in sessions_by_id:
+            raise ValueError(f"Branch {bid} references unknown session_id.")
+        branches_by_id[bid] = branch
+
     attachments_by_route = {}
-    receipt_ids = set()
-    photo_ids = set()
-    for att in exchange.get("attachments", []):
+    receipt_ids_by_session = {sid: set() for sid in sessions_by_id}
+    photo_ids_by_session = {sid: set() for sid in sessions_by_id}
+    for att in raw_attachments:
+        if not isinstance(att, dict):
+            raise ValueError("Attachment entry must be an object.")
         rel_path = att["relative_path"]
         if rel_path not in files:
             raise ValueError(f"Attachment missing from manifest files: {rel_path}")
@@ -781,30 +838,55 @@ def verify_exchange_bundle(bundle_dir, *, expected_path=None):
             raise ValueError(
                 f"Attachment digest mismatch between exchange and manifest: {rel_path}"
             )
-        attachments_by_route[att["route_key"]] = att
+        sid = att.get("session_id")
+        if sid not in sessions_by_id:
+            raise ValueError(f"Attachment {rel_path} references unknown session_id.")
+        route_key = att.get("route_key")
+        if not isinstance(route_key, str) or route_key in attachments_by_route:
+            raise ValueError(f"Invalid or duplicate attachment route_key: {route_key!r}")
+        attachments_by_route[route_key] = att
         if att["kind"] in ("receipt_preview", "receipt_original"):
-            receipt_ids.add(att["asset_id"])
+            receipt_ids_by_session[sid].add(att["asset_id"])
         elif att["kind"] == "travel_photo":
-            photo_ids.add(att["asset_id"])
+            photo_ids_by_session[sid].add(att["asset_id"])
 
     versions_by_id = {}
-    for version in exchange.get("versions", []):
-        vid = version["id"]
+    for version in raw_versions:
+        if not isinstance(version, dict):
+            raise ValueError("Version entry must be an object.")
+        vid = _validate_safe_id(version.get("id"), label="version id")
+        if vid in versions_by_id:
+            raise ValueError(f"Duplicate version id in exchange.json: {vid}")
+        bid = version.get("branch_id")
+        sid = version.get("session_id")
+        if bid not in branches_by_id:
+            raise ValueError(f"Version {vid} references unknown branch_id: {bid}")
+        if sid != branches_by_id[bid]["session_id"]:
+            raise ValueError(f"Version {vid} session_id does not match branch {bid}.")
+        seq = version.get("seq")
+        if type(seq) is not int or seq < 1:
+            raise ValueError(f"Version {vid} has invalid seq: {seq!r}")
         versions_by_id[vid] = version
+
         plan = version["plan"]
         rel_itinerary = plan["raw_itinerary_path"]
         if rel_itinerary not in files:
             raise ValueError(f"Raw itinerary missing from manifest files: {rel_itinerary}")
-        raw_text = (bundle_root / rel_itinerary).read_text(encoding="utf-8")
-        raw_bytes = raw_text.encode("utf-8")
-        if _sha256_bytes(raw_bytes) != plan["raw_itinerary_sha256"]:
+        raw_bytes = (bundle_root / rel_itinerary).read_bytes()
+        if len(raw_bytes) != plan.get("raw_itinerary_size"):
+            raise ValueError(f"Raw itinerary size mismatch for version {vid}.")
+        if _sha256_bytes(raw_bytes) != plan.get("raw_itinerary_sha256"):
             raise ValueError(f"Raw itinerary SHA-256 mismatch for version {vid}.")
+        try:
+            raw_text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"Raw itinerary is not valid UTF-8 for version {vid}.") from error
         parsed_itinerary = parse_strict_json(raw_text, label=rel_itinerary)
         expenses, total_cents, refs = _extract_expenses_and_refs(
             parsed_itinerary,
             version_id=vid,
-            receipt_ids_set=receipt_ids,
-            photo_ids_set=photo_ids,
+            receipt_ids_set=receipt_ids_by_session[sid],
+            photo_ids_set=photo_ids_by_session[sid],
         )
         if version["expenses"] != expenses:
             raise ValueError(f"Expenses mismatch with raw itinerary JSON for version {vid}.")
@@ -813,23 +895,111 @@ def verify_exchange_bundle(bundle_dir, *, expected_path=None):
         if version["attachment_refs"] != refs:
             raise ValueError(f"Attachment refs mismatch for version {vid}.")
 
+    claimed_versions = set()
+    for bid, branch in branches_by_id.items():
+        parent_bid = branch.get("parent_branch_id")
+        fork_vid = branch.get("fork_version_id")
+        fork_source_bid = branch.get("fork_source_branch_id")
+        if parent_bid is not None:
+            if parent_bid == bid or parent_bid not in branches_by_id:
+                raise ValueError(f"Branch {bid} has invalid parent_branch_id.")
+            if branches_by_id[parent_bid]["session_id"] != branch["session_id"]:
+                raise ValueError(f"Branch {bid} parent_branch_id belongs to another session.")
+        if fork_vid is not None:
+            if fork_vid not in versions_by_id:
+                raise ValueError(f"Branch {bid} references unknown fork_version_id: {fork_vid}")
+            fork_branch = versions_by_id[fork_vid]["branch_id"]
+            if fork_source_bid != fork_branch:
+                raise ValueError(
+                    f"Branch {bid} fork_source_branch_id contradicts fork_version_id {fork_vid}."
+                )
+            if parent_bid is not None and fork_branch != parent_bid:
+                raise ValueError(
+                    f"Branch {bid} fork_version_id {fork_vid} does not belong to {parent_bid}."
+                )
+            if branches_by_id[fork_branch]["session_id"] != branch["session_id"]:
+                raise ValueError(f"Branch {bid} fork_version_id belongs to another session.")
+        elif fork_source_bid is not None:
+            raise ValueError(f"Branch {bid} has fork_source_branch_id without fork_version_id.")
+
+        branch_vids = branch.get("version_ids")
+        if not isinstance(branch_vids, list):
+            raise ValueError(f"Branch {bid} version_ids must be a list.")
+        prev_seq = 0
+        prev_vid = None
+        for idx, vid in enumerate(branch_vids):
+            if vid not in versions_by_id:
+                raise ValueError(f"Branch {bid} lists unknown version id: {vid}")
+            if vid in claimed_versions:
+                raise ValueError(f"Version {vid} is listed in multiple branches or duplicated.")
+            claimed_versions.add(vid)
+            ver = versions_by_id[vid]
+            if ver["branch_id"] != bid:
+                raise ValueError(
+                    f"Version {vid} branch_id ({ver['branch_id']}) contradicts branch {bid}."
+                )
+            if ver["seq"] <= prev_seq:
+                raise ValueError(f"Branch {bid} version_ids are not in strictly increasing seq.")
+            prev_seq = ver["seq"]
+
+            rel = ver.get("parent_relation")
+            if not isinstance(rel, dict):
+                raise ValueError(f"Version {vid} is missing parent_relation.")
+            if idx == 0:
+                if fork_vid is not None:
+                    if rel.get("kind") != "fork_version_id" or rel.get("parent_version_id") != (
+                        fork_vid
+                    ):
+                        raise ValueError(
+                            f"Version {vid} parent_relation contradicts branch {bid} fork_version."
+                        )
+                elif rel.get("kind") != "branch_root" or rel.get("parent_version_id") is not None:
+                    raise ValueError(f"Version {vid} parent_relation must be branch_root.")
+            else:
+                if (
+                    rel.get("kind") != "branch_seq_predecessor"
+                    or rel.get("parent_version_id") != prev_vid
+                ):
+                    raise ValueError(
+                        f"Version {vid} parent_relation contradicts predecessor {prev_vid}."
+                    )
+            prev_vid = vid
+
+    if claimed_versions != set(versions_by_id.keys()):
+        missing = sorted(set(versions_by_id.keys()) - claimed_versions)
+        raise ValueError(
+            f"Versions missing from their branch version_ids list: {', '.join(missing)}"
+        )
+
+    summary = manifest.get("summary")
+    if isinstance(summary, dict):
+        expected_counts = {
+            "sessions": len(sessions_by_id),
+            "branches": len(branches_by_id),
+            "versions": len(versions_by_id),
+            "attachments": len(attachments_by_route),
+        }
+        for key, actual in expected_counts.items():
+            if summary.get(key) != actual:
+                raise ValueError(f"manifest.json summary.{key} mismatch.")
+
     if expected_path is not None:
         expected = parse_strict_json(
-            Path(expected_path).read_text(encoding="utf-8"), label="expected.json"
+            Path(expected_path).read_bytes().decode("utf-8"), label="expected.json"
         )
         if exchange["source"]["database_sha256"] != expected["database_sha256"]:
             raise ValueError("Source database_sha256 does not match expected.json.")
-        sessions = {s["id"]: s for s in exchange["sessions"]}
-        if expected["session"] not in sessions:
+        if expected["session"] not in sessions_by_id:
             raise ValueError("Expected session not found in bundle.")
-        if sessions[expected["session"]]["title"] != expected["title"]:
+        if sessions_by_id[expected["session"]]["title"] != expected["title"]:
             raise ValueError("Session title does not match expected.json.")
 
-        branches = {b["id"]: b for b in exchange["branches"]}
-        main_b = branches.get(expected["main_branch"])
-        fork_b = branches.get(expected["fork_branch"])
+        main_b = branches_by_id.get(expected["main_branch"])
+        fork_b = branches_by_id.get(expected["fork_branch"])
         if not main_b or not fork_b:
             raise ValueError("Expected main or fork branch not found in bundle.")
+        if main_b["parent_branch_id"] is not None or main_b["fork_version_id"] is not None:
+            raise ValueError("Main branch must not have a parent branch or fork ancestor.")
         if main_b["version_ids"] != expected["main_versions"]:
             raise ValueError("Main branch version order does not match expected.json.")
         if fork_b["version_ids"] != expected["fork_versions"]:

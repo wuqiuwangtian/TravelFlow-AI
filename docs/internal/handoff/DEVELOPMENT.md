@@ -342,7 +342,7 @@ TRAVELFLOW_WINDOWS_TEST_PYTHON=/mnt/c/path/to/python.exe python -m unittest desk
 
 ### 第一阶段候选交换导出
 
-[候选交换导出器](../../../desktop/exchange.py) 仅使用 Python 标准库，对指定的桌面 `.sqlite` 或 `.sqlite.gz` 以只读隔离方式（`.gz` 解压至临时目录，统一 `mode=ro&immutable=1`）导出自包含目录包，供移动维护者独立读取校验。**候选格式标记**为 `format: "travelflow-desktop-exchange-candidate/0-draft"`、`status: "candidate"`、`shared_contract_version: null`；不发布正式共享契约、不修改原样例 `application_id`（保持 `0`）、不放宽已有读取器，也不读取日常个人库。
+[候选交换导出器](../../../desktop/exchange.py) 仅使用 Python 标准库，对指定的已关闭隔离 `.sqlite` 快照或 `.sqlite.gz` 以只读隔离方式（`.gz` 解压至临时目录，统一 `mode=ro&immutable=1`；若普通 `.sqlite` 存在 `-wal`／`-shm`／`-journal` 伴随日志则明确拒绝，避免静默导出旧版本）导出自包含目录包，供移动维护者独立读取校验。校验器按原始文件字节核对长度与 SHA-256 后再解码 UTF-8（保留 CRLF），并检查分支与版本的双向归属、版本唯一性及祖先关系一致性。**候选格式标记**为 `format: "travelflow-desktop-exchange-candidate/0-draft"`、`status: "candidate"`、`shared_contract_version: null`；不发布正式共享契约、不修改原样例 `application_id`（保持 `0`）、不放宽已有读取器，也不读取日常个人库。
 
 | 导出内容 | 字段来源 | 说明与保真边界 |
 | --- | --- | --- |
