@@ -339,3 +339,30 @@ TRAVELFLOW_WINDOWS_TEST_PYTHON=/mnt/c/path/to/python.exe python -m unittest desk
 测试在 WSL 的临时目录创建源库，把完整备份包传入 Windows 临时目录，由 Windows 原生进程恢复、改写样例标题并重新备份。WSL 将返回包恢复至新目录，检查新标题后重开初始源库，初始标题与文件摘要均保持原样。反向直接认领对方已使用过的库，两种模式都应拒绝。这里验的是桌面存储和归属保护，标题编辑走隔离 SQL，完整 Python／Next 业务流程由各平台桌面应用验收覆盖。
 
 本机另用临时 NTFS 文件观察到，WSL 的 `flock` 与 Windows 字节锁可以同时取得。两个新版管理器用独占创建确定第一份归属记录，随后分别核验身份；重开沿用旧记录。写入未完成时拒绝打开，稍后可重试，持续异常时保留现场。并发回归模拟两套互不排斥的锁，在第一份记录写完前启动另一请求。两边均应更新并退出旧管理器后重开。上述证据限于遵守管理协议的入口，旧脚本、其他 SQLite 工具以及网络卷的锁语义未在此次验证。
+
+### 第一阶段候选交换导出
+
+[候选交换导出器](../../../desktop/exchange.py) 仅使用 Python 标准库，对指定的桌面 `.sqlite` 或 `.sqlite.gz` 以只读隔离方式（`.gz` 解压至临时目录，统一 `mode=ro&immutable=1`）导出自包含目录包，供移动维护者独立读取校验。**候选格式标记**为 `format: "travelflow-desktop-exchange-candidate/0-draft"`、`status: "candidate"`、`shared_contract_version: null`；不发布正式共享契约、不修改原样例 `application_id`（保持 `0`）、不放宽已有读取器，也不读取日常个人库。
+
+| 导出内容 | 字段来源 | 说明与保真边界 |
+| --- | --- | --- |
+| 会话与分支 | `sessions`、`branches` | 保留稳定 ID、`parent_branch_id`、`fork_version_id`、`is_primary` 与分支下有序 `version_ids` |
+| 版本顺序与历史关系 | `versions` 按 `(branch_id, seq)` | 桌面 `versions` 表无 `parent_version_id` 列；分支首版依据 `fork_version_id` 记 `fork_version_id` 或 `branch_root`，同分支后续版本按 `seq` 记 `branch_seq_predecessor` |
+| 原始行程 JSON | `plans.itinerary` | 经严格 JSON 语法与重复键校验后，逐字节原样写入 `itineraries/<version_id>.json`；不经 Pydantic 往返，保留未知字段及缺失／`null` 差异 |
+| 各版费用与附件引用 | `plans.itinerary` 中 `expenses` 与 `recap` | 逐条保留费用原始对象，`amount_cents` 校验为非负整数（拒绝布尔）；提取 `receipt_ids`、`photos[*].id`、`cover_photo_id` 并校验引用存在 |
+| 可校验附件文件 | `receipt_assets`（`preview_data`、`original_data`）、`photo_assets`（`image_data`） | 分别导出为 `attachments/receipts/<id>.preview.bin`、`attachments/receipts/<id>.original.bin`、`attachments/travel-photos/<id>.bin`，清单记录 `route_key`、大小与 SHA-256 |
+| 入口清单 | `manifest.json` | 全部数据与附件写入落盘并校验后，最后通过 `.manifest` 原子重命名发布；中途失败或被强杀不留下可用清单 |
+
+从仓库根目录复跑导出、独立断言与单元测试：
+
+```sh
+python -m desktop.exchange export \
+  --source desktop/tests/fixtures/d1/fictional-trip.sqlite.gz \
+  --output /tmp/travelflow-d1-exchange-candidate
+python -m desktop.exchange verify \
+  --bundle /tmp/travelflow-d1-exchange-candidate \
+  --expected desktop/tests/fixtures/d1/expected.json
+python -m unittest desktop.tests.test_exchange -v
+```
+
+未覆盖项：本产物为阶段一只读候选，不是已冻结的跨端写入契约；不含 LangGraph `checkpoints`／`writes`、`chat_receipts`、`travel_preferences` 及 `workflow_*` 表；移动端独立读取回执、Android 真机运行、写入命令、冲突合并与个人主库迁移均不在本阶段覆盖范围内。
