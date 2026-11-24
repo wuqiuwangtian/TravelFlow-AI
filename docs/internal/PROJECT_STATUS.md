@@ -6,10 +6,7 @@
 
 ## 当前接续状态
 
-- 候选包首交 `5f430c6` 暂缓交移动导入。固定归档：包驱动桌面 10 场景／36 步、24 项专项、7 项契约检查测试通过；独立 Git 副本按父提交基线验证 ledger-v1 不变。原分支返修：
-  1. result-mapping.json 将部分 Android 原始值和宿主合并。按移动 `9dec892` 的逐步实读分列：EC06 错目标 Android 为 scope_mismatch，查无权限为 denied；EC07 Android 为 pending_busy；EC10 宿主付款日已提交，后续四步是 baseline_conflict，USD 为 currency，而 Android 六步均 unsupported_capability。明确规范预期、原始返回与已知偏差；成功写入的 kind 和查询的 state 及最小回执投影也须按实际入口区分。补能识别宿主／Android 误填互换的固定断言。
-  2. 从 5f430c6 干净副本移走整个候选目录，node scripts/check-contracts.mjs（含 --baseline a589448 完整提交或不带基线）仍退出 0。修正本版登记包的完整性检查，补整目录缺失的负例，并保持旧包检查通过。
-  3. 包中给出规范化 profile 名称与排序规则，但没有独立复算完整意图摘要的封装格式、控制／查询通道及固定预期摘要。用固定午餐和查询在包内提供可独立核对的规范化字节或其精确定义、各自 SHA-256 和验证入口，重排键应同摘要、改变控制字段应不同。此项防止两端都能记账却永远无法匹配意图回执。
+- 新增消费契约候选已通过桌面导入前复核。返修 c4b7c08 的整包缺失负例及固定午餐／查询四组规范化字节与摘要通过独立检查。发现移动两端重放均返回 kind=committed、replayed=true，已在交接分支修正映射与断言。移动应导入固定提交 `d193d31926fa37b9ec1e3de24a2668a041cfaa7a` 的 `contracts/expense-create-candidate/`，manifest.json SHA-256 为 `dea1f762a283456227a72438a139674c8b033e31e46874449333c3da7a865d46`。最终候选已推送 review/expense-contract-mobile，10 项契约检查、10 场景 36 步桌面向量与 24 项专项通过。main 记录交接，候选包待移动独立导入回执再评审定版。
 
 - 已接受[移动 b870ad5 单笔待发送恢复集成回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/b870ad5d4b96689fd497f339b31c75c8d4561b45/docs/internal/PROJECT_STATUS.md#android-单笔待发送恢复集成回执)。最终 API 35 构建由移动维护者实测 17/17，旧 APK 保留数据升级的提交前／后断点各自恢复为唯一一笔 8635 分；EC10 直接提交和暂存后发送均保留付款日期与阻断原因。电脑从移动固定归档冻结安装后复跑 typecheck、check:p1-bridge-command、check:p1-desktop-create、check:p1-create-boundaries，另复跑桌面 23 项专项与只读契约基线检查。电脑本轮未重跑模拟器。共同结论限隔离单笔新增；下一步准备可供双端固定导入的契约候选。
 
