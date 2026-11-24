@@ -6,9 +6,7 @@
 
 ## 当前接续状态
 
-- 待发送恢复首交 `fbd52ec` 暂缓合入。固定归档复跑 pending、executor、vectors 三个 unittest 模块共 21 项通过；额外在临时双库复现两个偏差。原分支返修：
-  1. 让查询先实际取得 not_found_at_settled_read 并延迟交付其结果，另一线程原键发送、入账并返回 confirmed，再放行旧查询。重新打开的发送记录从 confirmed 回到 verification_pending，confirmed_revision_id 变为 null。请在同一事务内防止过期结果覆盖确认，所有分支按最终持久状态返回一致结果；用确定性交错和重开读库覆盖。
-  2. 带 paid_on 的新请求开启 after_commit_before_reply 注入，接收端正常拒绝，退出码 1 且有 stdout，发送方却报告 reply_lost。按实际子进程结果区分预期中断、正常业务响应及异常退出，保留拒绝原因与原意图；故障注入路径应沿用调用者权限，不能回落到默认可写身份。补合法拒绝及无写权限两项负例，核对接收端零新增。
+- 桌面隔离发送方返修 `af17ac4` 已通过复核。干净归档 23 项 pending／executor／vectors 专项通过；独立复现交错并重开读库，迟到的缺失查询未撤销确认，实际仍是一笔 8635 分。开启故障注入时带日期请求与无写权限请求分别保留 unsupported_capability 和 unauthorized，原输入完整、接收端无新增。集成另据移动评审线索复现“查询缺失覆盖能力阻断”，已保留原未发送原因并补回归。复跑入口：`python -m unittest desktop.tests.test_expense_pending desktop.tests.test_expense_executor desktop.tests.test_expense_vectors`。移动 4f5c32e 记录 Android 状态与升级返修，待移动固定回执；此阶段仍使用本机两份隔离库。
 
 - 已接受[移动 9dec892 逐项回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/9dec892de2ff896cb4128479db4cffbdbbfd51c7/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)。从双方固定归档复跑桌面 fb7ecc0 的 10 场景 36 步，移动宿主的固定新增、边界及 17 步补测入口。EC10 宿主接受显式付款日并推进版本，随后四次旧基线冲突，USD 返回 currency；桌面与 Android 候选均拒绝这六项。Android 结论取自移动维护者 API 35 回执，本轮未重跑模拟器。EC07/EC10 的待核实输入跨进程保留仍缺覆盖，共享写入版本待评审。
 
