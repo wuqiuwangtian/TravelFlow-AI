@@ -7,10 +7,13 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
+import desktop.expense_pending as expense_pending
 from desktop.expense_executor import (
     CallerContext,
     canonicalize_intent,
@@ -376,6 +379,126 @@ class ExpensePendingRecoveryTests(unittest.TestCase):
             {"ok": False, "error": "invalid_sender_store"},
         )
         self.assertEqual(unrelated.read_bytes(), before)
+
+    def test_late_stale_reconcile_never_downgrades_confirmed_state(self):
+        raw_bytes = json.dumps(self.fixture["command"], ensure_ascii=False).encode("utf-8")
+        self.assertTrue(stage_pending_operation(self.sender_db, raw_bytes)["ok"])
+
+        lookup_done = threading.Event()
+        allow_stale_finish = threading.Event()
+        real_lookup = expense_pending.lookup_receipt
+        stale_result: list[dict] = []
+
+        def delayed_lookup(db_path, raw_query, *, caller):
+            result = real_lookup(db_path, raw_query, caller=caller)
+            self.assertEqual(result["state"], "not_found_at_settled_read")
+            lookup_done.set()
+            assert allow_stale_finish.wait(timeout=10)
+            return result
+
+        def run_stale_reconcile():
+            stale_result.append(
+                reconcile_pending_operation(
+                    self.sender_db,
+                    self.receiver_db,
+                    caller=self.caller,
+                    operation_id=self.op_id,
+                )
+            )
+
+        with patch.object(expense_pending, "lookup_receipt", delayed_lookup):
+            worker = threading.Thread(target=run_stale_reconcile)
+            worker.start()
+            self.assertTrue(lookup_done.wait(timeout=10))
+
+            # Meanwhile, another caller sends, commits on receiver, and confirms sender.
+            sent = send_pending_operation(
+                self.sender_db,
+                self.receiver_db,
+                caller=self.caller,
+                operation_id=self.op_id,
+            )
+            self.assertTrue(sent["ok"])
+            self.assertEqual(sent["record"]["delivery_state"], "confirmed")
+            committed_rev = sent["record"]["confirmed_revision_id"]
+            self.assertTrue(committed_rev)
+
+            # Release the stale not_found_at_settled_read reconcile.
+            allow_stale_finish.set()
+            worker.join(timeout=10)
+
+        self.assertEqual(len(stale_result), 1)
+        self.assertTrue(stale_result[0]["ok"])
+        self.assertEqual(stale_result[0]["record"]["delivery_state"], "confirmed")
+        self.assertEqual(stale_result[0]["record"]["confirmed_revision_id"], committed_rev)
+
+        # Reopen sender DB in a fresh process: confirmed state & revision must survive intact.
+        rc_insp, reopened = _run_sender_cli(
+            "inspect", "--sender-db", str(self.sender_db), "--operation-id", self.op_id
+        )
+        self.assertEqual(rc_insp, 0)
+        self.assertEqual(reopened["record"]["delivery_state"], "confirmed")
+        self.assertEqual(reopened["record"]["confirmed_revision_id"], committed_rev)
+        self.assertIsNone(reopened["record"]["last_error"])
+
+        receiver = _read_receiver_summary(self.receiver_db)
+        self.assertEqual(len(receiver["expenses"]), 1)
+        self.assertEqual(len(receiver["receipts"]), 1)
+        self.assertEqual(len(receiver["outbox"]), 1)
+
+    def test_fault_path_preserves_business_rejection_and_caller_permissions(self):
+        # Case 1: explicit paid_on rejected before commit even with after_commit_before_reply fault.
+        cmd_paid = json.loads(json.dumps(self.fixture["command"]))
+        cmd_paid["payload"]["paid_on"] = "2026-11-23"
+        raw_paid = json.dumps(cmd_paid, ensure_ascii=False).encode("utf-8")
+        self.assertTrue(stage_pending_operation(self.sender_db, raw_paid)["ok"])
+
+        res_paid = send_pending_operation(
+            self.sender_db,
+            self.receiver_db,
+            caller=self.caller,
+            operation_id=self.op_id,
+            fault="after_commit_before_reply",
+        )
+        self.assertFalse(res_paid["ok"])
+        self.assertEqual(res_paid["error"], "unsupported_capability")
+        self.assertEqual(res_paid["receiver_raw"], {"ok": False, "error": "unsupported_capability"})
+        self.assertEqual(res_paid["record"]["delivery_state"], "unsent")
+        self.assertEqual(res_paid["record"]["last_error"], "unsupported_capability")
+        self.assertEqual(res_paid["record"]["raw_input_json"].encode("utf-8"), raw_paid)
+
+        receiver_after_paid = _read_receiver_summary(self.receiver_db)
+        self.assertEqual(receiver_after_paid["expenses"], [])
+        self.assertEqual(receiver_after_paid["receipts"], [])
+        self.assertEqual(receiver_after_paid["outbox"], [])
+
+        # Case 2: caller with can_write=False under fault injection must be rejected unauthorized.
+        s_db2 = self.folder / "sender-nowrite.sqlite"
+        r_db2 = self.folder / "receiver-nowrite.sqlite"
+        init_sender_store(s_db2)
+        init_isolated_store(r_db2)
+        raw_lunch = json.dumps(self.fixture["command"], ensure_ascii=False).encode("utf-8")
+        self.assertTrue(stage_pending_operation(s_db2, raw_lunch)["ok"])
+
+        readonly_caller = CallerContext.for_fixture(can_write=False)
+        res_unauth = send_pending_operation(
+            s_db2,
+            r_db2,
+            caller=readonly_caller,
+            operation_id=self.op_id,
+            fault="after_commit_before_reply",
+        )
+        self.assertFalse(res_unauth["ok"])
+        self.assertEqual(res_unauth["error"], "unauthorized")
+        self.assertEqual(res_unauth["receiver_raw"], {"ok": False, "error": "unauthorized"})
+        self.assertEqual(res_unauth["record"]["delivery_state"], "verification_pending")
+        self.assertEqual(res_unauth["record"]["last_error"], "unauthorized")
+        self.assertIsNone(res_unauth["record"]["confirmed_revision_id"])
+
+        receiver_after_unauth = _read_receiver_summary(r_db2)
+        self.assertEqual(receiver_after_unauth["expenses"], [])
+        self.assertEqual(receiver_after_unauth["receipts"], [])
+        self.assertEqual(receiver_after_unauth["outbox"], [])
 
 
 if __name__ == "__main__":

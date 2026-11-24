@@ -280,12 +280,25 @@ def _update_pending_state(
     raw_response: dict | None,
     confirmed_revision_id: str | None = None,
     confirmed_effect: str | None = None,
-) -> dict:
+) -> tuple[dict, bool]:
+    """Update pending state atomically; never downgrade or overwrite a confirmed record."""
     now = datetime.now(UTC).isoformat()
     raw_json = json.dumps(raw_response, ensure_ascii=False) if raw_response is not None else None
     with closing(_connect_sender(resolved_sender, read_only=False)) as db:
         db.execute("BEGIN IMMEDIATE")
         try:
+            current = db.execute(
+                "SELECT * FROM pending_operations "
+                "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            ).fetchone()
+            if current is None:
+                db.execute("ROLLBACK")
+                raise Rejected("pending_not_found")
+            if current["delivery_state"] == "confirmed":
+                db.execute("ROLLBACK")
+                return _row_to_pending_dict(current), True
+
             db.execute(
                 "UPDATE pending_operations "
                 "SET delivery_state = ?, last_error = ?, last_raw_response_json = ?, "
@@ -309,7 +322,7 @@ def _update_pending_state(
                 (dataset_id, source_device_id, operation_id),
             ).fetchone()
             db.execute("COMMIT")
-            return _row_to_pending_dict(row)
+            return _row_to_pending_dict(row), False
         except BaseException:
             if db.in_transaction:
                 db.execute("ROLLBACK")
@@ -327,6 +340,48 @@ def _receipt_matches_pending(receipt: dict | None, pending: dict) -> bool:
         and isinstance(receipt.get("result_revision_id"), str)
         and bool(receipt["result_revision_id"])
     )
+
+
+def _caller_allows_default_cli_write(caller: CallerContext, operation: dict) -> bool:
+    return (
+        caller.can_write
+        and operation["dataset_id"] == caller.dataset_id
+        and operation["dataset_id"] in caller.authorized_datasets
+        and operation["source_device_id"] == caller.device_id
+        and operation["source_device_id"] in caller.authorized_devices
+    )
+
+
+def _finalize_pending_update(
+    resolved_sender: Path,
+    *,
+    caller: CallerContext,
+    operation_id: str,
+    delivery_state: str,
+    last_error: str | None,
+    receiver_raw: dict,
+    confirmed_revision_id: str | None = None,
+    confirmed_effect: str | None = None,
+) -> dict:
+    updated, already_confirmed = _update_pending_state(
+        resolved_sender,
+        dataset_id=caller.dataset_id,
+        source_device_id=caller.device_id,
+        operation_id=operation_id,
+        delivery_state=delivery_state,
+        last_error=last_error,
+        raw_response=receiver_raw,
+        confirmed_revision_id=confirmed_revision_id,
+        confirmed_effect=confirmed_effect,
+    )
+    if already_confirmed or updated["delivery_state"] == "confirmed":
+        return {"ok": True, "receiver_raw": receiver_raw, "record": updated}
+    return {
+        "ok": False,
+        "error": last_error or "unknown_error",
+        "receiver_raw": receiver_raw,
+        "record": updated,
+    }
 
 
 def send_pending_operation(
@@ -356,7 +411,7 @@ def send_pending_operation(
         return {"ok": True, "receiver_raw": None, "record": pending}
 
     # Mark verification_pending before transmission so even a crash mid-send preserves intent.
-    pending = _update_pending_state(
+    pending, already_confirmed = _update_pending_state(
         resolved_sender,
         dataset_id=caller.dataset_id,
         source_device_id=caller.device_id,
@@ -365,9 +420,11 @@ def send_pending_operation(
         last_error="in_flight",
         raw_response=pending["last_raw_response"],
     )
+    if already_confirmed:
+        return {"ok": True, "receiver_raw": None, "record": pending}
 
     raw_bytes = pending["raw_input_json"].encode("utf-8")
-    if fault is not None:
+    if fault is not None and _caller_allows_default_cli_write(caller, pending["operation"]):
         with tempfile.TemporaryDirectory(prefix="p2-pending-send-") as tmp:
             cmd_file = Path(tmp) / "command.json"
             cmd_file.write_bytes(raw_bytes)
@@ -393,66 +450,79 @@ def send_pending_operation(
                 timeout=10,
                 check=False,
             )
-            receiver_raw = {
-                "exit_code": proc.returncode,
-                "stdout_empty": proc.stdout == b"",
-                "fault": fault,
-            }
-        updated = _update_pending_state(
-            resolved_sender,
-            dataset_id=caller.dataset_id,
-            source_device_id=caller.device_id,
-            operation_id=operation_id,
-            delivery_state="verification_pending",
-            last_error="reply_lost",
-            raw_response=receiver_raw,
-        )
-        return {"ok": False, "error": "reply_lost", "receiver_raw": receiver_raw, "record": updated}
+            if proc.returncode == 86 and proc.stdout == b"":
+                receiver_raw = {
+                    "exit_code": proc.returncode,
+                    "stdout_empty": True,
+                    "fault": fault,
+                }
+                return _finalize_pending_update(
+                    resolved_sender,
+                    caller=caller,
+                    operation_id=operation_id,
+                    delivery_state="verification_pending",
+                    last_error="reply_lost",
+                    receiver_raw=receiver_raw,
+                )
+            parsed_raw = None
+            if proc.stdout:
+                try:
+                    candidate = json.loads(proc.stdout.decode("utf-8"))
+                    if isinstance(candidate, dict):
+                        parsed_raw = candidate
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    parsed_raw = None
+            if parsed_raw is None:
+                receiver_raw = {
+                    "exit_code": proc.returncode,
+                    "stdout": proc.stdout.decode("utf-8", errors="replace"),
+                    "stderr": proc.stderr.decode("utf-8", errors="replace"),
+                    "fault": fault,
+                }
+                return _finalize_pending_update(
+                    resolved_sender,
+                    caller=caller,
+                    operation_id=operation_id,
+                    delivery_state="verification_pending",
+                    last_error=f"subprocess_exit_{proc.returncode}",
+                    receiver_raw=receiver_raw,
+                )
+            receiver_raw = parsed_raw
+    else:
+        receiver_raw = execute_command(receiver_db, raw_bytes, caller=caller)
 
-    receiver_raw = execute_command(receiver_db, raw_bytes, caller=caller)
     if receiver_raw.get("ok") is True and receiver_raw.get("state") == "committed":
         receipt = receiver_raw.get("receipt")
         if _receipt_matches_pending(receipt, pending):
-            updated = _update_pending_state(
+            return _finalize_pending_update(
                 resolved_sender,
-                dataset_id=caller.dataset_id,
-                source_device_id=caller.device_id,
+                caller=caller,
                 operation_id=operation_id,
                 delivery_state="confirmed",
                 last_error=None,
-                raw_response=receiver_raw,
+                receiver_raw=receiver_raw,
                 confirmed_revision_id=receipt["result_revision_id"],
                 confirmed_effect=receipt.get("effect"),
             )
-            return {"ok": True, "receiver_raw": receiver_raw, "record": updated}
-        updated = _update_pending_state(
+        return _finalize_pending_update(
             resolved_sender,
-            dataset_id=caller.dataset_id,
-            source_device_id=caller.device_id,
+            caller=caller,
             operation_id=operation_id,
             delivery_state="verification_pending",
             last_error="intent_conflict",
-            raw_response=receiver_raw,
+            receiver_raw=receiver_raw,
         )
-        return {
-            "ok": False,
-            "error": "intent_conflict",
-            "receiver_raw": receiver_raw,
-            "record": updated,
-        }
 
     raw_error = receiver_raw.get("error") or "unknown_error"
     next_state = "unsent" if raw_error == "unsupported_capability" else "verification_pending"
-    updated = _update_pending_state(
+    return _finalize_pending_update(
         resolved_sender,
-        dataset_id=caller.dataset_id,
-        source_device_id=caller.device_id,
+        caller=caller,
         operation_id=operation_id,
         delivery_state=next_state,
         last_error=raw_error,
-        raw_response=receiver_raw,
+        receiver_raw=receiver_raw,
     )
-    return {"ok": False, "error": raw_error, "receiver_raw": receiver_raw, "record": updated}
 
 
 def reconcile_pending_operation(
@@ -491,59 +561,46 @@ def reconcile_pending_operation(
     if receiver_raw.get("ok") is True and receiver_raw.get("state") == "committed":
         receipt = receiver_raw.get("receipt")
         if _receipt_matches_pending(receipt, pending):
-            updated = _update_pending_state(
+            return _finalize_pending_update(
                 resolved_sender,
-                dataset_id=caller.dataset_id,
-                source_device_id=caller.device_id,
+                caller=caller,
                 operation_id=operation_id,
                 delivery_state="confirmed",
                 last_error=None,
-                raw_response=receiver_raw,
+                receiver_raw=receiver_raw,
                 confirmed_revision_id=receipt["result_revision_id"],
                 confirmed_effect=receipt.get("effect"),
             )
-            return {"ok": True, "receiver_raw": receiver_raw, "record": updated}
-        updated = _update_pending_state(
+        return _finalize_pending_update(
             resolved_sender,
-            dataset_id=caller.dataset_id,
-            source_device_id=caller.device_id,
+            caller=caller,
             operation_id=operation_id,
             delivery_state="verification_pending",
             last_error="intent_conflict",
-            raw_response=receiver_raw,
+            receiver_raw=receiver_raw,
         )
-        return {
-            "ok": False,
-            "error": "intent_conflict",
-            "receiver_raw": receiver_raw,
-            "record": updated,
-        }
 
     if receiver_raw.get("ok") is True:
         state = receiver_raw.get("state")
         reason = receiver_raw.get("reason") or state or "unknown"
-        updated = _update_pending_state(
+        return _finalize_pending_update(
             resolved_sender,
-            dataset_id=caller.dataset_id,
-            source_device_id=caller.device_id,
+            caller=caller,
             operation_id=operation_id,
             delivery_state="verification_pending",
             last_error=reason,
-            raw_response=receiver_raw,
+            receiver_raw=receiver_raw,
         )
-        return {"ok": False, "error": reason, "receiver_raw": receiver_raw, "record": updated}
 
     raw_error = receiver_raw.get("error") or "unknown_error"
-    updated = _update_pending_state(
+    return _finalize_pending_update(
         resolved_sender,
-        dataset_id=caller.dataset_id,
-        source_device_id=caller.device_id,
+        caller=caller,
         operation_id=operation_id,
         delivery_state="verification_pending",
         last_error=raw_error,
-        raw_response=receiver_raw,
+        receiver_raw=receiver_raw,
     )
-    return {"ok": False, "error": raw_error, "receiver_raw": receiver_raw, "record": updated}
 
 
 def main(argv: list[str] | None = None) -> int:
