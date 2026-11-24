@@ -6,7 +6,9 @@
 
 ## 当前接续状态
 
-- 共同样例返修 `fb7ecc0c145486e761567ffc11fdce9198cae907` 已接受。从干净归档复跑 10 个场景、36 步及 16 项专项；独立注入多写一分、拒绝时夹带回执，分别使 EC01、EC06 以状态 1 失败。输入报告区分内存中可重用与 SQLite 重开后的证据，未提交输入跨重启保留待验。样例路径 `backend/tests/fixtures/p1_expense_create_vectors.json`，SHA-256 为 `2679ab4a3461be7b039a0686d6436640db32e4bbc1af700bd9f565a3a7e76bcb`。移动 `0b43cff` 的集成记录报告 API 35 的 14 个原生边界场景通过；与本套共同样例逐项核对仍待回执，本轮未复跑 Android。
+- 已接受[移动 9dec892 逐项回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/9dec892de2ff896cb4128479db4cffbdbbfd51c7/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)。从双方固定归档复跑桌面 fb7ecc0 的 10 场景 36 步，移动宿主的固定新增、边界及 17 步补测入口。EC10 宿主接受显式付款日并推进版本，随后四次旧基线冲突，USD 返回 currency；桌面与 Android 候选均拒绝这六项。Android 结论取自移动维护者 API 35 回执，本轮未重跑模拟器。EC07/EC10 的待核实输入跨进程保留仍缺覆盖，共享写入版本待评审。
+
+- 共同样例返修 `fb7ecc0c145486e761567ffc11fdce9198cae907` 已接受。从干净归档复跑 10 个场景、36 步及 16 项专项；独立注入多写一分、拒绝时夹带回执，分别使 EC01、EC06 以状态 1 失败。输入报告区分内存中可重用与 SQLite 重开后的证据，未提交输入跨重启保留待验。样例路径 `backend/tests/fixtures/p1_expense_create_vectors.json`，SHA-256 为 `2679ab4a3461be7b039a0686d6436640db32e4bbc1af700bd9f565a3a7e76bcb`。移动 `0b43cff` 的集成记录报告 API 35 的 14 个原生边界场景通过；后续逐项回执见上条。
 
 - 第二阶段桌面候选已形成：[新增消费的输入、回执与验收表](P1_CROSS_REPO_REVIEW.md#15-第二阶段桌面候选新增一笔消费)。6 项新检查与 36 项既有命令语义检查通过。独立 WAL 临时库已实测子进程在 COMMIT 前退出时只保留初始版本，提交后回包前退出时可重开读到完整四类记录；两项中断检查与上述 42 项合跑通过。执行器后续结果见上条。
 
