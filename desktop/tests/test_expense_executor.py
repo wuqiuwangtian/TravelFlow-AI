@@ -67,6 +67,33 @@ class ExpenseExecutorTests(unittest.TestCase):
             "utf-8"
         )
 
+    def test_contended_lookup_is_unsettled_and_write_can_retry(self):
+        before = _read_tables(self.db_path)
+        with closing(sqlite3.connect(self.db_path)) as writer:
+            writer.execute("BEGIN IMMEDIATE")
+            self.assertEqual(lookup_receipt(self.db_path, self.query_bytes, caller=self.caller),
+                             {"ok": True, "state": "unknown", "reason": "storage_busy"})
+            self.assertEqual(execute_command(self.db_path, self.command_bytes, caller=self.caller),
+                             {"ok": False, "error": "storage_busy"})
+        self.assertEqual(_read_tables(self.db_path), before)
+        self.assertEqual(lookup_receipt(self.db_path, self.query_bytes, caller=self.caller)["state"],
+                         "not_found_at_settled_read")
+        written = execute_command(self.db_path, self.command_bytes, caller=self.caller)
+        self.assertEqual(lookup_receipt(self.db_path, self.query_bytes, caller=self.caller)["receipt"],
+                         written["receipt"])
+
+    def test_wrong_target_is_rejected_equally_for_new_and_committed_keys(self):
+        self.assertTrue(execute_command(self.db_path, self.command_bytes, caller=self.caller)["ok"])
+        before = _read_tables(self.db_path)
+        for field in ("travel_id", "branch_id"):
+            for key in ("fixture-op-lunch", "fixture-fresh"):
+                cmd = json.loads(self.command_bytes)
+                cmd["target"][field] = "fixture-other"
+                cmd["operation"]["operation_id"] = key
+                result = execute_command(self.db_path, json.dumps(cmd).encode(), caller=self.caller)
+                self.assertEqual(result, {"ok": False, "error": "unauthorized"})
+        self.assertEqual(_read_tables(self.db_path), before)
+
     def test_canonical_encoding_and_declared_capabilities(self):
         self.assertEqual(SUPPORTED_CAPABILITIES["canonical_profile"], CANONICAL_PROFILE)
         self.assertEqual(SUPPORTED_CAPABILITIES["commands"], ("expense.create",))
@@ -123,7 +150,7 @@ class ExpenseExecutorTests(unittest.TestCase):
 
         # Lookup reports not_found before retry.
         looked = lookup_receipt(self.db_path, self.query_bytes, caller=self.caller)
-        self.assertEqual(looked, {"ok": True, "state": "not_found", "receipt": None})
+        self.assertEqual(looked, {"ok": True, "state": "not_found_at_settled_read", "receipt": None})
 
         # Retrying the same command succeeds exactly once.
         retried = execute_command(self.db_path, self.command_bytes, caller=self.caller)

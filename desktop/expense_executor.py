@@ -8,7 +8,6 @@ import json
 import os
 import re
 import sqlite3
-import time
 import uuid
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -489,18 +488,25 @@ def _validate_existing_store(db_path: str | Path, *, expected_dataset_id: str) -
     return resolved
 
 
-def _connect_existing(resolved: Path, *, read_only: bool) -> sqlite3.Connection:
-    mode = "ro" if read_only else "rw"
+def _connect_existing(resolved: Path, *, timeout: float) -> sqlite3.Connection:
     conn = sqlite3.connect(
-        f"{resolved.as_uri()}?mode={mode}", uri=True, timeout=10.0, isolation_level=None
+        f"{resolved.as_uri()}?mode=rw", uri=True, timeout=timeout, isolation_level=None
     )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA trusted_schema=OFF")
-    conn.execute("PRAGMA busy_timeout=10000")
-    if not read_only:
-        conn.execute("PRAGMA synchronous=FULL")
-        conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=FULL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _reserve_store(db: sqlite3.Connection) -> bool:
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        return True
+    except sqlite3.OperationalError as error:
+        if error.sqlite_errorcode & 0xFF in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+            return False
+        raise
 
 
 def init_isolated_store(
@@ -602,7 +608,10 @@ def lookup_receipt(db_path: str | Path, raw_query: bytes, *, caller: CallerConte
     except Rejected as error:
         return {"ok": False, "error": error.code}
 
-    with closing(_connect_existing(resolved, read_only=True)) as db:
+    # Reserve a settled snapshot before claiming an operation is absent.
+    with closing(_connect_existing(resolved, timeout=0.0)) as db:
+        if not _reserve_store(db):
+            return {"ok": True, "state": "unknown", "reason": "storage_busy"}
         row = db.execute(
             "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
             "intent_sha256, effect, result_revision_id, travel_id, branch_id, entity_id "
@@ -611,19 +620,8 @@ def lookup_receipt(db_path: str | Path, raw_query: bytes, *, caller: CallerConte
             (op["dataset_id"], op["source_device_id"], op["operation_id"]),
         ).fetchone()
     if row is None:
-        return {"ok": True, "state": "not_found", "receipt": None}
+        return {"ok": True, "state": "not_found_at_settled_read", "receipt": None}
     return {"ok": True, "state": "committed", "receipt": _format_receipt_row(row)}
-
-
-def _begin_immediate_with_retry(db: sqlite3.Connection, *, retries: int = 20) -> None:
-    for attempt in range(retries):
-        try:
-            db.execute("BEGIN IMMEDIATE")
-            return
-        except sqlite3.OperationalError as error:
-            if "locked" not in str(error).lower() or attempt == retries - 1:
-                raise
-            time.sleep(0.02 * (attempt + 1))
 
 
 def execute_command(
@@ -650,9 +648,19 @@ def execute_command(
     target = command["target"]
     payload = command["payload"]
 
-    with closing(_connect_existing(resolved, read_only=False)) as db:
-        _begin_immediate_with_retry(db)
+    with closing(_connect_existing(resolved, timeout=1.0)) as db:
+        if not _reserve_store(db):
+            return {"ok": False, "error": "storage_busy"}
         try:
+            branch = db.execute(
+                "SELECT head_revision_id FROM branches "
+                "WHERE dataset_id = ? AND travel_id = ? AND branch_id = ?",
+                (op["dataset_id"], target["travel_id"], target["branch_id"]),
+            ).fetchone()
+            if branch is None:
+                db.execute("ROLLBACK")
+                return {"ok": False, "error": "unauthorized"}
+
             existing = db.execute(
                 "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
                 "intent_sha256, canonical_intent_json, effect, result_revision_id, "
@@ -681,15 +689,6 @@ def execute_command(
             except Rejected as error:
                 db.execute("ROLLBACK")
                 return {"ok": False, "error": error.code}
-
-            branch = db.execute(
-                "SELECT head_revision_id FROM branches "
-                "WHERE dataset_id = ? AND travel_id = ? AND branch_id = ?",
-                (op["dataset_id"], target["travel_id"], target["branch_id"]),
-            ).fetchone()
-            if branch is None:
-                db.execute("ROLLBACK")
-                return {"ok": False, "error": "target_not_found"}
 
             current_head = branch["head_revision_id"]
             if current_head != command["expected_revision_id"]:

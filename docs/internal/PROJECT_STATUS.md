@@ -6,6 +6,8 @@
 
 ## 当前接续状态
 
+- 第二阶段[双方宿主边界对照](P1_CROSS_REPO_REVIEW.md#16-新增消费桌面执行与移动宿主的边界对照)已复跑。桌面修正争锁时的回执状态和目标作用域检查顺序，22 项桌面与 44 项后端专项通过，发布契约基线检查通过。移动宿主固定 5783ba5；Android 新一轮能力边界回执待核。
+
 - 2026-11-24 桌面隔离执行器已验收。返修 `d46f638` 的 9 项测试从干净归档通过，覆盖拒绝已有库、未知行程关联、2000 笔上限及满额后的原键重放。集成时另复现并修复主文件缺失时覆盖孤立 SQLite 伴随文件的问题。根目录运行 `python -m unittest desktop.tests.test_expense_executor desktop.tests.test_exchange`（20 项），以及后端 pytest 显式运行 p1_sqlite_commit_boundary_review.py、p1_expense_create_review.py、p1_command_semantics_review.py（44 项），均通过。电脑另从移动 `e5530a7` 的归档冻结安装后复跑 `node scripts/check-p1-desktop-expense-create.mjs`，两种中断与头推进后重放均通过。移动返修 `95030e6` 已集成到 [移动 main 5783ba5 的验收记录](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/5783ba5/docs/internal/PROJECT_STATUS.md#2026-11-24-android-固定新增消费返修集成验收)。移动侧报告 API 35 模拟器 11 个场景通过，同键异意图恢复保留冲突，12 项历史字段逐版一致。电脑侧已核对固定提交与回执，未重跑模拟器。写入契约仍待跨端能力与回执边界对齐。
 
 - 第二阶段桌面候选已形成：[新增消费的输入、回执与验收表](P1_CROSS_REPO_REVIEW.md#15-第二阶段桌面候选新增一笔消费)。6 项新检查与 36 项既有命令语义检查通过。独立 WAL 临时库已实测子进程在 COMMIT 前退出时只保留初始版本，提交后回包前退出时可重开读到完整四类记录；两项中断检查与上述 42 项合跑通过。执行器后续结果见上条。

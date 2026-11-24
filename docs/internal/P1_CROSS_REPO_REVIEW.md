@@ -563,3 +563,17 @@ P1_CANONICAL_CASES="$mobile_review/docs/internal/fixtures/p1-canonical-cases.jso
 [桌面检查](../../backend/tests/p1_expense_create_review.py)实测命令／查询编码、控制字段差异、金额边界，以及现有领域函数的金额与实体 ID 映射。旧入口把 request_id 当实体 ID，且模型无独立 currency／paid_on 字段。直接套用旧入口会混淆两个 ID，部分输入还会丢字段；接收适配须显式处理不支持的能力。本轮限定 CNY、paid_on=null 的样例，保持原意图完整。上表中的事务、回执恢复和对端确认仍需持久化执行器验证。
 
 桌面复跑：在仓库根目录运行 `backend/.venv/bin/python -m pytest -q -c backend/pyproject.toml backend/tests/p1_expense_create_review.py backend/tests/p1_command_semantics_review.py`。移动当前工作可继续；待其可用后再从本提交取相同样例独立复核。获得双方固定提交和返回值后再决定是否分配共享写入版本。
+
+## 16. 新增消费：桌面执行与移动宿主的边界对照
+
+桌面修正前基线 `ee30f49`，移动宿主固定 `5783ba5`。均使用虚构身份和隔离 SQLite。桌面新增两项回归：占有写锁时查询未提交操作，以及用已提交／全新的键向错误旅行或分支提交。两项在旧桌面实现分别得到 not_found 与可区分的 intent_conflict，修正后通过。
+
+| 情况 | 桌面候选与移动宿主的行为 | 联合验收边界 |
+| --- | --- | --- |
+| 回执查询时另一连接持有写锁 | 两端均返回 unknown / storage_busy，稳定读取无记录才返回 not_found_at_settled_read。查询只观察业务记录；桌面需能对已认领的可写实验库取得短暂事务保留锁 | 这两种结果都保留原操作键和意图；查不到只能描述该次读取，不能清除待核实记录 |
+| 写入争锁 | 桌面限时等待 1 秒后返回 storage_busy，移动宿主争锁可立即返回 storage_busy。锁释放后可用原键重试 | 等待时长是实现选择；同键并发最终只能写入一次 |
+| 身份或写入目标不匹配 | 桌面 unauthorized、移动宿主 denied。写入在查回执前确认目标旅行与分支，已提交键与新键均拒绝 | 本轮只对齐拒绝语义。移动宿主支持额外授权的查询来源，双方共同样例只查询本设备操作 |
+| 满额与重放 | 桌面满 2000 笔拒绝新建为 expense_limit_exceeded；移动宿主 planIntent 的同一限制为 expense_count。两端已提交重放先查回执 | 本轮桌面执行满额回归；此处移动宿主上限按固定源码核对，Android 1999→2000 等实测待移动回执 |
+| 字段与持久确认 | 桌面候选支持 CNY、未知付款日、无行程日／活动／票据／预算关联。成功查询可取原结果版本；移动宿主查询投影只有效果与版本 | 共同输入沿用第 15 节。恢复要核实完整原意图（可原键重放）；跨端错误名、超出共同范围的字段和网络回执尚未定版 |
+
+复跑：桌面根目录运行 `python -m unittest desktop.tests.test_expense_executor desktop.tests.test_exchange`。移动宿主从上述固定提交的干净归档冻结安装依赖，分别运行 `node scripts/check-p1-desktop-expense-create.mjs` 和 `node scripts/check-p1-store.mjs`。本轮两端宿主均已复跑；Android 原生场景由移动工作单独立跟进。
