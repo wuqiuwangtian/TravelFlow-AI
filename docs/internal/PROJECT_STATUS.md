@@ -6,6 +6,10 @@
 
 ## 当前接续状态
 
+- 待发送恢复首交 `fbd52ec` 暂缓合入。固定归档复跑 pending、executor、vectors 三个 unittest 模块共 21 项通过；额外在临时双库复现两个偏差。原分支返修：
+  1. 让查询先实际取得 not_found_at_settled_read 并延迟交付其结果，另一线程原键发送、入账并返回 confirmed，再放行旧查询。重新打开的发送记录从 confirmed 回到 verification_pending，confirmed_revision_id 变为 null。请在同一事务内防止过期结果覆盖确认，所有分支按最终持久状态返回一致结果；用确定性交错和重开读库覆盖。
+  2. 带 paid_on 的新请求开启 after_commit_before_reply 注入，接收端正常拒绝，退出码 1 且有 stdout，发送方却报告 reply_lost。按实际子进程结果区分预期中断、正常业务响应及异常退出，保留拒绝原因与原意图；故障注入路径应沿用调用者权限，不能回落到默认可写身份。补合法拒绝及无写权限两项负例，核对接收端零新增。
+
 - 已接受[移动 9dec892 逐项回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/9dec892de2ff896cb4128479db4cffbdbbfd51c7/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)。从双方固定归档复跑桌面 fb7ecc0 的 10 场景 36 步，移动宿主的固定新增、边界及 17 步补测入口。EC10 宿主接受显式付款日并推进版本，随后四次旧基线冲突，USD 返回 currency；桌面与 Android 候选均拒绝这六项。Android 结论取自移动维护者 API 35 回执，本轮未重跑模拟器。EC07/EC10 的待核实输入跨进程保留仍缺覆盖，共享写入版本待评审。
 
 - 共同样例返修 `fb7ecc0c145486e761567ffc11fdce9198cae907` 已接受。从干净归档复跑 10 个场景、36 步及 16 项专项；独立注入多写一分、拒绝时夹带回执，分别使 EC01、EC06 以状态 1 失败。输入报告区分内存中可重用与 SQLite 重开后的证据，未提交输入跨重启保留待验。样例路径 `backend/tests/fixtures/p1_expense_create_vectors.json`，SHA-256 为 `2679ab4a3461be7b039a0686d6436640db32e4bbc1af700bd9f565a3a7e76bcb`。移动 `0b43cff` 的集成记录报告 API 35 的 14 个原生边界场景通过；后续逐项回执见上条。
