@@ -6,7 +6,8 @@
 
 本候选仅覆盖两端已验证的**单笔 CNY 新增消费**（`expense.create`）与**独立回执查询**（`receipt.lookup`）：
 
-- 规范化编码：`p1-host-intent-c14n-1`（严格 RFC 8259 UTF-8、无重复键、精确整数无浮点舍入、对象键按 UTF-16BE 码元排序、紧凑 UTF-8、≤ 65536 字节）
+- 规范化编码：`p1-host-intent-c14n-1`（严格 RFC 8259 UTF-8、无重复键、精确整数无浮点舍入、对象键按 UTF-16BE 码元排序、紧凑 UTF-8、≤ 65536 字节）。
+  - **独立摘要封装格式**：摘要必须对紧凑 UTF-8 封装对象 `{"canonical_profile":"p1-host-intent-c14n-1","channel":"<control|receipt-query>","intent":<排序后意图>}` 计算 SHA-256，不能只对裸 `payload` 或未封装的 `command` 哈希。具体可独立复算字节、十六进制与固定预期摘要见 `canonical-digests.json`（含键重排同摘要与 `allow_shared_receipts` 翻转异摘要对照）。
 - 控制信封：`profile = "p1-host-control-1"`，`kind = "expense.create"`
 - 查询信封：`profile = "p1-host-query-1"`，`kind = "receipt.lookup"`
 
@@ -54,9 +55,10 @@
 ## 5. 包内文件与双端导入复跑
 
 - `manifest.json`：候选标识、范围与全部文件 SHA-256 清单（不含符号链接或未登记文件）。
+- `canonical-digests.json`：固定午餐命令（原始与键重排）、`allow_shared_receipts=true` 对照及 `receipt.lookup` 查询的完整封装规范化字节、UTF-8 十六进制、SHA-256 与同／异关系，供双端独立复算。
 - `normative-vectors.json`：与实现解耦的 10 组场景、36 步规范样例（引用固定午餐基础输入与变量绑定 `R1`/`R2`）。
 - `desktop-assertions.json`：桌面隔离执行器的逐例原始返回断言（与规范样例分离）。
-- `result-mapping.json`：桌面与移动宿主／Android 原始返回到共同 `business_outcome` 的映射及确认规则。
+- `result-mapping.json`：分别记录桌面、移动宿主（`9dec892` 实测）与 Android（`9dec892`／`b870ad5` 实测）原始返回到共同 `business_outcome` 的映射、已知偏差及确认规则。
 
 ### 桌面复跑命令
 

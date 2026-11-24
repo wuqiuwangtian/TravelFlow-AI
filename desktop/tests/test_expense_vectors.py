@@ -177,6 +177,27 @@ raise SystemExit(ev.main([]))
             with self.assertRaisesRegex(ValueError, "digest mismatch: normative-vectors.json"):
                 run_contract_candidate(copy_dir)
 
+        with tempfile.TemporaryDirectory(prefix="p2-contract-swap-") as tmp:
+            import hashlib
+
+            copy_dir = Path(tmp) / "expense-create-candidate"
+            shutil.copytree(DEFAULT_CONTRACT_BUNDLE, copy_dir)
+            map_path = copy_dir / "result-mapping.json"
+            man_path = copy_dir / "manifest.json"
+            mapping = json.loads(map_path.read_bytes().decode("utf-8"))
+            mapping["outcomes"]["rejected_unauthorized"]["mobile_android"]["wrong_target_error"] = (
+                "denied"
+            )
+            map_bytes = (json.dumps(mapping, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            map_path.write_bytes(map_bytes)
+            manifest = json.loads(man_path.read_bytes().decode("utf-8"))
+            manifest["files"]["result-mapping.json"] = hashlib.sha256(map_bytes).hexdigest()
+            man_path.write_bytes(
+                (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            )
+            with self.assertRaisesRegex(ValueError, "host/Android result-mapping mismatch"):
+                run_contract_candidate(copy_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

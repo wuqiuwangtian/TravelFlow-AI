@@ -33,6 +33,7 @@ CONTRACT_CANDIDATE_ID = "travelflow.expense-create-candidate"
 CONTRACT_CANDIDATE_VERSION = "0.1.0-candidate.1"
 CONTRACT_CANDIDATE_FILES = (
     "SPEC.md",
+    "canonical-digests.json",
     "desktop-assertions.json",
     "normative-vectors.json",
     "result-mapping.json",
@@ -510,6 +511,47 @@ def load_contract_candidate_spec(bundle_dir: Path = DEFAULT_CONTRACT_BUNDLE) -> 
         is not False
     ):
         raise ValueError("Contract candidate confirmation rule mismatch.")
+    outcomes = mapping.get("outcomes", {})
+    if (
+        outcomes.get("rejected_unauthorized", {})
+        .get("mobile_android", {})
+        .get("wrong_target_error")
+        != "scope_mismatch"
+        or outcomes.get("rejected_unauthorized", {})
+        .get("mobile_host", {})
+        .get("wrong_target_error")
+        != "denied"
+        or outcomes.get("lookup_unknown_busy", {}).get("mobile_android", {}).get("state")
+        != "pending_busy"
+        or outcomes.get("lookup_unknown_busy", {}).get("mobile_host", {}).get("state") != "unknown"
+        or outcomes.get("rejected_unsupported_capability", {})
+        .get("mobile_android", {})
+        .get("error")
+        != "unsupported_capability"
+        or outcomes.get("rejected_unsupported_capability", {})
+        .get("mobile_host", {})
+        .get("observed_9dec892", {})
+        .get("non_null_paid_on")
+        != "committed"
+    ):
+        raise ValueError("Contract candidate host/Android result-mapping mismatch.")
+
+    canonical_doc = json.loads((bundle / "canonical-digests.json").read_bytes().decode("utf-8"))
+    recomputed = {}
+    for item in canonical_doc.get("cases", []):
+        _, encoded, digest = canonicalize_intent(item["raw_json"].encode("utf-8"), item["channel"])
+        if (
+            encoded.decode("utf-8") != item["canonical_json"]
+            or encoded.hex() != item["canonical_utf8_hex"]
+            or digest != item["sha256"]
+        ):
+            raise ValueError(f"Canonical digest mismatch for {item['id']}.")
+        recomputed[item["id"]] = digest
+    for rel in canonical_doc.get("relations", []):
+        unique = {recomputed[cid] for cid in rel["ids"]}
+        expected_size = 1 if rel["relation"] == "same" else len(rel["ids"])
+        if len(unique) != expected_size:
+            raise ValueError(f"Canonical digest relation failed: {rel['relation']} {rel['ids']}")
 
     joined_scenarios = []
     for sc in normative["scenarios"]:
