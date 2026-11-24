@@ -28,6 +28,7 @@ import os
 import sqlite3
 import sys
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,26 @@ from app.storage.database import create_connection  # noqa: E402
 from app.storage.session_store import SessionStore  # noqa: E402
 
 HANDOFF_FORMAT = "travelflow-p3-trip-handoff/0-draft"
+HANDOFF_APPLICATION_ID = 0x54465033  # 'TFP3'
+HANDOFF_REQUIRED_TABLES = frozenset(
+    {
+        "handoff_trip_meta",
+        "sessions",
+        "branches",
+        "versions",
+        "plans",
+        "exchange_operation_receipts",
+    }
+)
+SCOPE_REQUIRED_KEYS = frozenset(
+    {
+        "dataset_id",
+        "authorized_devices",
+        "authorized_targets",
+        "can_write",
+        "can_lookup_receipt",
+    }
+)
 DEFAULT_FIXTURE_GZ = (
     REPO_ROOT / "desktop" / "tests" / "fixtures" / "d1" / "fictional-trip.sqlite.gz"
 )
@@ -102,19 +123,103 @@ def _read_raw_input(input_arg: str) -> bytes:
     return path.read_bytes()
 
 
+def _write_exclusive_bytes(path: Path, content: bytes) -> None:
+    """Create a new regular file exclusively without following symlinks or overwriting."""
+    if os.path.lexists(path):
+        raise ValueError(f"Refusing to overwrite existing path: {path}")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.write(fd, content)
+    finally:
+        os.close(fd)
+
+
+def _validate_handoff_database(db_path: Path) -> Path:
+    """Read-only verification that db_path is an isolated handoff copy created by init-trip."""
+    if db_path.is_symlink() or not db_path.is_file():
+        raise ValueError("invalid_handoff_database")
+    resolved = db_path.resolve(strict=True)
+    try:
+        with closing(sqlite3.connect(f"{resolved.as_uri()}?mode=ro", uri=True, timeout=5.0)) as db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA trusted_schema=OFF")
+            app_id = db.execute("PRAGMA application_id").fetchone()[0]
+            if app_id != HANDOFF_APPLICATION_ID:
+                raise ValueError("invalid_handoff_database")
+            tables = {
+                row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type='table'")
+            }
+            if not tables >= HANDOFF_REQUIRED_TABLES:
+                raise ValueError("invalid_handoff_database")
+            meta = db.execute(
+                "SELECT handoff_format, fixture_database_sha256 FROM handoff_trip_meta WHERE id = 1"
+            ).fetchone()
+            if (
+                meta is None
+                or meta["handoff_format"] != HANDOFF_FORMAT
+                or not isinstance(meta["fixture_database_sha256"], str)
+                or len(meta["fixture_database_sha256"]) != 64
+            ):
+                raise ValueError("invalid_handoff_database")
+    except sqlite3.Error:
+        raise ValueError("invalid_handoff_database") from None
+    return resolved
+
+
 def _load_scope(scope_path: Path) -> ExchangeReceiveScope:
-    data = json.loads(scope_path.read_bytes().decode("utf-8"))
-    targets = frozenset(
-        (str(item["travel_id"]), str(item["branch_id"]))
-        for item in data.get("authorized_targets", [])
-    )
-    devices = frozenset(str(dev) for dev in data.get("authorized_devices", []))
+    """Strictly parse explicit test authorization config; fail closed on missing/malformed keys."""
+    if scope_path.is_symlink() or not scope_path.is_file():
+        raise ValueError("invalid_scope_config")
+    try:
+        data = json.loads(scope_path.read_bytes().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("invalid_scope_config") from None
+
+    if not isinstance(data, dict) or set(data.keys()) != SCOPE_REQUIRED_KEYS:
+        raise ValueError("invalid_scope_config")
+
+    dataset_id = data["dataset_id"]
+    if not isinstance(dataset_id, str) or not (1 <= len(dataset_id) <= 256):
+        raise ValueError("invalid_scope_config")
+
+    raw_devices = data["authorized_devices"]
+    if not isinstance(raw_devices, list) or not all(
+        isinstance(dev, str) and 1 <= len(dev) <= 256 for dev in raw_devices
+    ):
+        raise ValueError("invalid_scope_config")
+
+    raw_targets = data["authorized_targets"]
+    if not isinstance(raw_targets, list):
+        raise ValueError("invalid_scope_config")
+    parsed_targets: list[tuple[str, str]] = []
+    for item in raw_targets:
+        if not isinstance(item, dict) or set(item.keys()) != {"travel_id", "branch_id"}:
+            raise ValueError("invalid_scope_config")
+        travel_id = item["travel_id"]
+        branch_id = item["branch_id"]
+        if (
+            not isinstance(travel_id, str)
+            or not (1 <= len(travel_id) <= 256)
+            or not isinstance(branch_id, str)
+            or not (1 <= len(branch_id) <= 256)
+        ):
+            raise ValueError("invalid_scope_config")
+        parsed_targets.append((travel_id, branch_id))
+
+    can_write = data["can_write"]
+    can_lookup_receipt = data["can_lookup_receipt"]
+    if type(can_write) is not bool or type(can_lookup_receipt) is not bool:
+        raise ValueError("invalid_scope_config")
+
     return ExchangeReceiveScope(
-        dataset_id=str(data["dataset_id"]),
-        authorized_devices=devices,
-        authorized_targets=targets,
-        can_write=bool(data.get("can_write", True)),
-        can_lookup_receipt=bool(data.get("can_lookup_receipt", True)),
+        dataset_id=dataset_id,
+        authorized_devices=frozenset(raw_devices),
+        authorized_targets=frozenset(parsed_targets),
+        can_write=can_write,
+        can_lookup_receipt=can_lookup_receipt,
     )
 
 
@@ -127,16 +232,40 @@ async def _init_trip(
     expected_json: Path = DEFAULT_EXPECTED_JSON,
     context_out: Path | None = None,
 ) -> dict[str, Any]:
-    work_dir = work_dir.resolve()
-    db_path = work_dir / "travel.sqlite"
-    scope_path = work_dir / "scope.json"
+    if os.path.islink(work_dir):
+        raise ValueError(f"Refusing to use symlink work directory: {work_dir}")
+    resolved_work_dir = work_dir.resolve()
+    db_path = resolved_work_dir / "travel.sqlite"
+    scope_path = resolved_work_dir / "scope.json"
+    reserved_paths = {
+        resolved_work_dir,
+        db_path,
+        scope_path,
+        Path(f"{db_path}-wal"),
+        Path(f"{db_path}-shm"),
+        Path(f"{db_path}-journal"),
+    }
+
     if os.path.lexists(db_path) or os.path.lexists(scope_path):
         raise ValueError(
-            f"Refusing to overwrite existing handoff files in {work_dir}; choose a new directory."
+            f"Refusing to overwrite existing handoff files in {resolved_work_dir}; "
+            "choose a new directory."
         )
     for suffix in ("-wal", "-shm", "-journal"):
         if os.path.lexists(f"{db_path}{suffix}"):
-            raise ValueError(f"Refusing to reuse existing SQLite companion file in {work_dir}.")
+            raise ValueError(
+                f"Refusing to reuse existing SQLite companion file in {resolved_work_dir}."
+            )
+
+    resolved_context_out: Path | None = None
+    if context_out is not None:
+        if os.path.lexists(context_out):
+            raise ValueError(f"Refusing to overwrite existing context output path: {context_out}")
+        resolved_context_out = context_out.parent.resolve() / context_out.name
+        if os.path.lexists(resolved_context_out) or resolved_context_out in reserved_paths:
+            raise ValueError(
+                f"Context output path conflicts with existing or reserved path: {context_out}"
+            )
 
     expected = json.loads(expected_json.read_bytes().decode("utf-8"))
     raw_sqlite = gzip.decompress(fixture_gz.read_bytes())
@@ -146,64 +275,100 @@ async def _init_trip(
             f"Fixture SHA-256 mismatch: expected {expected['database_sha256']}, got {actual_sha256}"
         )
 
-    work_dir.mkdir(parents=True, exist_ok=True)
-    fd = os.open(db_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    resolved_work_dir.mkdir(parents=True, exist_ok=True)
+    created_files: list[Path] = []
     try:
-        os.write(fd, raw_sqlite)
-    finally:
-        os.close(fd)
+        _write_exclusive_bytes(db_path, raw_sqlite)
+        created_files.append(db_path)
 
-    # Ensure exchange_operation_receipts schema exists cleanly on the isolated copy.
-    conn = await create_connection(db_path)
-    try:
-        store = SessionStore(conn)
-        versions = await store.list_versions(expected["main_branch"])
-        fork_versions = await store.list_versions(expected["fork_branch"])
-        if not versions or not fork_versions:
-            raise ValueError("Fixture database is missing expected versions.")
-        current_revision_id = versions[-1].id
-        fork_revision_id = fork_versions[-1].id
-    finally:
-        await conn.close()
+        # Ensure exchange_operation_receipts schema exists and stamp isolated handoff metadata.
+        conn = await create_connection(db_path)
+        try:
+            await conn.execute(f"PRAGMA application_id = {HANDOFF_APPLICATION_ID}")
+            await conn.execute(
+                "CREATE TABLE IF NOT EXISTS handoff_trip_meta ("
+                "id INTEGER PRIMARY KEY CHECK (id = 1), "
+                "handoff_format TEXT NOT NULL, "
+                "fixture_database_sha256 TEXT NOT NULL, "
+                "dataset_id TEXT NOT NULL, "
+                "travel_id TEXT NOT NULL, "
+                "branch_id TEXT NOT NULL, "
+                "created_at TEXT NOT NULL)"
+            )
+            await conn.execute(
+                "INSERT INTO handoff_trip_meta("
+                "id, handoff_format, fixture_database_sha256, dataset_id, travel_id, "
+                "branch_id, created_at"
+                ") VALUES (1, ?, ?, ?, ?, ?, ?)",
+                (
+                    HANDOFF_FORMAT,
+                    actual_sha256,
+                    dataset_id,
+                    expected["session"],
+                    expected["main_branch"],
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+            await conn.commit()
 
-    scope_doc = {
-        "dataset_id": dataset_id,
-        "authorized_devices": [device_id],
-        "authorized_targets": [
-            {
-                "travel_id": expected["session"],
-                "branch_id": expected["main_branch"],
-            }
-        ],
-        "can_write": True,
-        "can_lookup_receipt": True,
-    }
-    scope_path.write_text(
-        json.dumps(scope_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+            store = SessionStore(conn)
+            versions = await store.list_versions(expected["main_branch"])
+            fork_versions = await store.list_versions(expected["fork_branch"])
+            if not versions or not fork_versions:
+                raise ValueError("Fixture database is missing expected versions.")
+            current_revision_id = versions[-1].id
+            fork_revision_id = fork_versions[-1].id
+        finally:
+            await conn.close()
 
-    context = {
-        "handoff_format": HANDOFF_FORMAT,
-        "contract_id": CONTRACT_ID,
-        "contract_version": CONTRACT_VERSION,
-        "fixture_source": str(fixture_gz.relative_to(REPO_ROOT)),
-        "fixture_database_sha256": actual_sha256,
-        "database": str(db_path),
-        "scope_config": str(scope_path),
-        "dataset_id": dataset_id,
-        "authorized_devices": [device_id],
-        "travel_id": expected["session"],
-        "branch_id": expected["main_branch"],
-        "current_revision_id": current_revision_id,
-        "fork_branch_id": expected["fork_branch"],
-        "fork_revision_id": fork_revision_id,
-    }
-    if context_out is not None:
-        context_out.parent.mkdir(parents=True, exist_ok=True)
-        context_out.write_text(
-            json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        scope_doc = {
+            "dataset_id": dataset_id,
+            "authorized_devices": [device_id],
+            "authorized_targets": [
+                {
+                    "travel_id": expected["session"],
+                    "branch_id": expected["main_branch"],
+                }
+            ],
+            "can_write": True,
+            "can_lookup_receipt": True,
+        }
+        _write_exclusive_bytes(
+            scope_path,
+            (json.dumps(scope_doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
         )
-    return context
+        created_files.append(scope_path)
+
+        context = {
+            "handoff_format": HANDOFF_FORMAT,
+            "contract_id": CONTRACT_ID,
+            "contract_version": CONTRACT_VERSION,
+            "fixture_source": str(fixture_gz.relative_to(REPO_ROOT)),
+            "fixture_database_sha256": actual_sha256,
+            "database": str(db_path),
+            "scope_config": str(scope_path),
+            "dataset_id": dataset_id,
+            "authorized_devices": [device_id],
+            "travel_id": expected["session"],
+            "branch_id": expected["main_branch"],
+            "current_revision_id": current_revision_id,
+            "fork_branch_id": expected["fork_branch"],
+            "fork_revision_id": fork_revision_id,
+        }
+        if resolved_context_out is not None:
+            resolved_context_out.parent.mkdir(parents=True, exist_ok=True)
+            _write_exclusive_bytes(
+                resolved_context_out,
+                (json.dumps(context, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+            )
+            created_files.append(resolved_context_out)
+        return context
+    except BaseException:
+        for created in reversed(created_files):
+            created.unlink(missing_ok=True)
+        for suffix in ("-wal", "-shm", "-journal"):
+            Path(f"{db_path}{suffix}").unlink(missing_ok=True)
+        raise
 
 
 async def _run_receive(
@@ -213,12 +378,11 @@ async def _run_receive(
     *,
     fault: str | None = None,
 ) -> dict[str, Any]:
-    if not db_path.is_file():
-        raise FileNotFoundError(f"Database not found: {db_path}")
+    resolved_db = _validate_handoff_database(db_path)
     scope = _load_scope(scope_path)
-    conn = await create_connection(db_path)
+    conn = await create_connection(resolved_db)
     settings = Settings(_env_file=None, amap_api_key=None)
-    async with open_checkpointer(db_path) as checkpointer:
+    async with open_checkpointer(resolved_db) as checkpointer:
         graph = build_graph(
             _OfflineNoopLLM(),  # type: ignore[arg-type]
             _OfflineNoopSearch(),  # type: ignore[arg-type]
@@ -249,10 +413,9 @@ async def _run_receive(
 
 
 async def _run_lookup(db_path: Path, scope_path: Path, raw_bytes: bytes) -> dict[str, Any]:
-    if not db_path.is_file():
-        raise FileNotFoundError(f"Database not found: {db_path}")
+    resolved_db = _validate_handoff_database(db_path)
     scope = _load_scope(scope_path)
-    conn = await create_connection(db_path)
+    conn = await create_connection(resolved_db)
     try:
         store = SessionStore(conn)
         return await lookup_exchange_receipt(store, raw_bytes, scope=scope)
@@ -267,9 +430,8 @@ async def _inspect_trip(
     fork_branch_id: str | None = None,
 ) -> dict[str, Any]:
     """Read real trip ledger through existing FastAPI endpoints (no listening socket)."""
-    if not db_path.is_file():
-        raise FileNotFoundError(f"Database not found: {db_path}")
-    conn = await create_connection(db_path)
+    resolved_db = _validate_handoff_database(db_path)
+    conn = await create_connection(resolved_db)
     settings = Settings(_env_file=None, amap_api_key=None)
     store = SessionStore(conn)
     test_app = FastAPI()

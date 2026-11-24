@@ -7,9 +7,13 @@ separately via fixed mobile receipts.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -335,3 +339,332 @@ def test_independent_process_handoff_reply_lost_retry_and_ledger_readback(tmp_pa
     assert final_sender["record"]["delivery_state"] == "confirmed"
     assert final_sender["record"]["intent_sha256"] == expected_sha256
     assert final_sender["record"]["confirmed_revision_id"] == committed_revision_id
+
+
+def test_unrelated_sqlite_rejected_without_modification_across_all_three_entries(tmp_path: Path):
+    """receive, lookup, and inspect-trip reject unrelated SQLite files without mutating them."""
+    valid_work = tmp_path / "valid-handoff"
+    init_proc = _run_handoff("init-trip", "--work-dir", str(valid_work))
+    assert init_proc.returncode == 0
+    ctx = json.loads(init_proc.stdout.decode("utf-8"))
+
+    unrelated_db = tmp_path / "unrelated.sqlite"
+    with closing(sqlite3.connect(unrelated_db)) as db:
+        db.execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY, note TEXT)")
+        db.execute("INSERT INTO unrelated VALUES (1, 'do-not-touch')")
+        db.commit()
+
+    before_sha256 = hashlib.sha256(unrelated_db.read_bytes()).hexdigest()
+
+    cmd_bytes = _make_desktop_stub_command(
+        dataset_id=ctx["dataset_id"],
+        source_device_id=ctx["authorized_devices"][0],
+        operation_id="op-unrelated-1",
+        travel_id=ctx["travel_id"],
+        branch_id=ctx["branch_id"],
+        entity_id="unrelated-1",
+        expected_revision_id=ctx["current_revision_id"],
+    )
+    query_bytes = json.dumps(
+        {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+                "dataset_id": ctx["dataset_id"],
+                "source_device_id": ctx["authorized_devices"][0],
+                "operation_id": "op-unrelated-1",
+            },
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    recv_proc = _run_handoff(
+        "receive",
+        "--database",
+        str(unrelated_db),
+        "--scope",
+        ctx["scope_config"],
+        "--input",
+        "-",
+        input_bytes=cmd_bytes,
+    )
+    assert recv_proc.returncode == 1
+    assert json.loads(recv_proc.stdout.decode("utf-8")) == {
+        "ok": False,
+        "error": "invalid_handoff_database",
+    }
+
+    look_proc = _run_handoff(
+        "lookup",
+        "--database",
+        str(unrelated_db),
+        "--scope",
+        ctx["scope_config"],
+        "--input",
+        "-",
+        input_bytes=query_bytes,
+    )
+    assert look_proc.returncode == 1
+    assert json.loads(look_proc.stdout.decode("utf-8")) == {
+        "ok": False,
+        "error": "invalid_handoff_database",
+    }
+
+    insp_proc = _run_handoff(
+        "inspect-trip",
+        "--database",
+        str(unrelated_db),
+        "--branch-id",
+        ctx["branch_id"],
+    )
+    assert insp_proc.returncode == 1
+    assert json.loads(insp_proc.stdout.decode("utf-8")) == {
+        "ok": False,
+        "error": "invalid_handoff_database",
+    }
+
+    # Verify unrelated DB bytes, table list, and absence of WAL/SHM/journal companions.
+    assert hashlib.sha256(unrelated_db.read_bytes()).hexdigest() == before_sha256
+    for suffix in ("-wal", "-shm", "-journal"):
+        assert not os.path.lexists(f"{unrelated_db}{suffix}")
+    with closing(sqlite3.connect(f"{unrelated_db.as_uri()}?mode=ro", uri=True)) as db:
+        tables = [row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type='table'")]
+        assert tables == ["unrelated"]
+
+
+def test_scope_strict_boolean_and_explicit_permissions_for_read_and_write(tmp_path: Path):
+    """Malformed/missing/false permissions in scope.json must fail closed on both new & old keys."""
+    work_dir = tmp_path / "perm-handoff"
+    init_proc = _run_handoff("init-trip", "--work-dir", str(work_dir))
+    assert init_proc.returncode == 0
+    ctx = json.loads(init_proc.stdout.decode("utf-8"))
+    device_id = ctx["authorized_devices"][0]
+
+    # Commit one legitimate expense first so we can test already-committed receipt leak prevention.
+    committed_op = "op-perm-committed-1"
+    committed_cmd = _make_desktop_stub_command(
+        dataset_id=ctx["dataset_id"],
+        source_device_id=device_id,
+        operation_id=committed_op,
+        travel_id=ctx["travel_id"],
+        branch_id=ctx["branch_id"],
+        entity_id="perm-e1",
+        expected_revision_id=ctx["current_revision_id"],
+    )
+    ok_proc = _run_handoff(
+        "receive",
+        "--database",
+        ctx["database"],
+        "--scope",
+        ctx["scope_config"],
+        "--input",
+        "-",
+        input_bytes=committed_cmd,
+    )
+    assert ok_proc.returncode == 0
+    committed_v = json.loads(ok_proc.stdout.decode("utf-8"))["receipt"]["result_revision_id"]
+
+    new_cmd = _make_desktop_stub_command(
+        dataset_id=ctx["dataset_id"],
+        source_device_id=device_id,
+        operation_id="op-perm-new-2",
+        travel_id=ctx["travel_id"],
+        branch_id=ctx["branch_id"],
+        entity_id="perm-e2",
+        expected_revision_id=committed_v,
+    )
+    committed_query = json.dumps(
+        {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+                "dataset_id": ctx["dataset_id"],
+                "source_device_id": device_id,
+                "operation_id": committed_op,
+            },
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    base_scope = json.loads(Path(ctx["scope_config"]).read_text(encoding="utf-8"))
+
+    # 1. String "false" for can_write must be rejected as invalid_scope_config (never truthy!).
+    str_write_scope = tmp_path / "scope-str-write.json"
+    str_write_scope.write_text(json.dumps({**base_scope, "can_write": "false"}), encoding="utf-8")
+    for payload in (new_cmd, committed_cmd):
+        proc = _run_handoff(
+            "receive",
+            "--database",
+            ctx["database"],
+            "--scope",
+            str(str_write_scope),
+            "--input",
+            "-",
+            input_bytes=payload,
+        )
+        assert proc.returncode == 1
+        out = json.loads(proc.stdout.decode("utf-8"))
+        assert out == {"ok": False, "error": "invalid_scope_config"}
+        assert "receipt" not in out
+
+    # 2. Missing can_write or can_lookup_receipt must be rejected as invalid_scope_config.
+    missing_write_scope = tmp_path / "scope-missing-write.json"
+    missing_write_doc = {k: v for k, v in base_scope.items() if k != "can_write"}
+    missing_write_scope.write_text(json.dumps(missing_write_doc), encoding="utf-8")
+    proc_mw = _run_handoff(
+        "receive",
+        "--database",
+        ctx["database"],
+        "--scope",
+        str(missing_write_scope),
+        "--input",
+        "-",
+        input_bytes=new_cmd,
+    )
+    assert proc_mw.returncode == 1
+    assert json.loads(proc_mw.stdout.decode("utf-8")) == {
+        "ok": False,
+        "error": "invalid_scope_config",
+    }
+
+    str_lookup_scope = tmp_path / "scope-str-lookup.json"
+    str_lookup_scope.write_text(
+        json.dumps({**base_scope, "can_lookup_receipt": "false"}), encoding="utf-8"
+    )
+    proc_sl = _run_handoff(
+        "lookup",
+        "--database",
+        ctx["database"],
+        "--scope",
+        str(str_lookup_scope),
+        "--input",
+        "-",
+        input_bytes=committed_query,
+    )
+    assert proc_sl.returncode == 1
+    out_sl = json.loads(proc_sl.stdout.decode("utf-8"))
+    assert out_sl == {"ok": False, "error": "invalid_scope_config"}
+    assert "receipt" not in out_sl
+
+    # 3. Explicit boolean can_write=False blocks writes & replays (no receipt leak), lookup allowed.
+    read_only_scope = tmp_path / "scope-ro.json"
+    read_only_scope.write_text(
+        json.dumps({**base_scope, "can_write": False, "can_lookup_receipt": True}),
+        encoding="utf-8",
+    )
+    for payload in (new_cmd, committed_cmd):
+        proc = _run_handoff(
+            "receive",
+            "--database",
+            ctx["database"],
+            "--scope",
+            str(read_only_scope),
+            "--input",
+            "-",
+            input_bytes=payload,
+        )
+        assert proc.returncode == 1
+        out = json.loads(proc.stdout.decode("utf-8"))
+        assert out == {"ok": False, "error": "unauthorized"}
+        assert "receipt" not in out
+
+    ro_lookup = _run_handoff(
+        "lookup",
+        "--database",
+        ctx["database"],
+        "--scope",
+        str(read_only_scope),
+        "--input",
+        "-",
+        input_bytes=committed_query,
+    )
+    assert ro_lookup.returncode == 0
+    assert json.loads(ro_lookup.stdout.decode("utf-8"))["state"] == "committed"
+
+    # 4. Explicit boolean can_lookup_receipt=False blocks lookup on committed receipt (no leak).
+    no_lookup_scope = tmp_path / "scope-no-lookup.json"
+    no_lookup_scope.write_text(
+        json.dumps({**base_scope, "can_write": True, "can_lookup_receipt": False}),
+        encoding="utf-8",
+    )
+    nl_proc = _run_handoff(
+        "lookup",
+        "--database",
+        ctx["database"],
+        "--scope",
+        str(no_lookup_scope),
+        "--input",
+        "-",
+        input_bytes=committed_query,
+    )
+    assert nl_proc.returncode == 1
+    out_nl = json.loads(nl_proc.stdout.decode("utf-8"))
+    assert out_nl == {"ok": False, "error": "unauthorized"}
+    assert "receipt" not in out_nl
+
+    # Verify zero extra writes occurred during all rejected calls.
+    insp_proc = _run_handoff(
+        "inspect-trip",
+        "--database",
+        ctx["database"],
+        "--branch-id",
+        ctx["branch_id"],
+    )
+    assert insp_proc.returncode == 0
+    insp = json.loads(insp_proc.stdout.decode("utf-8"))
+    assert insp["head_revision_id"] == committed_v
+    assert len(insp["receipts"]) == 1
+
+
+def test_init_trip_context_out_exclusive_creation_and_reserved_path_guards(tmp_path: Path):
+    """init-trip must refuse existing files, symlinks, and reserved paths for --context-out."""
+    # 1. Existing regular file at --context-out must be rejected and left untouched.
+    existing_ctx = tmp_path / "existing-context.json"
+    existing_ctx.write_text('{"keep": "original"}\n', encoding="utf-8")
+    work1 = tmp_path / "work-existing-ctx"
+    p1 = _run_handoff("init-trip", "--work-dir", str(work1), "--context-out", str(existing_ctx))
+    assert p1.returncode == 1
+    assert existing_ctx.read_text(encoding="utf-8") == '{"keep": "original"}\n'
+    assert not (work1 / "travel.sqlite").exists()
+    assert not (work1 / "scope.json").exists()
+
+    # 2. Symlink at --context-out (to existing file and dangling) must be rejected.
+    target_file = tmp_path / "symlink-target.json"
+    target_file.write_text('{"secret": true}\n', encoding="utf-8")
+    link_path = tmp_path / "ctx-symlink.json"
+    os.symlink(target_file, link_path)
+    work2 = tmp_path / "work-symlink-ctx"
+    p2 = _run_handoff("init-trip", "--work-dir", str(work2), "--context-out", str(link_path))
+    assert p2.returncode == 1
+    assert target_file.read_text(encoding="utf-8") == '{"secret": true}\n'
+    assert not (work2 / "travel.sqlite").exists()
+    assert not (work2 / "scope.json").exists()
+
+    dangling_link = tmp_path / "ctx-dangling.json"
+    os.symlink(tmp_path / "nonexistent-target.json", dangling_link)
+    work3 = tmp_path / "work-dangling-ctx"
+    p3 = _run_handoff("init-trip", "--work-dir", str(work3), "--context-out", str(dangling_link))
+    assert p3.returncode == 1
+    assert not (tmp_path / "nonexistent-target.json").exists()
+    assert not (work3 / "travel.sqlite").exists()
+    assert not (work3 / "scope.json").exists()
+
+    # 3. Reserved handoff paths inside work_dir must be rejected without publishing artifacts.
+    for reserved_name in (
+        "travel.sqlite",
+        "scope.json",
+        "travel.sqlite-wal",
+        "travel.sqlite-shm",
+        "travel.sqlite-journal",
+    ):
+        work_res = tmp_path / f"work-reserved-{reserved_name}"
+        p_res = _run_handoff(
+            "init-trip",
+            "--work-dir",
+            str(work_res),
+            "--context-out",
+            str(work_res / reserved_name),
+        )
+        assert p_res.returncode == 1, reserved_name
+        assert not (work_res / "travel.sqlite").exists()
+        assert not (work_res / "scope.json").exists()
