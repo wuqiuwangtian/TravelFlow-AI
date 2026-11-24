@@ -6,15 +6,7 @@
 
 ## 当前接续状态
 
-- 共同样例首交 `b4eb9f1` 暂缓合入。干净归档运行 `python -m desktop.expense_vectors` 通过 10 场景 36 步，联合执行器专项 14 项通过。独立负对照在两份临时修改中分别将桌面写入 expenses.amount_cents 加 1、给错误目标 unauthorized 返回额外 receipt，检查器两次仍报 10/10 成功。原执行器未作这些修改。
-  - 在原分支补强共同样例与检查器：从重开的 SQLite 独立对照实际消费的实体、整分、关联及关键回执／待发的操作与结果版本；拒绝与重放前后核对已有业务内容，不能只数行。禁止无权限响应携带回执或结果版本。上述两种负对照均应报告场景、非零退出。
-  - preserve_input_for_retry 当前由 expected 直接抄入报告，应区分候选要求与实测。保留可移交的实际输入及摘要、独立核对可重用性；无持久待核实组件的路径明确标为未验证跨重启保留。保持固定午餐输入与第 15、16 节分工。
-
-- 桌面已准备[共同验收样例分支任务](PRODUCT_ROADMAP.md#第二阶段桌面分支任务单新增消费的共同验收样例)，基于 73bb8f4。移动 main 核对为 5783ba5，原生边界工作独立推进；候选样例和联合结果尚待交付。
-
-- 第二阶段[双方宿主边界对照](P1_CROSS_REPO_REVIEW.md#16-新增消费桌面执行与移动宿主的边界对照)已复跑。桌面修正争锁时的回执状态和目标作用域检查顺序，22 项桌面与 44 项后端专项通过，发布契约基线检查通过。移动宿主固定 5783ba5；Android 新一轮能力边界回执待核。
-
-- 2026-11-24 桌面隔离执行器已验收。返修 `d46f638` 的 9 项测试从干净归档通过，覆盖拒绝已有库、未知行程关联、2000 笔上限及满额后的原键重放。集成时另复现并修复主文件缺失时覆盖孤立 SQLite 伴随文件的问题。根目录运行 `python -m unittest desktop.tests.test_expense_executor desktop.tests.test_exchange`（20 项），以及后端 pytest 显式运行 p1_sqlite_commit_boundary_review.py、p1_expense_create_review.py、p1_command_semantics_review.py（44 项），均通过。电脑另从移动 `e5530a7` 的归档冻结安装后复跑 `node scripts/check-p1-desktop-expense-create.mjs`，两种中断与头推进后重放均通过。移动返修 `95030e6` 已集成到 [移动 main 5783ba5 的验收记录](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/5783ba5/docs/internal/PROJECT_STATUS.md#2026-11-24-android-固定新增消费返修集成验收)。移动侧报告 API 35 模拟器 11 个场景通过，同键异意图恢复保留冲突，12 项历史字段逐版一致。电脑侧已核对固定提交与回执，未重跑模拟器。写入契约仍待跨端能力与回执边界对齐。
+- 共同样例返修 `fb7ecc0c145486e761567ffc11fdce9198cae907` 已接受。从干净归档复跑 10 个场景、36 步及 16 项专项；独立注入多写一分、拒绝时夹带回执，分别使 EC01、EC06 以状态 1 失败。输入报告区分内存中可重用与 SQLite 重开后的证据，未提交输入跨重启保留待验。样例路径 `backend/tests/fixtures/p1_expense_create_vectors.json`，SHA-256 为 `2679ab4a3461be7b039a0686d6436640db32e4bbc1af700bd9f565a3a7e76bcb`。移动 `0b43cff` 的集成记录报告 API 35 的 14 个原生边界场景通过；与本套共同样例逐项核对仍待回执，本轮未复跑 Android。
 
 - 第二阶段桌面候选已形成：[新增消费的输入、回执与验收表](P1_CROSS_REPO_REVIEW.md#15-第二阶段桌面候选新增一笔消费)。6 项新检查与 36 项既有命令语义检查通过。独立 WAL 临时库已实测子进程在 COMMIT 前退出时只保留初始版本，提交后回包前退出时可重开读到完整四类记录；两项中断检查与上述 42 项合跑通过。执行器后续结果见上条。
 
