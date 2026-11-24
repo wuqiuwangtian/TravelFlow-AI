@@ -13,6 +13,11 @@ function fixture() {
   mkdirSync(path.join(folder, "scripts"));
   cpSync(path.join(root, "scripts/check-contracts.mjs"), path.join(folder, "scripts/check-contracts.mjs"));
   cpSync(path.join(root, "contracts/ledger-v1"), path.join(folder, "contracts/ledger-v1"), { recursive: true });
+  cpSync(
+    path.join(root, "contracts/expense-create-candidate"),
+    path.join(folder, "contracts/expense-create-candidate"),
+    { recursive: true },
+  );
   const git = (...args) => execFileSync("git", args, { cwd: folder, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "-q");
   git("config", "user.name", "Contract test");
@@ -66,5 +71,36 @@ test("an unavailable baseline fails rather than silently skipping immutability",
   try {
     const result = spawnSync(process.execPath, ["scripts/check-contracts.mjs", "--baseline", "1".repeat(40)], { cwd: f.folder, encoding: "utf8" });
     assert.notEqual(result.status, 0);
+  } finally { f.close(); }
+});
+
+test("tampering with a candidate contract file is rejected", () => {
+  const f = fixture();
+  try {
+    const spec = path.join(f.folder, "contracts/expense-create-candidate/SPEC.md");
+    writeFileSync(spec, readFileSync(spec, "utf8") + "\nTampered candidate\n");
+    const result = spawnSync(process.execPath, ["scripts/check-contracts.mjs"], { cwd: f.folder, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Candidate contract digest mismatch: SPEC\.md/);
+  } finally { f.close(); }
+});
+
+test("missing a candidate contract file is rejected", () => {
+  const f = fixture();
+  try {
+    rmSync(path.join(f.folder, "contracts/expense-create-candidate/result-mapping.json"));
+    const result = spawnSync(process.execPath, ["scripts/check-contracts.mjs"], { cwd: f.folder, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Candidate contract directory file set mismatch/);
+  } finally { f.close(); }
+});
+
+test("adding an unlisted file to candidate contract directory is rejected", () => {
+  const f = fixture();
+  try {
+    writeFileSync(path.join(f.folder, "contracts/expense-create-candidate/extra.txt"), "extra\n");
+    const result = spawnSync(process.execPath, ["scripts/check-contracts.mjs"], { cwd: f.folder, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Candidate contract directory file set mismatch/);
   } finally { f.close(); }
 });

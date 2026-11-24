@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from desktop.expense_vectors import DEFAULT_VECTORS, REPO_ROOT, run_vectors
+from desktop.expense_vectors import (
+    DEFAULT_CONTRACT_BUNDLE,
+    DEFAULT_VECTORS,
+    REPO_ROOT,
+    run_contract_candidate,
+    run_vectors,
+)
 
 
 class ExpenseVectorsTests(unittest.TestCase):
@@ -137,6 +144,38 @@ raise SystemExit(ev.main([]))
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("[FAIL] EC06_wrong_target_and_lookup_authorization", proc.stdout)
         self.assertIn("leaked forbidden keys: ['receipt']", proc.stdout)
+
+    def test_contract_candidate_bundle_passes_and_rejects_tampering(self):
+        report = run_contract_candidate(DEFAULT_CONTRACT_BUNDLE)
+        self.assertTrue(report["all_passed"], json.dumps(report["failed_scenarios"]))
+        self.assertEqual(report["total_scenarios"], 10)
+        self.assertEqual(report["passed_scenarios"], 10)
+        self.assertIsNone(report["shared_contract_version"])
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "desktop.expense_vectors",
+                "--contract-bundle",
+                str(DEFAULT_CONTRACT_BUNDLE),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Summary: 10/10 scenarios passed.", proc.stdout)
+
+        with tempfile.TemporaryDirectory(prefix="p2-contract-tamper-") as tmp:
+            copy_dir = Path(tmp) / "expense-create-candidate"
+            shutil.copytree(DEFAULT_CONTRACT_BUNDLE, copy_dir)
+            norm = copy_dir / "normative-vectors.json"
+            norm.write_bytes(norm.read_bytes() + b" ")
+            with self.assertRaisesRegex(ValueError, "digest mismatch: normative-vectors.json"):
+                run_contract_candidate(copy_dir)
 
 
 if __name__ == "__main__":

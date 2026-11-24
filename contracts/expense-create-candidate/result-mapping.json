@@ -1,0 +1,169 @@
+{
+  "format": "travelflow-expense-result-mapping/0-draft",
+  "contract_id": "travelflow.expense-create-candidate",
+  "contract_version": "0.1.0-candidate.1",
+  "status": "candidate",
+  "shared_contract_version": null,
+  "confirmation_rule": {
+    "minimal_receipt_fields": [
+      "effect",
+      "result_revision_id"
+    ],
+    "minimal_receipt_sufficient_for_intent_confirmation": false,
+    "required_for_confirmation": "Caller must verify either matching intent_sha256/canonical_intent from receipt or replay the exact original command under the same operation key so same-key different-intent returns intent_conflict instead of false confirmation."
+  },
+  "outcomes": {
+    "committed_changed": {
+      "desktop": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed"
+      },
+      "mobile_host_and_android": {
+        "status": "committed",
+        "replayed": false,
+        "effect": "changed"
+      }
+    },
+    "replayed_committed": {
+      "desktop": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "effect": "changed"
+      },
+      "mobile_host_and_android": {
+        "status": "committed",
+        "replayed": true,
+        "effect": "changed"
+      }
+    },
+    "interrupted_before_commit": {
+      "desktop": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "mobile_host_and_android": {
+        "interrupted_before_commit": true
+      }
+    },
+    "interrupted_after_commit": {
+      "desktop": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "mobile_host_and_android": {
+        "interrupted_after_commit_before_reply": true
+      }
+    },
+    "lookup_committed": {
+      "desktop": {
+        "ok": true,
+        "state": "committed",
+        "effect": "changed"
+      },
+      "mobile_host_and_android": {
+        "state": "committed",
+        "effect": "changed",
+        "note": "Mobile host projection returns effect and result_revision_id only; caller must verify full intent before marking confirmed."
+      }
+    },
+    "lookup_not_found_settled": {
+      "desktop": {
+        "ok": true,
+        "state": "not_found_at_settled_read"
+      },
+      "mobile_host_and_android": {
+        "state": "not_found_at_settled_read"
+      }
+    },
+    "lookup_unknown_busy": {
+      "desktop": {
+        "ok": true,
+        "state": "unknown",
+        "reason": "storage_busy"
+      },
+      "mobile_host_and_android": {
+        "state": "unknown",
+        "reason": "storage_busy"
+      }
+    },
+    "rejected_intent_conflict": {
+      "desktop": {
+        "ok": false,
+        "error": "intent_conflict"
+      },
+      "mobile_host_and_android": {
+        "error": "intent_conflict"
+      }
+    },
+    "rejected_baseline_conflict": {
+      "desktop": {
+        "ok": false,
+        "error": "baseline_conflict"
+      },
+      "mobile_host_and_android": {
+        "error": "baseline_conflict"
+      }
+    },
+    "rejected_entity_exists": {
+      "desktop": {
+        "ok": false,
+        "error": "entity_exists"
+      },
+      "mobile_host_and_android": {
+        "error": "entity_exists"
+      }
+    },
+    "rejected_unauthorized": {
+      "desktop": {
+        "ok": false,
+        "error": "unauthorized"
+      },
+      "mobile_host_and_android": {
+        "error": "denied",
+        "note": "Must not leak receipt or result_revision_id."
+      }
+    },
+    "rejected_expense_limit": {
+      "desktop": {
+        "ok": false,
+        "error": "expense_limit_exceeded"
+      },
+      "mobile_host_and_android": {
+        "error": "expense_count"
+      }
+    },
+    "rejected_invalid_input": {
+      "desktop": {
+        "ok": false,
+        "errors": [
+          "integer_range",
+          "type",
+          "invalid_field"
+        ]
+      },
+      "mobile_host_and_android": {
+        "errors": [
+          "integer_range",
+          "type",
+          "invalid_field"
+        ]
+      }
+    },
+    "rejected_unsupported_capability": {
+      "desktop": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "mobile_host_and_android": {
+        "android_candidate_errors": [
+          "unsupported_capability",
+          "currency"
+        ],
+        "host_note": "Mobile host 9dec892 accepts explicit paid_on while desktop and Android candidate reject all 6 out-of-scope fields; callers must retain full original intent."
+      }
+    }
+  }
+}

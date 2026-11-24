@@ -1,0 +1,854 @@
+{
+  "format": "travelflow-expense-normative-vectors/0-draft",
+  "contract_id": "travelflow.expense-create-candidate",
+  "contract_version": "0.1.0-candidate.1",
+  "status": "candidate",
+  "shared_contract_version": null,
+  "canonical_profile": "p1-host-intent-c14n-1",
+  "defaults": {
+    "dataset_id": "fixture-dataset",
+    "travel_id": "fixture-travel",
+    "branch_id": "fixture-branch",
+    "initial_revision_id": "fixture-r0",
+    "device_id": "fixture-device",
+    "base_command": {
+      "profile": "p1-host-control-1",
+      "kind": "expense.create",
+      "operation": {
+        "dataset_id": "fixture-dataset",
+        "source_device_id": "fixture-device",
+        "operation_id": "fixture-op-lunch"
+      },
+      "target": {
+        "travel_id": "fixture-travel",
+        "branch_id": "fixture-branch",
+        "entity_id": "fixture-lunch"
+      },
+      "expected_revision_id": "fixture-r0",
+      "payload": {
+        "title": "午餐",
+        "amount_cents": 8635,
+        "currency": "CNY",
+        "paid_on": null,
+        "category": "meal",
+        "day": null,
+        "activity_id": null,
+        "notes": "",
+        "receipt_ids": [],
+        "allow_shared_receipts": false,
+        "budget_item_id": null,
+        "settles_budget": false
+      }
+    },
+    "base_receipt_query": {
+      "profile": "p1-host-query-1",
+      "kind": "receipt.lookup",
+      "operation": {
+        "dataset_id": "fixture-dataset",
+        "source_device_id": "fixture-device",
+        "operation_id": "fixture-op-lunch"
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "EC01_first_create",
+      "title": "首次新增一笔消费并落盘版本、账目、回执与待发记录",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "create_lunch",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1",
+            "check_stored_intent": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC02_interrupt_before_commit_then_retry",
+      "title": "提交前子进程中断零写入，查询未落盘后原键重试成功一次",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "abort_before_commit",
+          "action": "execute",
+          "fault": "before_commit",
+          "expected": {
+            "business_outcome": "interrupted_before_commit",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_literal": "fixture-r0"
+          }
+        },
+        {
+          "name": "lookup_after_abort",
+          "action": "lookup",
+          "expected": {
+            "business_outcome": "lookup_not_found_settled",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "retry_same_key",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1",
+            "check_stored_intent": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC03_interrupt_after_commit_and_replay_after_head_advance",
+      "title": "提交后丢回包，重启查回执、键重排重放及分支头推进后原键重放均返回原 R1",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "abort_after_commit",
+          "action": "execute",
+          "fault": "after_commit_before_reply",
+          "bind_revision_from_head": "R1",
+          "expected": {
+            "business_outcome": "interrupted_after_commit",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1",
+            "check_stored_intent": true
+          }
+        },
+        {
+          "name": "lookup_committed_after_restart",
+          "action": "lookup",
+          "expected": {
+            "business_outcome": "lookup_committed",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "replay_reordered_keys",
+          "action": "execute",
+          "sort_keys": true,
+          "expected": {
+            "business_outcome": "replayed_committed",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "advance_branch_head",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-dinner"
+            },
+            "target": {
+              "entity_id": "fixture-dinner"
+            },
+            "expected_revision_var": "R1",
+            "payload": {
+              "title": "晚餐",
+              "amount_cents": 4200
+            }
+          },
+          "bind_revision": "R2",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R2",
+            "check_stored_intent": true
+          }
+        },
+        {
+          "name": "replay_original_after_head_advance",
+          "action": "execute",
+          "expected": {
+            "business_outcome": "replayed_committed",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC04_intent_conflict_amount_and_control",
+      "title": "同操作键改金额 8636 或改 allow_shared_receipts=true 均报 intent_conflict",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "seed_first",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "conflict_amount_8636",
+          "action": "execute",
+          "patch": {
+            "payload": {
+              "amount_cents": 8636
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_intent_conflict",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "conflict_allow_shared_receipts",
+          "action": "execute",
+          "patch": {
+            "payload": {
+              "allow_shared_receipts": true
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_intent_conflict",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC05_baseline_conflict_and_entity_exists",
+      "title": "旧基线拒绝 baseline_conflict；新键沿用已存在 entity_id 拒绝 entity_exists",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "seed_first",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "stale_baseline",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-stale"
+            },
+            "target": {
+              "entity_id": "fixture-lunch-2"
+            },
+            "expected_revision_id": "fixture-r0"
+          },
+          "expected": {
+            "business_outcome": "rejected_baseline_conflict",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "duplicate_entity_on_current_head",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-dup-entity"
+            },
+            "expected_revision_var": "R1"
+          },
+          "expected": {
+            "business_outcome": "rejected_entity_exists",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC06_wrong_target_and_lookup_authorization",
+      "title": "错误目标旅行／分支（已提交键与新键）及未授权查询均拒绝且不泄露回执",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "seed_first",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "committed_key_wrong_branch",
+          "action": "execute",
+          "patch": {
+            "target": {
+              "branch_id": "wrong-branch"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "new_key_wrong_travel",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-wrong-travel"
+            },
+            "target": {
+              "travel_id": "wrong-travel",
+              "entity_id": "fixture-wrong-travel"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "lookup_wrong_device",
+          "action": "lookup",
+          "caller": {
+            "device_id": "other-device"
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "lookup_without_permission",
+          "action": "lookup",
+          "caller": {
+            "can_lookup_receipt": false
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC07_lookup_busy_and_settled_not_found",
+      "title": "写锁占用时查无回执返回 unknown/storage_busy，释放后稳定读取返回 not_found_at_settled_read",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "lookup_while_write_locked",
+          "action": "lookup_under_write_lock",
+          "expected": {
+            "business_outcome": "lookup_unknown_busy",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "lookup_after_lock_released",
+          "action": "lookup",
+          "expected": {
+            "business_outcome": "lookup_not_found_settled",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC08_limit_1999_to_2000_overflow_and_replay",
+      "title": "单分支 1998→1999→2000 成功，第 2001 笔超限拒绝，满额时原键重放仍返回原版本",
+      "initial_state": {
+        "seeded_expenses": 1998
+      },
+      "steps": [
+        {
+          "name": "create_1999th",
+          "action": "execute",
+          "bind_revision": "R1",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R1"
+          }
+        },
+        {
+          "name": "create_2000th",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-2000"
+            },
+            "target": {
+              "entity_id": "fixture-expense-2000"
+            },
+            "expected_revision_var": "R1",
+            "payload": {
+              "title": "第两千笔",
+              "amount_cents": 100
+            }
+          },
+          "bind_revision": "R2",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "state_delta": {
+              "revisions": 1,
+              "expenses": 1,
+              "receipts": 1,
+              "outbox": 1
+            },
+            "head_revision_var": "R2"
+          }
+        },
+        {
+          "name": "reject_2001st",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-2001"
+            },
+            "target": {
+              "entity_id": "fixture-expense-2001"
+            },
+            "expected_revision_var": "R2",
+            "payload": {
+              "title": "超限消费",
+              "amount_cents": 100
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_expense_limit",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R2"
+          }
+        },
+        {
+          "name": "replay_1999th_while_at_2000_cap",
+          "action": "execute",
+          "expected": {
+            "business_outcome": "replayed_committed",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            },
+            "head_revision_var": "R2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC09_invalid_amount_values",
+      "title": "非法金额 0、true、1.25、10000000000 逐项拒绝且零写入",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "amount_zero",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-amt-0"
+            },
+            "target": {
+              "entity_id": "fixture-amt-0"
+            },
+            "payload": {
+              "amount_cents": 0
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_invalid_input",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "amount_bool_true",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-amt-true"
+            },
+            "target": {
+              "entity_id": "fixture-amt-true"
+            },
+            "payload": {
+              "amount_cents": true
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_invalid_input",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "amount_fraction_1_25",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-amt-frac"
+            },
+            "target": {
+              "entity_id": "fixture-amt-frac"
+            },
+            "payload": {
+              "amount_cents": 1.25
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_invalid_input",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "amount_overflow_10000000000",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-amt-over"
+            },
+            "target": {
+              "entity_id": "fixture-amt-over"
+            },
+            "payload": {
+              "amount_cents": 10000000000
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_invalid_input",
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "EC10_unsupported_valid_fields_preserve_input",
+      "title": "逐项覆盖非空付款日、行程日、活动、票据、预算关联及不支持币种，拒绝且保留原输入待日后重试",
+      "initial_state": {
+        "seeded_expenses": 0
+      },
+      "steps": [
+        {
+          "name": "non_null_paid_on",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-paid-on"
+            },
+            "target": {
+              "entity_id": "fixture-paid-on"
+            },
+            "payload": {
+              "paid_on": "2026-11-23"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "non_null_day",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-day"
+            },
+            "target": {
+              "entity_id": "fixture-day"
+            },
+            "payload": {
+              "day": 60
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "non_null_activity_id",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-activity"
+            },
+            "target": {
+              "entity_id": "fixture-activity"
+            },
+            "payload": {
+              "activity_id": "unknown-stop"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "non_empty_receipt_ids",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-receipts"
+            },
+            "target": {
+              "entity_id": "fixture-receipts"
+            },
+            "payload": {
+              "receipt_ids": [
+                "66a8ba9d2eab4300b2f86943ea2c01fe"
+              ]
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "non_null_budget_item_id",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-budget"
+            },
+            "target": {
+              "entity_id": "fixture-budget"
+            },
+            "payload": {
+              "budget_item_id": "budget-meal-1"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        },
+        {
+          "name": "unsupported_currency_usd",
+          "action": "execute",
+          "patch": {
+            "operation": {
+              "operation_id": "fixture-op-usd"
+            },
+            "target": {
+              "entity_id": "fixture-usd"
+            },
+            "payload": {
+              "currency": "USD"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "preserve_input_for_retry": true,
+            "state_delta": {
+              "revisions": 0,
+              "expenses": 0,
+              "receipts": 0,
+              "outbox": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

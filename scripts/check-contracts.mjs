@@ -26,6 +26,62 @@ assert.equal(corpus.schema_version, manifest.fixture_schema_version);
 assert.equal(corpus.cases.length, 14);
 console.log("Ledger contract 0.1.0 manifest and fixture checks passed.");
 
+const candidateDir = path.join(root, "contracts/expense-create-candidate");
+if (existsSync(candidateDir)) {
+  const expectedCandidateFiles = [
+    "SPEC.md",
+    "desktop-assertions.json",
+    "normative-vectors.json",
+    "result-mapping.json",
+  ];
+  const candidateManifestPath = path.join(candidateDir, "manifest.json");
+  assert(existsSync(candidateManifestPath), "Candidate contract missing manifest.json");
+  const candidateManifest = JSON.parse(readFileSync(candidateManifestPath, "utf8"));
+  assert.equal(candidateManifest.contract_id, "travelflow.expense-create-candidate");
+  assert.equal(candidateManifest.contract_version, "0.1.0-candidate.1");
+  assert.equal(candidateManifest.status, "candidate");
+  assert.equal(candidateManifest.shared_contract_version, null);
+  assert.deepEqual(
+    Object.keys(candidateManifest.files).sort(),
+    expectedCandidateFiles,
+    "Candidate contract manifest file list mismatch",
+  );
+  const actualEntries = readdirSync(candidateDir, { withFileTypes: true }).map((entry) => {
+    assert(!entry.isSymbolicLink(), `Candidate contract cannot contain symlink: ${entry.name}`);
+    assert(!entry.isDirectory(), `Candidate contract cannot contain unexpected subdir: ${entry.name}`);
+    return entry.name;
+  }).sort();
+  assert.deepEqual(
+    actualEntries,
+    [...expectedCandidateFiles, "manifest.json"].sort(),
+    "Candidate contract directory file set mismatch",
+  );
+  for (const [name, expectedSha] of Object.entries(candidateManifest.files)) {
+    const filePath = path.join(candidateDir, name);
+    assert(existsSync(filePath), `Candidate contract missing file: ${name}`);
+    const actualSha = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+    assert.equal(actualSha, expectedSha, `Candidate contract digest mismatch: ${name}`);
+  }
+  const normative = JSON.parse(readFileSync(path.join(candidateDir, "normative-vectors.json"), "utf8"));
+  const desktopAssertions = JSON.parse(readFileSync(path.join(candidateDir, "desktop-assertions.json"), "utf8"));
+  const mapping = JSON.parse(readFileSync(path.join(candidateDir, "result-mapping.json"), "utf8"));
+  assert.equal(normative.contract_version, candidateManifest.contract_version);
+  assert.equal(desktopAssertions.contract_version, candidateManifest.contract_version);
+  assert.equal(mapping.contract_version, candidateManifest.contract_version);
+  assert.equal(mapping.confirmation_rule.minimal_receipt_sufficient_for_intent_confirmation, false);
+  const normativeIds = normative.scenarios.map((sc) => sc.id).sort();
+  assert.deepEqual(Object.keys(desktopAssertions.scenarios).sort(), normativeIds, "Desktop assertions scenario IDs mismatch");
+  for (const sc of normative.scenarios) {
+    const deskSteps = desktopAssertions.scenarios[sc.id];
+    assert.deepEqual(Object.keys(deskSteps).sort(), sc.steps.map((st) => st.name).sort(), `Desktop assertions step mismatch in ${sc.id}`);
+    for (const st of sc.steps) {
+      assert(st.expected.business_outcome in mapping.outcomes, `Unmapped business_outcome in ${sc.id}/${st.name}: ${st.expected.business_outcome}`);
+      assert(!("desktop_raw" in st.expected), `Normative vector must not embed desktop_raw in ${sc.id}/${st.name}`);
+    }
+  }
+  console.log(`Expense-create candidate ${candidateManifest.contract_version} manifest and bundle checks passed.`);
+}
+
 // 摘要一致不代表版本不可改：同时更新内容与摘要也必须被基线比较拒绝。
 if (baseline && !/^0{40}$/.test(baseline)) {
   const git = (...parameters) => execFileSync("git", parameters, { cwd: root, maxBuffer: 4 * 1024 * 1024 });
