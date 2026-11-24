@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import sqlite3
 import subprocess
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from desktop.expense_executor import (
     CallerContext,
+    Rejected,
     canonicalize_intent,
     execute_command,
     init_isolated_store,
@@ -27,6 +29,9 @@ DEFAULT_SOURCE_FIXTURE = (
 )
 VECTOR_FORMAT = "travelflow-expense-create-vectors-candidate/0-draft"
 
+FORBIDDEN_REJECT_KEYS = frozenset({"receipt", "result_revision_id", "effect", "replayed", "state"})
+ALLOWED_UNAUTHORIZED_KEYS = frozenset({"ok", "error"})
+
 
 def _deep_merge(base: dict, patch: dict) -> dict:
     merged = copy.deepcopy(base)
@@ -39,35 +44,92 @@ def _deep_merge(base: dict, patch: dict) -> dict:
 
 
 def _snapshot_store(db_path: Path) -> dict:
+    """Open a fresh SQLite connection and read full persisted business and receipt content."""
     with closing(sqlite3.connect(db_path)) as db:
         db.row_factory = sqlite3.Row
         integrity = [tuple(row) for row in db.execute("PRAGMA integrity_check").fetchall()]
         head = db.execute("SELECT head_revision_id FROM branches LIMIT 1").fetchone()[0]
-        revisions = db.execute("SELECT COUNT(*) FROM revisions").fetchone()[0]
-        expenses = db.execute("SELECT COUNT(*) FROM expenses").fetchone()[0]
-        receipts = db.execute("SELECT COUNT(*) FROM operation_receipts").fetchone()[0]
-        outbox = db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
-        stored_intents = {
+        revisions = {
+            row["revision_id"]: {
+                "parent_revision_id": row["parent_revision_id"],
+                "seq": row["seq"],
+                "source_operation_id": row["source_operation_id"],
+            }
+            for row in db.execute(
+                "SELECT revision_id, parent_revision_id, seq, source_operation_id "
+                "FROM revisions ORDER BY seq"
+            ).fetchall()
+        }
+        expenses = {
+            row["entity_id"]: {
+                "revision_id": row["revision_id"],
+                "title": row["title"],
+                "amount_cents": row["amount_cents"],
+                "currency": row["currency"],
+                "paid_on": row["paid_on"],
+                "category": row["category"],
+                "day": row["day"],
+                "activity_id": row["activity_id"],
+                "notes": row["notes"],
+                "receipt_ids": json.loads(row["receipt_ids_json"]),
+                "budget_item_id": row["budget_item_id"],
+                "settles_budget": bool(row["settles_budget"]),
+                "created_by_operation_id": row["created_by_operation_id"],
+            }
+            for row in db.execute(
+                "SELECT entity_id, revision_id, title, amount_cents, currency, paid_on, "
+                "category, day, activity_id, notes, receipt_ids_json, budget_item_id, "
+                "settles_budget, created_by_operation_id FROM expenses ORDER BY entity_id"
+            ).fetchall()
+        }
+        receipts = {
             row["operation_id"]: {
+                "source_device_id": row["source_device_id"],
+                "kind": row["kind"],
+                "canonical_profile": row["canonical_profile"],
+                "intent_sha256": row["intent_sha256"],
+                "canonical_intent_json": row["canonical_intent_json"],
+                "effect": row["effect"],
+                "result_revision_id": row["result_revision_id"],
+                "travel_id": row["travel_id"],
+                "branch_id": row["branch_id"],
+                "entity_id": row["entity_id"],
+            }
+            for row in db.execute(
+                "SELECT operation_id, source_device_id, kind, canonical_profile, "
+                "intent_sha256, canonical_intent_json, effect, result_revision_id, "
+                "travel_id, branch_id, entity_id FROM operation_receipts ORDER BY operation_id"
+            ).fetchall()
+        }
+        outbox = {
+            row["operation_id"]: {
+                "source_device_id": row["source_device_id"],
+                "kind": row["kind"],
+                "canonical_profile": row["canonical_profile"],
                 "intent_sha256": row["intent_sha256"],
                 "canonical_intent_json": row["canonical_intent_json"],
                 "result_revision_id": row["result_revision_id"],
+                "state": row["state"],
             }
             for row in db.execute(
-                "SELECT operation_id, intent_sha256, canonical_intent_json, result_revision_id "
-                "FROM operation_receipts"
+                "SELECT operation_id, source_device_id, kind, canonical_profile, "
+                "intent_sha256, canonical_intent_json, result_revision_id, state "
+                "FROM outbox ORDER BY operation_id"
             ).fetchall()
         }
     return {
         "integrity": integrity,
         "head_revision_id": head,
         "counts": {
-            "revisions": revisions,
-            "expenses": expenses,
-            "receipts": receipts,
-            "outbox": outbox,
+            "revisions": len(revisions),
+            "expenses": len(expenses),
+            "receipts": len(receipts),
+            "outbox": len(outbox),
         },
-        "stored_intents": stored_intents,
+        "revisions": revisions,
+        "expenses": expenses,
+        "receipts": receipts,
+        "outbox": outbox,
     }
 
 
@@ -196,7 +258,202 @@ def _check_desktop_raw(expected_raw: dict, actual_raw: dict, bindings: dict[str,
             actual_val = actual_raw.get(key)
             if actual_val != exp_val:
                 mismatches.append(f"raw.{key}={actual_val!r} != expected {exp_val!r}")
+
+    # Reject leaked receipts or revision IDs on any rejected or non-committed response.
+    if actual_raw.get("ok") is False:
+        leaked = sorted(k for k in FORBIDDEN_REJECT_KEYS if k in actual_raw)
+        if leaked:
+            mismatches.append(f"rejected response leaked forbidden keys: {leaked}")
+        if actual_raw.get("error") == "unauthorized":
+            extra = sorted(actual_raw.keys() - ALLOWED_UNAUTHORIZED_KEYS)
+            if extra:
+                mismatches.append(f"unauthorized response leaked extra keys: {extra}")
+    elif actual_raw.get("state") in ("not_found_at_settled_read", "unknown"):
+        if actual_raw.get("receipt") is not None:
+            mismatches.append("uncommitted lookup leaked non-null receipt")
+        if "result_revision_id" in actual_raw:
+            mismatches.append("uncommitted lookup leaked result_revision_id")
     return mismatches
+
+
+def _check_persisted_content(
+    *,
+    before: dict,
+    after: dict,
+    expected_delta: dict,
+    input_doc: dict | None,
+    raw_input_bytes: bytes | None,
+) -> list[str]:
+    """Verify actual persisted SQLite rows, not just row counts."""
+    mismatches = []
+    if all(v == 0 for v in expected_delta.values()):
+        for section in ("head_revision_id", "revisions", "expenses", "receipts", "outbox"):
+            if after[section] != before[section]:
+                mismatches.append(f"persisted {section} mutated on zero-delta step")
+        return mismatches
+
+    if expected_delta == {"revisions": 1, "expenses": 1, "receipts": 1, "outbox": 1}:
+        assert input_doc is not None and raw_input_bytes is not None
+        op = input_doc["operation"]
+        target = input_doc["target"]
+        payload = input_doc["payload"]
+        op_id = op["operation_id"]
+        entity_id = target["entity_id"]
+        new_rev = after["head_revision_id"]
+
+        # Verify no pre-existing rows were altered.
+        for eid, prev_exp in before["expenses"].items():
+            if after["expenses"].get(eid) != prev_exp:
+                mismatches.append(f"pre-existing expense {eid!r} mutated during new create")
+        for oid, prev_rec in before["receipts"].items():
+            if after["receipts"].get(oid) != prev_rec:
+                mismatches.append(f"pre-existing receipt {oid!r} mutated during new create")
+        for oid, prev_out in before["outbox"].items():
+            if after["outbox"].get(oid) != prev_out:
+                mismatches.append(f"pre-existing outbox {oid!r} mutated during new create")
+
+        # Verify the newly committed expense row field-by-field.
+        actual_exp = after["expenses"].get(entity_id)
+        expected_exp = {
+            "revision_id": new_rev,
+            "title": payload["title"],
+            "amount_cents": payload["amount_cents"],
+            "currency": payload["currency"],
+            "paid_on": payload["paid_on"],
+            "category": payload["category"],
+            "day": payload["day"],
+            "activity_id": payload["activity_id"],
+            "notes": payload["notes"],
+            "receipt_ids": payload["receipt_ids"],
+            "budget_item_id": payload["budget_item_id"],
+            "settles_budget": bool(payload["settles_budget"]),
+            "created_by_operation_id": op_id,
+        }
+        if actual_exp is None:
+            mismatches.append(f"committed expense {entity_id!r} missing from SQLite")
+        else:
+            for field, exp_val in expected_exp.items():
+                if actual_exp.get(field) != exp_val:
+                    mismatches.append(
+                        f"expense[{entity_id!r}].{field}={actual_exp.get(field)!r} != {exp_val!r}"
+                    )
+
+        # Verify new revision row.
+        actual_rev = after["revisions"].get(new_rev)
+        if actual_rev is None:
+            mismatches.append(f"committed revision {new_rev!r} missing from SQLite")
+        else:
+            if actual_rev["parent_revision_id"] != before["head_revision_id"]:
+                mismatches.append(
+                    f"revision[{new_rev!r}].parent={actual_rev['parent_revision_id']!r} "
+                    f"!= {before['head_revision_id']!r}"
+                )
+            if actual_rev["source_operation_id"] != op_id:
+                mismatches.append(
+                    f"revision[{new_rev!r}].source_operation_id="
+                    f"{actual_rev['source_operation_id']!r} != {op_id!r}"
+                )
+
+        # Verify receipt and outbox rows against canonicalized submitted input.
+        _, canonical_bytes, canonical_sha = canonicalize_intent(raw_input_bytes, "control")
+        canonical_text = canonical_bytes.decode("utf-8")
+
+        actual_rec = after["receipts"].get(op_id)
+        if actual_rec is None:
+            mismatches.append(f"committed receipt {op_id!r} missing from SQLite")
+        else:
+            for field, exp_val in (
+                ("source_device_id", op["source_device_id"]),
+                ("kind", input_doc["kind"]),
+                ("intent_sha256", canonical_sha),
+                ("canonical_intent_json", canonical_text),
+                ("effect", "changed"),
+                ("result_revision_id", new_rev),
+                ("travel_id", target["travel_id"]),
+                ("branch_id", target["branch_id"]),
+                ("entity_id", entity_id),
+            ):
+                if actual_rec.get(field) != exp_val:
+                    mismatches.append(
+                        f"receipt[{op_id!r}].{field}={actual_rec.get(field)!r} != {exp_val!r}"
+                    )
+
+        actual_out = after["outbox"].get(op_id)
+        if actual_out is None:
+            mismatches.append(f"committed outbox {op_id!r} missing from SQLite")
+        else:
+            for field, exp_val in (
+                ("source_device_id", op["source_device_id"]),
+                ("kind", input_doc["kind"]),
+                ("intent_sha256", canonical_sha),
+                ("canonical_intent_json", canonical_text),
+                ("result_revision_id", new_rev),
+                ("state", "pending"),
+            ):
+                if actual_out.get(field) != exp_val:
+                    mismatches.append(
+                        f"outbox[{op_id!r}].{field}={actual_out.get(field)!r} != {exp_val!r}"
+                    )
+    return mismatches
+
+
+def _measure_input_retention(
+    *,
+    action: str,
+    expected: dict,
+    input_doc: dict | None,
+    raw_input_bytes: bytes | None,
+    after: dict,
+) -> tuple[dict, list[str]]:
+    """Independently measure input reusability vs candidate requirement."""
+    required = bool(expected.get("preserve_input_for_retry"))
+    submitted_sha = (
+        hashlib.sha256(raw_input_bytes).hexdigest() if raw_input_bytes is not None else None
+    )
+    mismatches = []
+    reusable_canonical_sha = None
+    reusable_in_caller = False
+    if raw_input_bytes is not None:
+        channel = "receipt-query" if action in ("lookup", "lookup_under_write_lock") else "control"
+        try:
+            _, _, reusable_canonical_sha = canonicalize_intent(raw_input_bytes, channel)
+            reusable_in_caller = True
+        except Rejected:
+            reusable_in_caller = False
+
+    if required and not reusable_in_caller:
+        mismatches.append("input marked preserve_input_for_retry is not canonically reusable")
+
+    op_id = (input_doc or {}).get("operation", {}).get("operation_id")
+    persisted_in_store = (
+        op_id is not None
+        and reusable_canonical_sha is not None
+        and op_id in after["receipts"]
+        and after["receipts"][op_id]["intent_sha256"] == reusable_canonical_sha
+        and op_id in after["outbox"]
+        and after["outbox"][op_id]["intent_sha256"] == reusable_canonical_sha
+    )
+    if persisted_in_store:
+        note = "verified in SQLite operation_receipts and outbox across reopen"
+    elif required:
+        note = (
+            "unverified across restart: isolated desktop executor has no persistent "
+            "pending-intent client store for uncommitted or rejected inputs"
+        )
+    else:
+        note = "not required by candidate step"
+
+    return (
+        {
+            "required_by_candidate": required,
+            "submitted_input_sha256": submitted_sha,
+            "reusable_canonical_sha256": reusable_canonical_sha,
+            "reusable_in_caller_memory": reusable_in_caller,
+            "cross_restart_persistence_verified": persisted_in_store,
+            "cross_restart_note": note,
+        },
+        mismatches,
+    )
 
 
 def run_vectors(
@@ -355,21 +612,30 @@ def run_vectors(
                         f"expected {expected['head_revision_literal']!r}"
                     )
 
-                stored_intent_sha = None
-                if expected.get("check_stored_intent") and raw_input_bytes is not None:
-                    _, canonical_bytes, canonical_sha = canonicalize_intent(
-                        raw_input_bytes, "control"
+                step_mismatches.extend(
+                    _check_persisted_content(
+                        before=before,
+                        after=after,
+                        expected_delta=expected["state_delta"],
+                        input_doc=input_doc,
+                        raw_input_bytes=raw_input_bytes,
                     )
+                )
+
+                retention_report, retention_mismatches = _measure_input_retention(
+                    action=action,
+                    expected=expected,
+                    input_doc=input_doc,
+                    raw_input_bytes=raw_input_bytes,
+                    after=after,
+                )
+                step_mismatches.extend(retention_mismatches)
+
+                stored_intent_sha = None
+                if input_doc is not None:
                     op_id = input_doc["operation"]["operation_id"]
-                    stored = after["stored_intents"].get(op_id)
-                    if stored is None:
-                        step_mismatches.append(f"missing stored receipt intent for {op_id}")
-                    else:
-                        stored_intent_sha = stored["intent_sha256"]
-                        if stored["intent_sha256"] != canonical_sha or stored[
-                            "canonical_intent_json"
-                        ] != canonical_bytes.decode("utf-8"):
-                            step_mismatches.append(f"stored intent mismatch for {op_id}")
+                    if op_id in after["receipts"]:
+                        stored_intent_sha = after["receipts"][op_id]["intent_sha256"]
 
                 if step_mismatches:
                     scenario_failures.append({"step": step_name, "mismatches": step_mismatches})
@@ -385,7 +651,7 @@ def run_vectors(
                         "delta": actual_delta,
                         "head_revision_id": after["head_revision_id"],
                         "stored_intent_sha256": stored_intent_sha,
-                        "preserve_input_for_retry": bool(expected.get("preserve_input_for_retry")),
+                        "input_retention": retention_report,
                         "passed": not step_mismatches,
                         "mismatches": step_mismatches,
                     }
