@@ -6,7 +6,7 @@
 
 ## 当前接续状态
 
-- 正式包 [travelflow.expense-create 0.1.0](../../contracts/expense-create-v0.1.0/SPEC.md) 已验收，移动导入使用固定提交 `d916697828ad3d2f0e87a3a231b996c7873d421b`，manifest.json SHA-256 为 `759145bea1b98f086af4c70938ae33932b6cc0ba0527e12dc62faaf90733b8b1`。干净检出独立核对文件集合、五份文件摘要、四份 JSON 与第二候选的逐字段差异，业务规则及样例一致。两包各 10 场景 36 步、12 项契约测试、25 项桌面专项、文档和发布材料检查通过；既有两包字节未变。移动已验候选，正式字节的独立导入待回执。此事件仅交付单笔 CNY 新增与回执查询的契约；应用发布与跨设备传输另验。
+- 正式包 [travelflow.expense-create 0.1.0](../../contracts/expense-create-v0.1.0/SPEC.md) 已验收，移动导入使用固定提交 `d916697828ad3d2f0e87a3a231b996c7873d421b`，manifest.json SHA-256 为 `759145bea1b98f086af4c70938ae33932b6cc0ba0527e12dc62faaf90733b8b1`。干净检出独立核对文件集合、五份文件摘要、四份 JSON 与第二候选的逐字段差异，业务规则及样例一致。两包各 10 场景 36 步、12 项契约测试、25 项桌面专项、文档和发布材料检查通过；既有两包字节未变。移动正式导入回执为 250acac3ff4cbe5ef1879ab2a6e096dd0279ff75。电脑从该提交的干净归档单独运行 node scripts/check-contracts.mjs 通过，再与 d916697 的正式目录逐文件比对，六份文件完全一致。移动业务运行证据沿用 8ba3365，本轮未重跑模拟器。此事件仅交付单笔 CNY 新增与回执查询的契约；应用发布与跨设备传输另验。
 
 - 共同写入契约的单笔新增范围已通过定版评审，分配独立标识 `travelflow.expense-create`、版本 `0.1.0`。行为基线取桌面第二候选 `94ec1fb8965e788e7d068677d9c864d755bd1379`，清单 SHA-256 `99722538b7c006cc7caaa31612f83d0d831b925bd21296dc5737a0448c1b8642`。已接受[移动固定回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/8ba33654b2a6a4dcae02979f05bc4c37b8269711/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)：桌面独立核对六份文件、四组摘要，并复跑移动宿主从持久意图复算摘要与错误映射；Android API 35 取移动实读证据。共同子集限单笔 CNY 新增与按键查询。移动宿主支持显式付款日的差异仍按能力区分。第二候选留作固定证据；正式包交付见上条。
 
