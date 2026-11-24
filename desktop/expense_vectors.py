@@ -24,10 +24,20 @@ from desktop.expense_executor import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VECTORS = REPO_ROOT / "backend" / "tests" / "fixtures" / "p1_expense_create_vectors.json"
+DEFAULT_CONTRACT_BUNDLE = REPO_ROOT / "contracts" / "expense-create-candidate"
 DEFAULT_SOURCE_FIXTURE = (
     REPO_ROOT / "backend" / "tests" / "fixtures" / "p1_expense_create_candidate.json"
 )
 VECTOR_FORMAT = "travelflow-expense-create-vectors-candidate/0-draft"
+CONTRACT_CANDIDATE_ID = "travelflow.expense-create-candidate"
+CONTRACT_CANDIDATE_VERSION = "0.1.0-candidate.2"
+CONTRACT_CANDIDATE_FILES = (
+    "SPEC.md",
+    "canonical-digests.json",
+    "desktop-assertions.json",
+    "normative-vectors.json",
+    "result-mapping.json",
+)
 
 FORBIDDEN_REJECT_KEYS = frozenset({"receipt", "result_revision_id", "effect", "replayed", "state"})
 ALLOWED_UNAUTHORIZED_KEYS = frozenset({"ok", "error"})
@@ -456,6 +466,140 @@ def _measure_input_retention(
     )
 
 
+def load_contract_candidate_spec(bundle_dir: Path = DEFAULT_CONTRACT_BUNDLE) -> dict:
+    """Verify candidate contract bundle digests and join normative vectors + desktop assertions."""
+    bundle = Path(bundle_dir)
+    if not bundle.is_dir():
+        raise ValueError(f"Contract candidate directory does not exist: {bundle}")
+    manifest_path = bundle / "manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("Contract candidate bundle missing manifest.json.")
+    manifest = json.loads(manifest_path.read_bytes().decode("utf-8"))
+    if (
+        manifest.get("contract_id") != CONTRACT_CANDIDATE_ID
+        or manifest.get("contract_version") != CONTRACT_CANDIDATE_VERSION
+        or manifest.get("status") != "candidate"
+        or manifest.get("shared_contract_version") is not None
+    ):
+        raise ValueError("Unsupported or invalid contract candidate manifest.")
+
+    files = manifest.get("files")
+    if not isinstance(files, dict) or sorted(files.keys()) != sorted(CONTRACT_CANDIDATE_FILES):
+        raise ValueError("Contract candidate manifest file list mismatch.")
+
+    actual_entries = sorted(p.name for p in bundle.iterdir())
+    if actual_entries != sorted([*CONTRACT_CANDIDATE_FILES, "manifest.json"]):
+        raise ValueError("Contract candidate directory file set mismatch.")
+
+    for name, expected_sha in files.items():
+        path = bundle / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Contract candidate missing or invalid file: {name}")
+        actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_sha != expected_sha:
+            raise ValueError(f"Contract candidate digest mismatch: {name}")
+
+    normative = json.loads((bundle / "normative-vectors.json").read_bytes().decode("utf-8"))
+    desktop_assertions = json.loads(
+        (bundle / "desktop-assertions.json").read_bytes().decode("utf-8")
+    )
+    mapping = json.loads((bundle / "result-mapping.json").read_bytes().decode("utf-8"))
+    if (
+        mapping.get("confirmation_rule", {}).get(
+            "minimal_receipt_sufficient_for_intent_confirmation"
+        )
+        is not False
+    ):
+        raise ValueError("Contract candidate confirmation rule mismatch.")
+    outcomes = mapping.get("outcomes", {})
+    if (
+        outcomes.get("rejected_unauthorized", {})
+        .get("mobile_android", {})
+        .get("wrong_target_error")
+        != "scope_mismatch"
+        or outcomes.get("rejected_unauthorized", {})
+        .get("mobile_host", {})
+        .get("wrong_target_error")
+        != "denied"
+        or outcomes.get("lookup_unknown_busy", {}).get("mobile_android", {}).get("state")
+        != "pending_busy"
+        or outcomes.get("lookup_unknown_busy", {}).get("mobile_host", {}).get("state") != "unknown"
+        or outcomes.get("rejected_unsupported_capability", {})
+        .get("mobile_android", {})
+        .get("error")
+        != "unsupported_capability"
+        or outcomes.get("rejected_unsupported_capability", {})
+        .get("mobile_host", {})
+        .get("observed_9dec892", {})
+        .get("non_null_paid_on")
+        != "committed"
+    ):
+        raise ValueError("Contract candidate host/Android result-mapping mismatch.")
+
+    canonical_doc = json.loads((bundle / "canonical-digests.json").read_bytes().decode("utf-8"))
+    recomputed = {}
+    for item in canonical_doc.get("cases", []):
+        _, encoded, digest = canonicalize_intent(item["raw_json"].encode("utf-8"), item["channel"])
+        if (
+            encoded.decode("utf-8") != item["canonical_json"]
+            or encoded.hex() != item["canonical_utf8_hex"]
+            or digest != item["sha256"]
+        ):
+            raise ValueError(f"Canonical digest mismatch for {item['id']}.")
+        recomputed[item["id"]] = digest
+    for rel in canonical_doc.get("relations", []):
+        unique = {recomputed[cid] for cid in rel["ids"]}
+        expected_size = 1 if rel["relation"] == "same" else len(rel["ids"])
+        if len(unique) != expected_size:
+            raise ValueError(f"Canonical digest relation failed: {rel['relation']} {rel['ids']}")
+
+    joined_scenarios = []
+    for sc in normative["scenarios"]:
+        sc_id = sc["id"]
+        desk_steps = desktop_assertions["scenarios"].get(sc_id)
+        if not isinstance(desk_steps, dict):
+            raise ValueError(f"Desktop assertions missing scenario: {sc_id}")
+        joined_steps = []
+        for st in sc["steps"]:
+            st_copy = copy.deepcopy(st)
+            if st["name"] not in desk_steps:
+                raise ValueError(f"Desktop assertions missing step: {sc_id}/{st['name']}")
+            st_copy["expected"]["desktop_raw"] = copy.deepcopy(desk_steps[st["name"]])
+            joined_steps.append(st_copy)
+        joined_scenarios.append(
+            {
+                "id": sc_id,
+                "title": sc["title"],
+                "initial_state": copy.deepcopy(sc["initial_state"]),
+                "steps": joined_steps,
+            }
+        )
+
+    return {
+        "format": VECTOR_FORMAT,
+        "status": manifest["status"],
+        "shared_contract_version": manifest["shared_contract_version"],
+        "contract_id": manifest["contract_id"],
+        "contract_version": manifest["contract_version"],
+        "defaults": copy.deepcopy(normative["defaults"]),
+        "scenarios": joined_scenarios,
+    }
+
+
+def run_contract_candidate(
+    bundle_dir: Path = DEFAULT_CONTRACT_BUNDLE,
+    *,
+    source_fixture_path: Path = DEFAULT_SOURCE_FIXTURE,
+) -> dict:
+    """Verify a contract candidate bundle and run all scenarios on the desktop executor."""
+    spec = load_contract_candidate_spec(bundle_dir)
+    return _execute_vector_spec(
+        spec,
+        source_label=str(bundle_dir),
+        source_fixture_path=source_fixture_path,
+    )
+
+
 def run_vectors(
     vectors_path: Path = DEFAULT_VECTORS,
     *,
@@ -465,7 +609,19 @@ def run_vectors(
     spec = json.loads(vectors_path.read_bytes().decode("utf-8"))
     if spec.get("format") != VECTOR_FORMAT or spec.get("shared_contract_version") is not None:
         raise ValueError("Unsupported or non-candidate vectors file format.")
+    return _execute_vector_spec(
+        spec,
+        source_label=str(vectors_path),
+        source_fixture_path=source_fixture_path,
+    )
 
+
+def _execute_vector_spec(
+    spec: dict,
+    *,
+    source_label: str,
+    source_fixture_path: Path = DEFAULT_SOURCE_FIXTURE,
+) -> dict:
     defaults = spec["defaults"]
     if source_fixture_path.is_file():
         source_fixture = json.loads(source_fixture_path.read_bytes().decode("utf-8"))
@@ -675,7 +831,7 @@ def run_vectors(
         "format": spec["format"],
         "status": spec["status"],
         "shared_contract_version": spec["shared_contract_version"],
-        "vectors_path": str(vectors_path),
+        "vectors_path": source_label,
         "total_scenarios": len(scenario_reports),
         "passed_scenarios": len(scenario_reports) - len(failed_scenarios),
         "failed_scenarios": failed_scenarios,
@@ -687,10 +843,14 @@ def run_vectors(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vectors", type=Path, default=DEFAULT_VECTORS)
+    parser.add_argument("--contract-bundle", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
-    report = run_vectors(args.vectors)
+    if args.contract_bundle is not None:
+        report = run_contract_candidate(args.contract_bundle)
+    else:
+        report = run_vectors(args.vectors)
     if args.as_json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
