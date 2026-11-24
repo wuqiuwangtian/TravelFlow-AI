@@ -191,6 +191,7 @@ async def create_connection(db_path: str | Path) -> aiosqlite.Connection:
 
     # WAL 模式让读不阻塞写，适合「边生成边查看历史」的场景
     await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA busy_timeout=5000")
     await conn.execute("PRAGMA foreign_keys=ON")
     await conn.executescript(SCHEMA)
     # 轻量迁移：老库补齐后加的列（幂等）

@@ -394,6 +394,190 @@ def _finalize_pending_update(
     }
 
 
+def prepare_pending_delivery(
+    sender_db: str | Path,
+    *,
+    dataset_id: str,
+    source_device_id: str,
+    operation_id: str,
+) -> dict:
+    """Transition a persisted pending record to verification_pending and return its raw bytes."""
+    try:
+        resolved_sender = _validate_sender_store(sender_db)
+    except Rejected as error:
+        return {"ok": False, "error": error.code}
+
+    fetched = read_pending_operation(
+        resolved_sender,
+        dataset_id=dataset_id,
+        source_device_id=source_device_id,
+        operation_id=operation_id,
+    )
+    if not fetched["ok"]:
+        return fetched
+    pending = fetched["record"]
+    if pending["delivery_state"] == "confirmed":
+        return {"ok": True, "already_confirmed": True, "record": pending, "raw_bytes": None}
+
+    pending, already_confirmed = _update_pending_state(
+        resolved_sender,
+        dataset_id=dataset_id,
+        source_device_id=source_device_id,
+        operation_id=operation_id,
+        delivery_state="verification_pending",
+        last_error="in_flight",
+        raw_response=pending["last_raw_response"],
+    )
+    if already_confirmed:
+        return {"ok": True, "already_confirmed": True, "record": pending, "raw_bytes": None}
+    return {
+        "ok": True,
+        "already_confirmed": False,
+        "record": pending,
+        "raw_bytes": pending["raw_input_json"].encode("utf-8"),
+    }
+
+
+def consume_delivery_response(
+    sender_db: str | Path,
+    *,
+    dataset_id: str,
+    source_device_id: str,
+    operation_id: str,
+    receiver_raw: dict,
+    transport_error: str | None = None,
+) -> dict:
+    """Consume a receiver delivery response (or transport failure) without downgrading confirmed."""
+    try:
+        resolved_sender = _validate_sender_store(sender_db)
+    except Rejected as error:
+        return {"ok": False, "error": error.code}
+
+    fetched = read_pending_operation(
+        resolved_sender,
+        dataset_id=dataset_id,
+        source_device_id=source_device_id,
+        operation_id=operation_id,
+    )
+    if not fetched["ok"]:
+        return fetched
+    pending = fetched["record"]
+    caller = CallerContext.for_fixture(dataset_id=dataset_id, device_id=source_device_id)
+
+    if transport_error is not None:
+        return _finalize_pending_update(
+            resolved_sender,
+            caller=caller,
+            operation_id=operation_id,
+            delivery_state="verification_pending",
+            last_error=transport_error,
+            receiver_raw=receiver_raw,
+        )
+
+    if receiver_raw.get("ok") is True and receiver_raw.get("state") == "committed":
+        receipt = receiver_raw.get("receipt")
+        if _receipt_matches_pending(receipt, pending):
+            return _finalize_pending_update(
+                resolved_sender,
+                caller=caller,
+                operation_id=operation_id,
+                delivery_state="confirmed",
+                last_error=None,
+                receiver_raw=receiver_raw,
+                confirmed_revision_id=receipt["result_revision_id"],
+                confirmed_effect=receipt.get("effect"),
+            )
+        return _finalize_pending_update(
+            resolved_sender,
+            caller=caller,
+            operation_id=operation_id,
+            delivery_state="verification_pending",
+            last_error="intent_conflict",
+            receiver_raw=receiver_raw,
+        )
+
+    raw_error = receiver_raw.get("error") or "unknown_error"
+    next_state = "unsent" if raw_error == "unsupported_capability" else "verification_pending"
+    return _finalize_pending_update(
+        resolved_sender,
+        caller=caller,
+        operation_id=operation_id,
+        delivery_state=next_state,
+        last_error=raw_error,
+        receiver_raw=receiver_raw,
+    )
+
+
+def consume_lookup_response(
+    sender_db: str | Path,
+    *,
+    dataset_id: str,
+    source_device_id: str,
+    operation_id: str,
+    receiver_raw: dict,
+) -> dict:
+    """Consume a receiver receipt.lookup response without downgrading confirmed."""
+    try:
+        resolved_sender = _validate_sender_store(sender_db)
+    except Rejected as error:
+        return {"ok": False, "error": error.code}
+
+    fetched = read_pending_operation(
+        resolved_sender,
+        dataset_id=dataset_id,
+        source_device_id=source_device_id,
+        operation_id=operation_id,
+    )
+    if not fetched["ok"]:
+        return fetched
+    pending = fetched["record"]
+    caller = CallerContext.for_fixture(dataset_id=dataset_id, device_id=source_device_id)
+
+    if receiver_raw.get("ok") is True and receiver_raw.get("state") == "committed":
+        receipt = receiver_raw.get("receipt")
+        if _receipt_matches_pending(receipt, pending):
+            return _finalize_pending_update(
+                resolved_sender,
+                caller=caller,
+                operation_id=operation_id,
+                delivery_state="confirmed",
+                last_error=None,
+                receiver_raw=receiver_raw,
+                confirmed_revision_id=receipt["result_revision_id"],
+                confirmed_effect=receipt.get("effect"),
+            )
+        return _finalize_pending_update(
+            resolved_sender,
+            caller=caller,
+            operation_id=operation_id,
+            delivery_state="verification_pending",
+            last_error="intent_conflict",
+            receiver_raw=receiver_raw,
+        )
+
+    if receiver_raw.get("ok") is True:
+        state = receiver_raw.get("state")
+        reason = receiver_raw.get("reason") or state or "unknown"
+        return _finalize_pending_update(
+            resolved_sender,
+            caller=caller,
+            operation_id=operation_id,
+            delivery_state="verification_pending",
+            last_error=reason,
+            receiver_raw=receiver_raw,
+        )
+
+    raw_error = receiver_raw.get("error") or "unknown_error"
+    return _finalize_pending_update(
+        resolved_sender,
+        caller=caller,
+        operation_id=operation_id,
+        delivery_state="verification_pending",
+        last_error=raw_error,
+        receiver_raw=receiver_raw,
+    )
+
+
 def send_pending_operation(
     sender_db: str | Path,
     receiver_db: str | Path,

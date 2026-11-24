@@ -38,6 +38,7 @@ from app.domain.workflow import WorkflowView
 from app.search.base import SearchResult
 from app.services.branch_lock import branch_guard
 from app.services.chat_service import ChatService
+from app.services.exchange_receive import recover_exchange_checkpoint
 from app.services.plan_undo import recover_plan_undo
 from app.services.planning_context import planning_context
 from app.storage.session_store import SessionStore
@@ -323,6 +324,7 @@ async def create_branch(
         if parent_id:
             assert graph is not None
             recovered = await recover_plan_undo(store, graph, parent_id)
+            await recover_exchange_checkpoint(store, graph, parent_id)
             if recovered and source and source.version.id == recovered.version.id:
                 source = recovered
             if not payload.fork_version_id:

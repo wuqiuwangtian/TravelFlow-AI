@@ -1,30 +1,35 @@
 """Desktop receive path for frozen travelflow.expense-create 0.1.0 into real trip ledgers.
 
-Transaction boundary note:
+Transaction & checkpoint recovery design:
 - Existing routes_itinerary._save_revision commits LangGraph checkpoints, versions, plans,
-  and sessions across separate SQLite transactions/connections.
-- To preserve atomic consistency between the new trip version (versions + plans + sessions)
-  and the durable operation receipt (exchange_operation_receipts), this service commits all
-  four business/receipt tables in a single BEGIN IMMEDIATE ... COMMIT transaction on
-  SessionStore's SQLite connection BEFORE any optional LangGraph checkpoint sync.
-- LangGraph AsyncSqliteSaver owns a separate SQLite connection; if a crash occurs after the
-  atomic business+receipt commit and before optional graph.aupdate_state finishes, trip detail
-  and ledger reads (versions/plans) and receipt lookup/replay remain 100% consistent while
-  the LangGraph checkpoint lags until the next chat/sync turn.
+  and sessions across separate SQLite transactions/connections, and SessionStore shares a
+  single aiosqlite.Connection across coroutines.
+- To prevent cross-coroutine half-commits or unintended rollbacks on the shared SessionStore
+  connection, receive_expense_create and lookup_exchange_receipt open a dedicated SQLite
+  connection (isolation_level=None) and execute versions + plans + sessions.updated_at +
+  exchange_operation_receipts inside one exclusive BEGIN IMMEDIATE ... COMMIT transaction.
+- Newly received versions are committed with checkpoint_id=NULL. After commit (and on any
+  idempotent replay, chat turn, itinerary edit, fork, undo, or studio adoption), the durable
+  idempotent helper recover_exchange_checkpoint() reconciles LangGraph's checkpoint to the
+  committed head version and stamps versions.checkpoint_id.
 """
 
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import re
 import sqlite3
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
+
+import aiosqlite
 
 from app.agents.checkpoint import thread_config
 from app.domain.enums import PlanStatus
@@ -76,10 +81,11 @@ class ExchangeRejected(Exception):
 
 @dataclass(frozen=True)
 class ExchangeReceiveScope:
-    """Explicit receiver-verified identity and dataset scope."""
+    """Explicit receiver-verified identity, dataset, and target (travel_id, branch_id) scope."""
 
     dataset_id: str
     authorized_devices: frozenset[str]
+    authorized_targets: frozenset[tuple[str, str]]
     can_write: bool = True
     can_lookup_receipt: bool = True
 
@@ -317,7 +323,11 @@ def _validate_v010_capabilities(payload: dict[str, Any]) -> None:
 
 
 def _authorize_scope(
-    scope: ExchangeReceiveScope, operation: dict[str, Any], *, require_write: bool
+    scope: ExchangeReceiveScope,
+    operation: dict[str, Any],
+    *,
+    require_write: bool,
+    target: dict[str, Any] | None = None,
 ) -> None:
     if require_write and not scope.can_write:
         raise ExchangeRejected("unauthorized")
@@ -326,6 +336,10 @@ def _authorize_scope(
     if operation["dataset_id"] != scope.dataset_id:
         raise ExchangeRejected("unauthorized")
     if operation["source_device_id"] not in scope.authorized_devices:
+        raise ExchangeRejected("unauthorized")
+    if target is not None and (target["travel_id"], target["branch_id"]) not in (
+        scope.authorized_targets
+    ):
         raise ExchangeRejected("unauthorized")
 
 
@@ -348,6 +362,31 @@ def _format_receipt(row: Any) -> dict[str, Any]:
     }
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def _resolve_store_db_path(store: SessionStore) -> Path | None:
+    cur = await store._conn.execute("PRAGMA database_list")
+    rows = await cur.fetchall()
+    for row in rows:
+        if row["name"] == "main" and row["file"]:
+            return Path(str(row["file"]))
+    return None
+
+
+async def _open_exclusive_connection(
+    db_path: Path, *, busy_timeout_ms: int = 200
+) -> aiosqlite.Connection:
+    conn = await aiosqlite.connect(str(db_path), isolation_level=None, timeout=10.0)
+    conn.row_factory = aiosqlite.Row
+    await conn.execute("PRAGMA foreign_keys=ON")
+    await conn.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+    return conn
+
+
 async def _begin_immediate(conn: Any) -> bool:
     try:
         await conn.execute("BEGIN IMMEDIATE")
@@ -358,13 +397,122 @@ async def _begin_immediate(conn: Any) -> bool:
         raise
 
 
+async def recover_exchange_checkpoint(
+    store: SessionStore, graph: Any, branch_id: str
+) -> str | None:
+    """Reconcile LangGraph checkpoint to the latest committed exchange_receive version.
+
+    Durable & idempotent:
+    - Committed exchange_receive versions start with checkpoint_id IS NULL.
+    - If the branch head is an unsynced exchange_receive version, this reconciles the
+      LangGraph thread state to match the committed plans row (reusing the current
+      checkpoint when state already matches) and stamps versions.checkpoint_id on an
+      exclusive transaction boundary.
+    - Caller must hold branch_guard(branch_id).
+    """
+    if graph is None:
+        return None
+
+    cur = await store._conn.execute(
+        "SELECT id, trigger, checkpoint_id FROM versions "
+        "WHERE branch_id = ? ORDER BY seq DESC LIMIT 1",
+        (branch_id,),
+    )
+    head_row = await cur.fetchone()
+    if (
+        head_row is None
+        or head_row["trigger"] != "exchange_receive"
+        or head_row["checkpoint_id"] is not None
+    ):
+        return None
+
+    version_id = str(head_row["id"])
+    cur = await store._conn.execute(
+        "SELECT markdown, todos, itinerary, requirements FROM plans WHERE version_id = ?",
+        (version_id,),
+    )
+    plan_row = await cur.fetchone()
+    if plan_row is None or not plan_row["itinerary"]:
+        return None
+
+    itinerary = Itinerary.model_validate_json(plan_row["itinerary"])
+    requirements = (
+        Requirements.model_validate_json(plan_row["requirements"])
+        if plan_row["requirements"]
+        else Requirements()
+    )
+    markdown = str(plan_row["markdown"] or "")
+    todos = json.loads(plan_row["todos"] or "[]")
+
+    config = thread_config(branch_id)
+    snapshot = await graph.aget_state(config)
+    values = dict(snapshot.values or {})
+    current_ckpt = (snapshot.config.get("configurable") or {}).get("checkpoint_id")
+
+    already_synced = (
+        bool(current_ckpt)
+        and values.get("itinerary") == itinerary
+        and values.get("plan_markdown") == markdown
+        and values.get("requirements") == requirements
+        and list(values.get("todos") or []) == todos
+    )
+    new_checkpoint_id: str | None
+    if already_synced:
+        new_checkpoint_id = str(current_ckpt)
+    else:
+        patch = {
+            "pending_journey": None,
+            "pending_place": None,
+            "pending_replan": None,
+            "pending_linked": None,
+            "pending_move": None,
+            "plan_markdown": markdown,
+            "itinerary": itinerary,
+            "requirements": requirements,
+            "todos": todos,
+            "revision": int(values.get("revision", 0)) + 1,
+            "status": values.get("status", PlanStatus.REVIEWING),
+            "updated_at": datetime.now(),
+        }
+        updated = await graph.aupdate_state(config, patch, as_node="refiner")
+        raw_ckpt = (updated.get("configurable") or {}).get("checkpoint_id")
+        if not raw_ckpt:
+            return None
+        new_checkpoint_id = str(raw_ckpt)
+
+    db_path = await _resolve_store_db_path(store)
+    if db_path is not None:
+        tx_conn = await _open_exclusive_connection(db_path, busy_timeout_ms=5000)
+        try:
+            await tx_conn.execute("BEGIN IMMEDIATE")
+            try:
+                await tx_conn.execute(
+                    "UPDATE versions SET checkpoint_id = ? WHERE id = ? AND checkpoint_id IS NULL",
+                    (new_checkpoint_id, version_id),
+                )
+                await tx_conn.execute("COMMIT")
+            except BaseException:
+                if tx_conn.in_transaction:
+                    await tx_conn.execute("ROLLBACK")
+                raise
+        finally:
+            await tx_conn.close()
+    else:
+        await store._conn.execute(
+            "UPDATE versions SET checkpoint_id = ? WHERE id = ? AND checkpoint_id IS NULL",
+            (new_checkpoint_id, version_id),
+        )
+        await store._conn.commit()
+    return str(new_checkpoint_id)
+
+
 async def lookup_exchange_receipt(
     store: SessionStore,
     raw_query: bytes,
     *,
     scope: ExchangeReceiveScope,
 ) -> dict[str, Any]:
-    """Authorize caller first, then query durable exchange receipt on the real app DB."""
+    """Authorize caller first, then query durable exchange receipt on an exclusive connection."""
     try:
         if not scope.can_lookup_receipt:
             raise ExchangeRejected("unauthorized")
@@ -374,23 +522,33 @@ async def lookup_exchange_receipt(
     except ExchangeRejected as error:
         return {"ok": False, "error": error.code}
 
-    conn = store._conn
-    if not await _begin_immediate(conn):
-        return {"ok": True, "state": "unknown", "reason": "storage_busy"}
+    db_path = await _resolve_store_db_path(store)
+    if db_path is None:
+        return {"ok": False, "error": "invalid_target_state"}
+
+    tx_conn = await _open_exclusive_connection(db_path)
     try:
-        cursor = await conn.execute(
-            "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
-            "intent_sha256, effect, result_version_id, session_id, branch_id, entity_id, "
-            "origin_direction FROM exchange_operation_receipts "
-            "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
-            (op["dataset_id"], op["source_device_id"], op["operation_id"]),
-        )
-        row = await cursor.fetchone()
+        if not await _begin_immediate(tx_conn):
+            return {"ok": True, "state": "unknown", "reason": "storage_busy"}
+        try:
+            cursor = await tx_conn.execute(
+                "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
+                "intent_sha256, effect, result_version_id, session_id, branch_id, entity_id, "
+                "origin_direction FROM exchange_operation_receipts "
+                "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (op["dataset_id"], op["source_device_id"], op["operation_id"]),
+            )
+            row = await cursor.fetchone()
+        finally:
+            if tx_conn.in_transaction:
+                await tx_conn.execute("ROLLBACK")
     finally:
-        await conn.execute("ROLLBACK")
+        await tx_conn.close()
 
     if row is None:
         return {"ok": True, "state": "not_found_at_settled_read", "receipt": None}
+    if (row["session_id"], row["branch_id"]) not in scope.authorized_targets:
+        return {"ok": False, "error": "unauthorized"}
     return {"ok": True, "state": "committed", "receipt": _format_receipt(row)}
 
 
@@ -400,10 +558,13 @@ async def receive_expense_create(
     *,
     scope: ExchangeReceiveScope,
     graph: Any = None,
-    on_before_commit: Callable[[], None] | None = None,
-    on_after_commit_before_reply: Callable[[str], None] | None = None,
+    on_after_version_insert: Callable[[], Any] | Callable[[], Awaitable[Any]] | None = None,
+    on_before_commit: Callable[[], Any] | Callable[[], Awaitable[Any]] | None = None,
+    on_after_commit_before_reply: Callable[[str], Any]
+    | Callable[[str], Awaitable[Any]]
+    | None = None,
 ) -> dict[str, Any]:
-    """Receive one 0.1.0 expense.create command into a real trip branch atomically."""
+    """Receive one 0.1.0 expense.create command into an authorized trip branch atomically."""
     try:
         if not scope.can_write:
             raise ExchangeRejected("unauthorized")
@@ -411,224 +572,218 @@ async def receive_expense_create(
             raw_command, "control"
         )
         op = command["operation"]
-        _authorize_scope(scope, op, require_write=True)
+        target = command["target"]
+        _authorize_scope(scope, op, require_write=True, target=target)
     except ExchangeRejected as error:
         return {"ok": False, "error": error.code}
 
-    target = command["target"]
+    db_path = await _resolve_store_db_path(store)
+    if db_path is None:
+        return {"ok": False, "error": "invalid_target_state"}
+
     payload = command["payload"]
     canonical_text = canonical_bytes.decode("utf-8")
-    conn = store._conn
 
     async with branch_guard(target["branch_id"]):
-        if not await _begin_immediate(conn):
-            return {"ok": False, "error": "storage_busy"}
-        checkpoint_sync: tuple[str, str, Itinerary, Requirements, str, list[Any]] | None = None
+        tx_conn = await _open_exclusive_connection(db_path)
+        replayed_receipt: dict[str, Any] | None = None
+        new_version_id: str | None = None
         try:
-            # 1. Verify target (session_id, branch_id) before receipt lookup.
-            cur = await conn.execute(
-                "SELECT id, session_id FROM branches WHERE id = ? AND session_id = ?",
-                (target["branch_id"], target["travel_id"]),
-            )
-            branch_row = await cur.fetchone()
-            if branch_row is None:
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": "unauthorized"}
-
-            # 2. Check durable receipt by (dataset_id, source_device_id, operation_id).
-            cur = await conn.execute(
-                "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
-                "intent_sha256, canonical_intent_json, effect, result_version_id, session_id, "
-                "branch_id, entity_id, origin_direction FROM exchange_operation_receipts "
-                "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
-                (op["dataset_id"], op["source_device_id"], op["operation_id"]),
-            )
-            existing = await cur.fetchone()
-            if existing is not None:
-                await conn.execute("ROLLBACK")
-                if (
-                    existing["intent_sha256"] == intent_sha256
-                    and existing["canonical_intent_json"] == canonical_text
-                ):
-                    return {
-                        "ok": True,
-                        "replayed": True,
-                        "state": "committed",
-                        "receipt": _format_receipt(existing),
-                    }
-                return {"ok": False, "error": "intent_conflict"}
-
-            # 3. Validate 0.1.0 capabilities and field rules.
+            if not await _begin_immediate(tx_conn):
+                return {"ok": False, "error": "storage_busy"}
             try:
-                _validate_v010_capabilities(payload)
-            except ExchangeRejected as error:
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": error.code}
-
-            # 4. Read current branch head version + plan.
-            cur = await conn.execute(
-                "SELECT id, seq, detail_level, checkpoint_id FROM versions "
-                "WHERE branch_id = ? ORDER BY seq DESC LIMIT 1",
-                (target["branch_id"],),
-            )
-            head_row = await cur.fetchone()
-            if head_row is None:
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": "baseline_conflict", "current_revision_id": None}
-
-            current_head_id = str(head_row["id"])
-            if current_head_id != command["expected_revision_id"]:
-                await conn.execute("ROLLBACK")
-                return {
-                    "ok": False,
-                    "error": "baseline_conflict",
-                    "current_revision_id": current_head_id,
-                }
-
-            cur = await conn.execute(
-                "SELECT markdown, citations, todos, searched_at, itinerary, requirements "
-                "FROM plans WHERE version_id = ?",
-                (current_head_id,),
-            )
-            plan_row = await cur.fetchone()
-            if plan_row is None or not plan_row["itinerary"]:
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": "invalid_target_state"}
-
-            itinerary = Itinerary.model_validate_json(plan_row["itinerary"])
-            requirements = (
-                Requirements.model_validate_json(plan_row["requirements"])
-                if plan_row["requirements"]
-                else Requirements()
-            )
-
-            # 5. Enforce entity uniqueness and 2000-expense single-branch cap.
-            if any(entry.id == target["entity_id"] for entry in itinerary.expenses):
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": "entity_exists"}
-            if len(itinerary.expenses) >= MAX_BRANCH_EXPENSES:
-                await conn.execute("ROLLBACK")
-                return {"ok": False, "error": "expense_limit_exceeded"}
-
-            # 6. Apply existing domain add_expense + sync_markdown.
-            expense_create = ExpenseCreate(
-                request_id=target["entity_id"],
-                title=payload["title"],
-                amount=Decimal(payload["amount_cents"]).scaleb(-2),
-                category=payload["category"],
-                day=payload["day"],
-                activity_id=payload["activity_id"],
-                notes=payload["notes"],
-                receipt_ids=payload["receipt_ids"],
-                allow_shared_receipts=payload["allow_shared_receipts"],
-                budget_item_id=payload["budget_item_id"],
-                settles_budget=payload["settles_budget"],
-            )
-            add_expense(itinerary, expense_create)
-            new_markdown = sync_markdown(plan_row["markdown"] or "", itinerary, requirements)
-
-            new_version_id = uuid.uuid4().hex[:12]
-            next_seq = int(head_row["seq"]) + 1
-            now_local = datetime.now().isoformat(timespec="seconds")
-            now_utc = datetime.now(UTC).isoformat()
-
-            # 7. Atomically commit versions + plans + sessions + exchange_operation_receipts.
-            # Received events are tagged origin_direction='received' and never enqueued as
-            # local outbound edits to echo back to the source device.
-            await conn.execute(
-                "INSERT INTO versions(id, branch_id, seq, summary, detail_level, trigger, "
-                "checkpoint_id, created_at) VALUES (?, ?, ?, ?, ?, 'exchange_receive', ?, ?)",
-                (
-                    new_version_id,
-                    target["branch_id"],
-                    next_seq,
-                    f"同步记账：{payload['title']}",
-                    head_row["detail_level"],
-                    head_row["checkpoint_id"],
-                    now_local,
-                ),
-            )
-            await conn.execute(
-                "INSERT INTO plans(version_id, markdown, citations, todos, searched_at, "
-                "itinerary, requirements) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    new_version_id,
-                    new_markdown,
-                    plan_row["citations"],
-                    plan_row["todos"],
-                    plan_row["searched_at"],
-                    itinerary.model_dump_json(),
-                    requirements.model_dump_json(),
-                ),
-            )
-            await conn.execute(
-                "UPDATE sessions SET updated_at = ? WHERE id = ?",
-                (now_local, target["travel_id"]),
-            )
-            await conn.execute(
-                "INSERT INTO exchange_operation_receipts("
-                "dataset_id, source_device_id, operation_id, kind, canonical_profile, "
-                "intent_sha256, canonical_intent_json, effect, result_version_id, "
-                "session_id, branch_id, entity_id, origin_direction, committed_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, 'changed', ?, ?, ?, ?, 'received', ?)",
-                (
-                    op["dataset_id"],
-                    op["source_device_id"],
-                    op["operation_id"],
-                    command["kind"],
-                    CANONICAL_PROFILE,
-                    intent_sha256,
-                    canonical_text,
-                    new_version_id,
-                    target["travel_id"],
-                    target["branch_id"],
-                    target["entity_id"],
-                    now_utc,
-                ),
-            )
-
-            if on_before_commit is not None:
-                on_before_commit()
-            await conn.execute("COMMIT")
-            todos_raw = json.loads(plan_row["todos"] or "[]")
-            checkpoint_sync = (
-                target["branch_id"],
-                new_version_id,
-                itinerary,
-                requirements,
-                new_markdown,
-                todos_raw,
-            )
-        except BaseException:
-            await conn.execute("ROLLBACK")
-            raise
-
-        if on_after_commit_before_reply is not None:
-            on_after_commit_before_reply(new_version_id)
-
-        # Best-effort post-commit LangGraph checkpoint sync (separate SQLite connection).
-        if graph is not None and checkpoint_sync is not None:
-            bid, vid, synced_itinerary, synced_req, synced_md, synced_todos = checkpoint_sync
-            config = thread_config(bid)
-            snapshot = await graph.aget_state(config)
-            values = dict(snapshot.values or {})
-            patch = {
-                "plan_markdown": synced_md,
-                "itinerary": synced_itinerary,
-                "requirements": synced_req,
-                "todos": synced_todos,
-                "revision": int(values.get("revision", 0)) + 1,
-                "status": values.get("status", PlanStatus.REVIEWING),
-                "updated_at": datetime.now(),
-            }
-            updated = await graph.aupdate_state(config, patch, as_node="refiner")
-            new_checkpoint_id = (updated.get("configurable") or {}).get("checkpoint_id")
-            if new_checkpoint_id:
-                await conn.execute(
-                    "UPDATE versions SET checkpoint_id = ? WHERE id = ?",
-                    (new_checkpoint_id, vid),
+                # 1. Verify target (session_id, branch_id) exists.
+                cur = await tx_conn.execute(
+                    "SELECT id, session_id FROM branches WHERE id = ? AND session_id = ?",
+                    (target["branch_id"], target["travel_id"]),
                 )
-                await conn.commit()
+                branch_row = await cur.fetchone()
+                if branch_row is None:
+                    await tx_conn.execute("ROLLBACK")
+                    return {"ok": False, "error": "unauthorized"}
+
+                # 2. Check durable receipt by (dataset_id, source_device_id, operation_id).
+                cur = await tx_conn.execute(
+                    "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
+                    "intent_sha256, canonical_intent_json, effect, result_version_id, session_id, "
+                    "branch_id, entity_id, origin_direction FROM exchange_operation_receipts "
+                    "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                    (op["dataset_id"], op["source_device_id"], op["operation_id"]),
+                )
+                existing = await cur.fetchone()
+                if existing is not None:
+                    await tx_conn.execute("ROLLBACK")
+                    if (
+                        existing["intent_sha256"] == intent_sha256
+                        and existing["canonical_intent_json"] == canonical_text
+                    ):
+                        replayed_receipt = _format_receipt(existing)
+                    else:
+                        return {"ok": False, "error": "intent_conflict"}
+
+                if replayed_receipt is None:
+                    # 3. Validate 0.1.0 capabilities and field rules.
+                    try:
+                        _validate_v010_capabilities(payload)
+                    except ExchangeRejected as error:
+                        await tx_conn.execute("ROLLBACK")
+                        return {"ok": False, "error": error.code}
+
+                    # 4. Read current branch head version + plan.
+                    cur = await tx_conn.execute(
+                        "SELECT id, seq, detail_level FROM versions "
+                        "WHERE branch_id = ? ORDER BY seq DESC LIMIT 1",
+                        (target["branch_id"],),
+                    )
+                    head_row = await cur.fetchone()
+                    if head_row is None:
+                        await tx_conn.execute("ROLLBACK")
+                        return {
+                            "ok": False,
+                            "error": "baseline_conflict",
+                            "current_revision_id": None,
+                        }
+
+                    current_head_id = str(head_row["id"])
+                    if current_head_id != command["expected_revision_id"]:
+                        await tx_conn.execute("ROLLBACK")
+                        return {
+                            "ok": False,
+                            "error": "baseline_conflict",
+                            "current_revision_id": current_head_id,
+                        }
+
+                    cur = await tx_conn.execute(
+                        "SELECT markdown, citations, todos, searched_at, itinerary, requirements "
+                        "FROM plans WHERE version_id = ?",
+                        (current_head_id,),
+                    )
+                    plan_row = await cur.fetchone()
+                    if plan_row is None or not plan_row["itinerary"]:
+                        await tx_conn.execute("ROLLBACK")
+                        return {"ok": False, "error": "invalid_target_state"}
+
+                    itinerary = Itinerary.model_validate_json(plan_row["itinerary"])
+                    requirements = (
+                        Requirements.model_validate_json(plan_row["requirements"])
+                        if plan_row["requirements"]
+                        else Requirements()
+                    )
+
+                    # 5. Enforce entity uniqueness and 2000-expense single-branch cap.
+                    if any(entry.id == target["entity_id"] for entry in itinerary.expenses):
+                        await tx_conn.execute("ROLLBACK")
+                        return {"ok": False, "error": "entity_exists"}
+                    if len(itinerary.expenses) >= MAX_BRANCH_EXPENSES:
+                        await tx_conn.execute("ROLLBACK")
+                        return {"ok": False, "error": "expense_limit_exceeded"}
+
+                    # 6. Apply existing domain add_expense + sync_markdown.
+                    expense_create = ExpenseCreate(
+                        request_id=target["entity_id"],
+                        title=payload["title"],
+                        amount=Decimal(payload["amount_cents"]).scaleb(-2),
+                        category=payload["category"],
+                        day=payload["day"],
+                        activity_id=payload["activity_id"],
+                        notes=payload["notes"],
+                        receipt_ids=payload["receipt_ids"],
+                        allow_shared_receipts=payload["allow_shared_receipts"],
+                        budget_item_id=payload["budget_item_id"],
+                        settles_budget=payload["settles_budget"],
+                    )
+                    add_expense(itinerary, expense_create)
+                    new_markdown = sync_markdown(
+                        plan_row["markdown"] or "", itinerary, requirements
+                    )
+
+                    new_version_id = uuid.uuid4().hex[:12]
+                    next_seq = int(head_row["seq"]) + 1
+                    now_local = datetime.now().isoformat(timespec="seconds")
+                    now_utc = datetime.now(UTC).isoformat()
+
+                    # 7. Atomically commit versions (checkpoint_id=NULL) + plans + sessions +
+                    # exchange_operation_receipts on the exclusive connection.
+                    await tx_conn.execute(
+                        "INSERT INTO versions(id, branch_id, seq, summary, detail_level, trigger, "
+                        "checkpoint_id, created_at) VALUES (?, ?, ?, ?, ?, 'exchange_receive', "
+                        "NULL, ?)",
+                        (
+                            new_version_id,
+                            target["branch_id"],
+                            next_seq,
+                            f"同步记账：{payload['title']}",
+                            head_row["detail_level"],
+                            now_local,
+                        ),
+                    )
+                    if on_after_version_insert is not None:
+                        await _maybe_await(on_after_version_insert())
+                    await tx_conn.execute(
+                        "INSERT INTO plans(version_id, markdown, citations, todos, searched_at, "
+                        "itinerary, requirements) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            new_version_id,
+                            new_markdown,
+                            plan_row["citations"],
+                            plan_row["todos"],
+                            plan_row["searched_at"],
+                            itinerary.model_dump_json(),
+                            requirements.model_dump_json(),
+                        ),
+                    )
+                    await tx_conn.execute(
+                        "UPDATE sessions SET updated_at = ? WHERE id = ?",
+                        (now_local, target["travel_id"]),
+                    )
+                    await tx_conn.execute(
+                        "INSERT INTO exchange_operation_receipts("
+                        "dataset_id, source_device_id, operation_id, kind, canonical_profile, "
+                        "intent_sha256, canonical_intent_json, effect, result_version_id, "
+                        "session_id, branch_id, entity_id, origin_direction, committed_at"
+                        ") VALUES (?, ?, ?, ?, ?, ?, ?, 'changed', ?, ?, ?, ?, 'received', ?)",
+                        (
+                            op["dataset_id"],
+                            op["source_device_id"],
+                            op["operation_id"],
+                            command["kind"],
+                            CANONICAL_PROFILE,
+                            intent_sha256,
+                            canonical_text,
+                            new_version_id,
+                            target["travel_id"],
+                            target["branch_id"],
+                            target["entity_id"],
+                            now_utc,
+                        ),
+                    )
+
+                    if on_before_commit is not None:
+                        await _maybe_await(on_before_commit())
+                    await tx_conn.execute("COMMIT")
+            except BaseException:
+                if tx_conn.in_transaction:
+                    await tx_conn.execute("ROLLBACK")
+                raise
+        finally:
+            await tx_conn.close()
+
+        if replayed_receipt is not None:
+            if graph is not None:
+                await recover_exchange_checkpoint(store, graph, target["branch_id"])
+            return {
+                "ok": True,
+                "replayed": True,
+                "state": "committed",
+                "receipt": replayed_receipt,
+            }
+
+        assert new_version_id is not None
+        if on_after_commit_before_reply is not None:
+            await _maybe_await(on_after_commit_before_reply(new_version_id))
+
+        if graph is not None:
+            await recover_exchange_checkpoint(store, graph, target["branch_id"])
 
         return {
             "ok": True,

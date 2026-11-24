@@ -233,7 +233,10 @@ async def undo_plan(store: SessionStore, graph, version_id: str, payload: UndoPl
     if current is None:
         raise InvalidRequest("版本不存在")
     branch_id = current.version.branch_id
+    from app.services.exchange_receive import recover_exchange_checkpoint
+
     await recover_plan_undo(store, graph, branch_id)
+    await recover_exchange_checkpoint(store, graph, branch_id)
     fingerprint = hashlib.sha256(
         json.dumps([version_id, payload.change_version_id]).encode()
     ).hexdigest()
