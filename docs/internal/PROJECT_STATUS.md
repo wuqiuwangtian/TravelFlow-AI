@@ -6,6 +6,12 @@
 
 ## 当前接续状态
 
+- 第三阶段桌面接收首交 `21eed88` 暂缓合入。干净归档执行 `cd backend && python -m pytest -q tests/test_exchange_receive_trip.py tests/test_itinerary_api.py`，15 项通过。随后用同一虚构应用做了以下独立复核，Antigravity 在原分支修正并提交确定性回归。
+  1. 接收在 INSERT INTO versions 之后暂停，另一协程在同一 SessionStore 上执行 touch_session 并提交，再恢复接收并在 on_before_commit 抛异常。重开实读 exchange_receive 版本 1、关联 plans 0、回执 0。branch_guard 不能隔离同一连接上的其他业务。改用具有独占事务边界的写入方案，并验证失败不留孤版、其他正常写入也不被回滚。
+  2. 在业务已提交、图更新前丢回复，重开并按原键重放。版本详情有一笔 8635 分，graph.aget_state 的当前 itinerary.expenses 仍为 0。需要持久、幂等、按版本恢复或等效方案，避免旧 checkpoint 继续生成丢账的新版本；以正常对话或编辑继承该笔及新旧历史读取作验收。无法安全实现时按任务单回报方案及影响。
+  3. 对已有备选分支使用其正确头版本，沿用原调用者／数据集、只改目标，接收实际返回成功。当前 scope 只验证设备和数据集。按显式授权的旅行／分支在读取回执或基线前拒绝误投，用错误分支的真实当前头测试，并覆盖旧键与新键。
+  4. 当前发送方样例只手工插入 sender_outbox；之后没有从该库实际投递或持久确认。用已有待发送恢复逻辑或适配器，从持久输入交付请求并消费回执；丢回复重投后重开双方库，以发送方确认版本与桌面唯一入账版本相同为完成条件。保持隔离传输。
+
 - 正式包 [travelflow.expense-create 0.1.0](../../contracts/expense-create-v0.1.0/SPEC.md) 已验收，移动导入使用固定提交 `d916697828ad3d2f0e87a3a231b996c7873d421b`，manifest.json SHA-256 为 `759145bea1b98f086af4c70938ae33932b6cc0ba0527e12dc62faaf90733b8b1`。干净检出独立核对文件集合、五份文件摘要、四份 JSON 与第二候选的逐字段差异，业务规则及样例一致。两包各 10 场景 36 步、12 项契约测试、25 项桌面专项、文档和发布材料检查通过；既有两包字节未变。移动正式导入回执为 250acac3ff4cbe5ef1879ab2a6e096dd0279ff75。电脑从该提交的干净归档单独运行 node scripts/check-contracts.mjs 通过，再与 d916697 的正式目录逐文件比对，六份文件完全一致。移动业务运行证据沿用 8ba3365，本轮未重跑模拟器。此事件仅交付单笔 CNY 新增与回执查询的契约；应用发布与跨设备传输另验。
 
 - 共同写入契约的单笔新增范围已通过定版评审，分配独立标识 `travelflow.expense-create`、版本 `0.1.0`。行为基线取桌面第二候选 `94ec1fb8965e788e7d068677d9c864d755bd1379`，清单 SHA-256 `99722538b7c006cc7caaa31612f83d0d831b925bd21296dc5737a0448c1b8642`。已接受[移动固定回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/8ba33654b2a6a4dcae02979f05bc4c37b8269711/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)：桌面独立核对六份文件、四组摘要，并复跑移动宿主从持久意图复算摘要与错误映射；Android API 35 取移动实读证据。共同子集限单笔 CNY 新增与按键查询。移动宿主支持显式付款日的差异仍按能力区分。第二候选留作固定证据；正式包交付见上条。
