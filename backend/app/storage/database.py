@@ -159,6 +159,25 @@ CREATE TABLE IF NOT EXISTS workflow_user_templates (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_templates_name
     ON workflow_user_templates(name_key) WHERE deleted=0;
+
+-- 跨端契约 0.1.0 接收回执：与 versions/plans 同事务提交，记录 origin_direction 避免回送来源设备。
+CREATE TABLE IF NOT EXISTS exchange_operation_receipts (
+    dataset_id TEXT NOT NULL,
+    source_device_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    canonical_profile TEXT NOT NULL,
+    intent_sha256 TEXT NOT NULL,
+    canonical_intent_json TEXT NOT NULL,
+    effect TEXT NOT NULL,
+    result_version_id TEXT NOT NULL REFERENCES versions(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    entity_id TEXT NOT NULL,
+    origin_direction TEXT NOT NULL DEFAULT 'received',
+    committed_at TEXT NOT NULL,
+    PRIMARY KEY (dataset_id, source_device_id, operation_id)
+);
 """
 
 
