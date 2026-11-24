@@ -1,0 +1,247 @@
+{
+  "format": "travelflow-expense-result-mapping/0-draft",
+  "contract_id": "travelflow.expense-create",
+  "contract_version": "0.1.0",
+  "status": "frozen",
+  "shared_contract_version": "0.1.0",
+  "evidence_commits": {
+    "desktop": "a589448",
+    "mobile_host_and_android_receipt": "9dec892",
+    "mobile_android_pending_recovery_receipt": "b870ad5",
+    "source_candidate_commit": "94ec1fb",
+    "mobile_candidate_2_receipt": "8ba3365"
+  },
+  "confirmation_rule": {
+    "minimal_receipt_fields": [
+      "effect",
+      "result_revision_id"
+    ],
+    "minimal_receipt_sufficient_for_intent_confirmation": false,
+    "required_for_confirmation": "Caller must verify either matching intent_sha256/canonical_intent from receipt or replay the exact original command under the same operation key so same-key different-intent returns intent_conflict instead of false confirmation."
+  },
+  "outcomes": {
+    "committed_changed": {
+      "desktop": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "includes_intent_sha256": true
+      },
+      "mobile_host": {
+        "kind": "committed",
+        "replayed": false,
+        "effect": "changed"
+      },
+      "mobile_android": {
+        "kind": "committed",
+        "replayed": false,
+        "effect": "changed"
+      }
+    },
+    "replayed_committed": {
+      "desktop": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "effect": "changed",
+        "includes_intent_sha256": true
+      },
+      "mobile_host": {
+        "kind": "committed",
+        "replayed": true,
+        "effect": "changed"
+      },
+      "mobile_android": {
+        "kind": "committed",
+        "replayed": true,
+        "effect": "changed"
+      }
+    },
+    "interrupted_before_commit": {
+      "desktop": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "mobile_host": {
+        "interrupted_before_commit": true
+      },
+      "mobile_android": {
+        "interrupted_before_commit": true
+      }
+    },
+    "interrupted_after_commit": {
+      "desktop": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "mobile_host": {
+        "interrupted_after_commit_before_reply": true
+      },
+      "mobile_android": {
+        "interrupted_after_commit_before_reply": true
+      }
+    },
+    "lookup_committed": {
+      "desktop": {
+        "ok": true,
+        "state": "committed",
+        "effect": "changed",
+        "includes_intent_sha256": true
+      },
+      "mobile_host": {
+        "state": "committed",
+        "effect": "changed",
+        "minimal_receipt_projection": [
+          "effect",
+          "result_revision_id"
+        ],
+        "includes_intent_sha256": false
+      },
+      "mobile_android": {
+        "state": "committed",
+        "effect": "changed",
+        "minimal_receipt_projection": [
+          "effect",
+          "result_revision_id"
+        ],
+        "includes_intent_sha256": false
+      }
+    },
+    "lookup_not_found_settled": {
+      "desktop": {
+        "ok": true,
+        "state": "not_found_at_settled_read"
+      },
+      "mobile_host": {
+        "state": "not_found_at_settled_read"
+      },
+      "mobile_android": {
+        "state": "not_found_at_settled_read"
+      }
+    },
+    "lookup_unknown_busy": {
+      "desktop": {
+        "ok": true,
+        "state": "unknown",
+        "reason": "storage_busy"
+      },
+      "mobile_host": {
+        "state": "unknown",
+        "reason": "storage_busy"
+      },
+      "mobile_android": {
+        "state": "pending_busy"
+      }
+    },
+    "rejected_intent_conflict": {
+      "desktop": {
+        "ok": false,
+        "error": "intent_conflict"
+      },
+      "mobile_host": {
+        "error": "intent_conflict"
+      },
+      "mobile_android": {
+        "error": "intent_conflict"
+      }
+    },
+    "rejected_baseline_conflict": {
+      "desktop": {
+        "ok": false,
+        "error": "baseline_conflict"
+      },
+      "mobile_host": {
+        "error": "baseline_conflict"
+      },
+      "mobile_android": {
+        "error": "baseline_conflict"
+      }
+    },
+    "rejected_entity_exists": {
+      "desktop": {
+        "ok": false,
+        "error": "entity_exists"
+      },
+      "mobile_host": {
+        "error": "entity_exists"
+      },
+      "mobile_android": {
+        "error": "entity_exists"
+      }
+    },
+    "rejected_unauthorized": {
+      "desktop": {
+        "ok": false,
+        "wrong_target_error": "unauthorized",
+        "unauthorized_lookup_error": "unauthorized"
+      },
+      "mobile_host": {
+        "wrong_target_error": "denied",
+        "unauthorized_lookup_error": "denied"
+      },
+      "mobile_android": {
+        "wrong_target_error": "scope_mismatch",
+        "unauthorized_lookup_error": "denied"
+      }
+    },
+    "rejected_expense_limit": {
+      "desktop": {
+        "ok": false,
+        "error": "expense_limit_exceeded"
+      },
+      "mobile_host": {
+        "error": "expense_count"
+      },
+      "mobile_android": {
+        "error": "expense_count"
+      }
+    },
+    "rejected_invalid_input": {
+      "desktop": {
+        "ok": false,
+        "errors": [
+          "integer_range",
+          "type",
+          "invalid_field"
+        ]
+      },
+      "mobile_host": {
+        "errors": [
+          "integer_range",
+          "type",
+          "invalid_field",
+          "category",
+          "budget_link"
+        ]
+      },
+      "mobile_android": {
+        "errors": [
+          "integer_range",
+          "type",
+          "invalid_field"
+        ]
+      }
+    },
+    "rejected_unsupported_capability": {
+      "desktop": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "mobile_android": {
+        "error": "unsupported_capability"
+      },
+      "mobile_host": {
+        "known_deviation_from_candidate": true,
+        "observed_9dec892": {
+          "non_null_paid_on": "committed",
+          "non_null_day": "baseline_conflict",
+          "non_null_activity_id": "baseline_conflict",
+          "non_empty_receipt_ids": "baseline_conflict",
+          "non_null_budget_item_id": "baseline_conflict",
+          "unsupported_currency_usd": "currency"
+        }
+      }
+    }
+  }
+}

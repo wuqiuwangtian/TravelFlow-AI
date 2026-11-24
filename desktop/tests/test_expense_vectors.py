@@ -12,10 +12,12 @@ from pathlib import Path
 
 from desktop.expense_vectors import (
     DEFAULT_CONTRACT_BUNDLE,
+    DEFAULT_FORMAL_CONTRACT_BUNDLE,
     DEFAULT_VECTORS,
     REPO_ROOT,
     run_contract_candidate,
     run_vectors,
+    verify_formal_matches_candidate,
 )
 
 
@@ -196,6 +198,44 @@ raise SystemExit(ev.main([]))
                 (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
             )
             with self.assertRaisesRegex(ValueError, "host/Android result-mapping mismatch"):
+                run_contract_candidate(copy_dir)
+
+    def test_formal_v010_bundle_matches_candidate_runs_all_scenarios_and_rejects_tampering(self):
+        parity = verify_formal_matches_candidate(
+            DEFAULT_FORMAL_CONTRACT_BUNDLE, DEFAULT_CONTRACT_BUNDLE
+        )
+        self.assertTrue(parity["matched"])
+        self.assertEqual(parity["formal_version"], "0.1.0")
+        self.assertEqual(parity["scenarios"], 10)
+
+        report = run_contract_candidate(DEFAULT_FORMAL_CONTRACT_BUNDLE)
+        self.assertTrue(report["all_passed"], json.dumps(report["failed_scenarios"]))
+        self.assertEqual(report["total_scenarios"], 10)
+        self.assertEqual(report["passed_scenarios"], 10)
+        self.assertEqual(report["shared_contract_version"], "0.1.0")
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "desktop.expense_vectors",
+                "--contract-bundle",
+                str(DEFAULT_FORMAL_CONTRACT_BUNDLE),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Summary: 10/10 scenarios passed.", proc.stdout)
+
+        with tempfile.TemporaryDirectory(prefix="p2-formal-tamper-") as tmp:
+            copy_dir = Path(tmp) / "expense-create-v0.1.0"
+            shutil.copytree(DEFAULT_FORMAL_CONTRACT_BUNDLE, copy_dir)
+            (copy_dir / "SPEC.md").write_bytes((copy_dir / "SPEC.md").read_bytes() + b"\n!")
+            with self.assertRaisesRegex(ValueError, "digest mismatch: SPEC.md"):
                 run_contract_candidate(copy_dir)
 
 

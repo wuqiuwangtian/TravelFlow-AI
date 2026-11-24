@@ -1,0 +1,71 @@
+{
+  "format": "travelflow-expense-canonical-digests/0-draft",
+  "contract_id": "travelflow.expense-create",
+  "contract_version": "0.1.0",
+  "status": "frozen",
+  "shared_contract_version": "0.1.0",
+  "canonical_profile": "p1-host-intent-c14n-1",
+  "wrapper_schema": {
+    "keys_order": [
+      "canonical_profile",
+      "channel",
+      "intent"
+    ],
+    "channels": [
+      "control",
+      "receipt-query"
+    ],
+    "encoding": "compact UTF-8 JSON without ASCII escaping; object keys inside intent sorted by UTF-16BE code units; <= 65536 bytes; SHA-256 hex digest"
+  },
+  "cases": [
+    {
+      "id": "control_lunch_base",
+      "channel": "control",
+      "raw_json": "{\"profile\": \"p1-host-control-1\", \"kind\": \"expense.create\", \"operation\": {\"dataset_id\": \"fixture-dataset\", \"source_device_id\": \"fixture-device\", \"operation_id\": \"fixture-op-lunch\"}, \"target\": {\"travel_id\": \"fixture-travel\", \"branch_id\": \"fixture-branch\", \"entity_id\": \"fixture-lunch\"}, \"expected_revision_id\": \"fixture-r0\", \"payload\": {\"title\": \"午餐\", \"amount_cents\": 8635, \"currency\": \"CNY\", \"paid_on\": null, \"category\": \"meal\", \"day\": null, \"activity_id\": null, \"notes\": \"\", \"receipt_ids\": [], \"allow_shared_receipts\": false, \"budget_item_id\": null, \"settles_budget\": false}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"fixture-r0\",\"kind\":\"expense.create\",\"operation\":{\"dataset_id\":\"fixture-dataset\",\"operation_id\":\"fixture-op-lunch\",\"source_device_id\":\"fixture-device\"},\"payload\":{\"activity_id\":null,\"allow_shared_receipts\":false,\"amount_cents\":8635,\"budget_item_id\":null,\"category\":\"meal\",\"currency\":\"CNY\",\"day\":null,\"notes\":\"\",\"paid_on\":null,\"receipt_ids\":[],\"settles_budget\":false,\"title\":\"午餐\"},\"profile\":\"p1-host-control-1\",\"target\":{\"branch_id\":\"fixture-branch\",\"entity_id\":\"fixture-lunch\",\"travel_id\":\"fixture-travel\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22666978747572652d7230222c226b696e64223a22657870656e73652e637265617465222c226f7065726174696f6e223a7b22646174617365745f6964223a22666978747572652d64617461736574222c226f7065726174696f6e5f6964223a22666978747572652d6f702d6c756e6368222c22736f757263655f6465766963655f6964223a22666978747572652d646576696365227d2c227061796c6f6164223a7b2261637469766974795f6964223a6e756c6c2c22616c6c6f775f7368617265645f7265636569707473223a66616c73652c22616d6f756e745f63656e7473223a383633352c226275646765745f6974656d5f6964223a6e756c6c2c2263617465676f7279223a226d65616c222c2263757272656e6379223a22434e59222c22646179223a6e756c6c2c226e6f746573223a22222c22706169645f6f6e223a6e756c6c2c22726563656970745f696473223a5b5d2c22736574746c65735f627564676574223a66616c73652c227469746c65223a22e58d88e9a490227d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22746172676574223a7b226272616e63685f6964223a22666978747572652d6272616e6368222c22656e746974795f6964223a22666978747572652d6c756e6368222c2274726176656c5f6964223a22666978747572652d74726176656c227d7d7d",
+      "sha256": "e85c6c0d3f9c535a4d07eb8e43e33e3daabfbcaf4f85d325eb3e4270c0e34ddd"
+    },
+    {
+      "id": "control_lunch_reordered_keys",
+      "channel": "control",
+      "raw_json": "{\"expected_revision_id\": \"fixture-r0\", \"kind\": \"expense.create\", \"operation\": {\"dataset_id\": \"fixture-dataset\", \"operation_id\": \"fixture-op-lunch\", \"source_device_id\": \"fixture-device\"}, \"payload\": {\"activity_id\": null, \"allow_shared_receipts\": false, \"amount_cents\": 8635, \"budget_item_id\": null, \"category\": \"meal\", \"currency\": \"CNY\", \"day\": null, \"notes\": \"\", \"paid_on\": null, \"receipt_ids\": [], \"settles_budget\": false, \"title\": \"午餐\"}, \"profile\": \"p1-host-control-1\", \"target\": {\"branch_id\": \"fixture-branch\", \"entity_id\": \"fixture-lunch\", \"travel_id\": \"fixture-travel\"}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"fixture-r0\",\"kind\":\"expense.create\",\"operation\":{\"dataset_id\":\"fixture-dataset\",\"operation_id\":\"fixture-op-lunch\",\"source_device_id\":\"fixture-device\"},\"payload\":{\"activity_id\":null,\"allow_shared_receipts\":false,\"amount_cents\":8635,\"budget_item_id\":null,\"category\":\"meal\",\"currency\":\"CNY\",\"day\":null,\"notes\":\"\",\"paid_on\":null,\"receipt_ids\":[],\"settles_budget\":false,\"title\":\"午餐\"},\"profile\":\"p1-host-control-1\",\"target\":{\"branch_id\":\"fixture-branch\",\"entity_id\":\"fixture-lunch\",\"travel_id\":\"fixture-travel\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22666978747572652d7230222c226b696e64223a22657870656e73652e637265617465222c226f7065726174696f6e223a7b22646174617365745f6964223a22666978747572652d64617461736574222c226f7065726174696f6e5f6964223a22666978747572652d6f702d6c756e6368222c22736f757263655f6465766963655f6964223a22666978747572652d646576696365227d2c227061796c6f6164223a7b2261637469766974795f6964223a6e756c6c2c22616c6c6f775f7368617265645f7265636569707473223a66616c73652c22616d6f756e745f63656e7473223a383633352c226275646765745f6974656d5f6964223a6e756c6c2c2263617465676f7279223a226d65616c222c2263757272656e6379223a22434e59222c22646179223a6e756c6c2c226e6f746573223a22222c22706169645f6f6e223a6e756c6c2c22726563656970745f696473223a5b5d2c22736574746c65735f627564676574223a66616c73652c227469746c65223a22e58d88e9a490227d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22746172676574223a7b226272616e63685f6964223a22666978747572652d6272616e6368222c22656e746974795f6964223a22666978747572652d6c756e6368222c2274726176656c5f6964223a22666978747572652d74726176656c227d7d7d",
+      "sha256": "e85c6c0d3f9c535a4d07eb8e43e33e3daabfbcaf4f85d325eb3e4270c0e34ddd"
+    },
+    {
+      "id": "control_lunch_allow_shared_receipts_true",
+      "channel": "control",
+      "raw_json": "{\"profile\": \"p1-host-control-1\", \"kind\": \"expense.create\", \"operation\": {\"dataset_id\": \"fixture-dataset\", \"source_device_id\": \"fixture-device\", \"operation_id\": \"fixture-op-lunch\"}, \"target\": {\"travel_id\": \"fixture-travel\", \"branch_id\": \"fixture-branch\", \"entity_id\": \"fixture-lunch\"}, \"expected_revision_id\": \"fixture-r0\", \"payload\": {\"title\": \"午餐\", \"amount_cents\": 8635, \"currency\": \"CNY\", \"paid_on\": null, \"category\": \"meal\", \"day\": null, \"activity_id\": null, \"notes\": \"\", \"receipt_ids\": [], \"allow_shared_receipts\": true, \"budget_item_id\": null, \"settles_budget\": false}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"fixture-r0\",\"kind\":\"expense.create\",\"operation\":{\"dataset_id\":\"fixture-dataset\",\"operation_id\":\"fixture-op-lunch\",\"source_device_id\":\"fixture-device\"},\"payload\":{\"activity_id\":null,\"allow_shared_receipts\":true,\"amount_cents\":8635,\"budget_item_id\":null,\"category\":\"meal\",\"currency\":\"CNY\",\"day\":null,\"notes\":\"\",\"paid_on\":null,\"receipt_ids\":[],\"settles_budget\":false,\"title\":\"午餐\"},\"profile\":\"p1-host-control-1\",\"target\":{\"branch_id\":\"fixture-branch\",\"entity_id\":\"fixture-lunch\",\"travel_id\":\"fixture-travel\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22666978747572652d7230222c226b696e64223a22657870656e73652e637265617465222c226f7065726174696f6e223a7b22646174617365745f6964223a22666978747572652d64617461736574222c226f7065726174696f6e5f6964223a22666978747572652d6f702d6c756e6368222c22736f757263655f6465766963655f6964223a22666978747572652d646576696365227d2c227061796c6f6164223a7b2261637469766974795f6964223a6e756c6c2c22616c6c6f775f7368617265645f7265636569707473223a747275652c22616d6f756e745f63656e7473223a383633352c226275646765745f6974656d5f6964223a6e756c6c2c2263617465676f7279223a226d65616c222c2263757272656e6379223a22434e59222c22646179223a6e756c6c2c226e6f746573223a22222c22706169645f6f6e223a6e756c6c2c22726563656970745f696473223a5b5d2c22736574746c65735f627564676574223a66616c73652c227469746c65223a22e58d88e9a490227d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22746172676574223a7b226272616e63685f6964223a22666978747572652d6272616e6368222c22656e746974795f6964223a22666978747572652d6c756e6368222c2274726176656c5f6964223a22666978747572652d74726176656c227d7d7d",
+      "sha256": "ea638c25c573ac450eb02faffae24a18cf8b5a30d0efa69ad76f9ff89e0e02e2"
+    },
+    {
+      "id": "query_lunch_base",
+      "channel": "receipt-query",
+      "raw_json": "{\"profile\": \"p1-host-query-1\", \"kind\": \"receipt.lookup\", \"operation\": {\"dataset_id\": \"fixture-dataset\", \"source_device_id\": \"fixture-device\", \"operation_id\": \"fixture-op-lunch\"}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"receipt-query\",\"intent\":{\"kind\":\"receipt.lookup\",\"operation\":{\"dataset_id\":\"fixture-dataset\",\"operation_id\":\"fixture-op-lunch\",\"source_device_id\":\"fixture-device\"},\"profile\":\"p1-host-query-1\"}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22726563656970742d7175657279222c22696e74656e74223a7b226b696e64223a22726563656970742e6c6f6f6b7570222c226f7065726174696f6e223a7b22646174617365745f6964223a22666978747572652d64617461736574222c226f7065726174696f6e5f6964223a22666978747572652d6f702d6c756e6368222c22736f757263655f6465766963655f6964223a22666978747572652d646576696365227d2c2270726f66696c65223a2270312d686f73742d71756572792d31227d7d",
+      "sha256": "6eae8c5e2bbda98cd3e7dab4858f6d573f8593698ce3c9ce97ffee3f45ea8315"
+    }
+  ],
+  "relations": [
+    {
+      "relation": "same",
+      "ids": [
+        "control_lunch_base",
+        "control_lunch_reordered_keys"
+      ]
+    },
+    {
+      "relation": "different",
+      "ids": [
+        "control_lunch_base",
+        "control_lunch_allow_shared_receipts_true",
+        "query_lunch_base"
+      ]
+    }
+  ]
+}

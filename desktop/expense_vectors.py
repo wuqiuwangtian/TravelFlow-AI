@@ -25,12 +25,19 @@ from desktop.expense_executor import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VECTORS = REPO_ROOT / "backend" / "tests" / "fixtures" / "p1_expense_create_vectors.json"
 DEFAULT_CONTRACT_BUNDLE = REPO_ROOT / "contracts" / "expense-create-candidate"
+DEFAULT_FORMAL_CONTRACT_BUNDLE = REPO_ROOT / "contracts" / "expense-create-v0.1.0"
 DEFAULT_SOURCE_FIXTURE = (
     REPO_ROOT / "backend" / "tests" / "fixtures" / "p1_expense_create_candidate.json"
 )
 VECTOR_FORMAT = "travelflow-expense-create-vectors-candidate/0-draft"
 CONTRACT_CANDIDATE_ID = "travelflow.expense-create-candidate"
 CONTRACT_CANDIDATE_VERSION = "0.1.0-candidate.2"
+CONTRACT_FORMAL_ID = "travelflow.expense-create"
+CONTRACT_FORMAL_VERSION = "0.1.0"
+SUPPORTED_CONTRACT_RELEASES = {
+    (CONTRACT_CANDIDATE_ID, CONTRACT_CANDIDATE_VERSION): ("candidate", None),
+    (CONTRACT_FORMAL_ID, CONTRACT_FORMAL_VERSION): ("frozen", CONTRACT_FORMAL_VERSION),
+}
 CONTRACT_CANDIDATE_FILES = (
     "SPEC.md",
     "canonical-digests.json",
@@ -475,13 +482,14 @@ def load_contract_candidate_spec(bundle_dir: Path = DEFAULT_CONTRACT_BUNDLE) -> 
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("Contract candidate bundle missing manifest.json.")
     manifest = json.loads(manifest_path.read_bytes().decode("utf-8"))
+    release_key = (manifest.get("contract_id"), manifest.get("contract_version"))
+    expected_release = SUPPORTED_CONTRACT_RELEASES.get(release_key)
     if (
-        manifest.get("contract_id") != CONTRACT_CANDIDATE_ID
-        or manifest.get("contract_version") != CONTRACT_CANDIDATE_VERSION
-        or manifest.get("status") != "candidate"
-        or manifest.get("shared_contract_version") is not None
+        expected_release is None
+        or manifest.get("status") != expected_release[0]
+        or manifest.get("shared_contract_version") != expected_release[1]
     ):
-        raise ValueError("Unsupported or invalid contract candidate manifest.")
+        raise ValueError("Unsupported or invalid contract bundle manifest.")
 
     files = manifest.get("files")
     if not isinstance(files, dict) or sorted(files.keys()) != sorted(CONTRACT_CANDIDATE_FILES):
@@ -583,6 +591,40 @@ def load_contract_candidate_spec(bundle_dir: Path = DEFAULT_CONTRACT_BUNDLE) -> 
         "contract_version": manifest["contract_version"],
         "defaults": copy.deepcopy(normative["defaults"]),
         "scenarios": joined_scenarios,
+    }
+
+
+def verify_formal_matches_candidate(
+    formal_dir: Path = DEFAULT_FORMAL_CONTRACT_BUNDLE,
+    candidate_dir: Path = DEFAULT_CONTRACT_BUNDLE,
+) -> dict:
+    """Programmatically verify formal 0.1.0 matches 0.1.0-candidate.2 across all semantic files."""
+    formal_spec = load_contract_candidate_spec(formal_dir)
+    candidate_spec = load_contract_candidate_spec(candidate_dir)
+    if formal_spec["contract_id"] != CONTRACT_FORMAL_ID or (
+        formal_spec["contract_version"] != CONTRACT_FORMAL_VERSION
+    ):
+        raise ValueError("Formal bundle identity mismatch.")
+    if formal_spec["defaults"] != candidate_spec["defaults"]:
+        raise ValueError("Formal 0.1.0 defaults differ from candidate 2.")
+    if formal_spec["scenarios"] != candidate_spec["scenarios"]:
+        raise ValueError("Formal 0.1.0 36-step scenarios differ from candidate 2.")
+
+    for name, keys in (
+        ("canonical-digests.json", ("wrapper_schema", "cases", "relations")),
+        ("result-mapping.json", ("confirmation_rule", "outcomes")),
+    ):
+        f_doc = json.loads((Path(formal_dir) / name).read_bytes().decode("utf-8"))
+        c_doc = json.loads((Path(candidate_dir) / name).read_bytes().decode("utf-8"))
+        for key in keys:
+            if f_doc[key] != c_doc[key]:
+                raise ValueError(f"Formal 0.1.0 {name}[{key}] differs from candidate 2.")
+
+    return {
+        "matched": True,
+        "formal_version": formal_spec["contract_version"],
+        "candidate_version": candidate_spec["contract_version"],
+        "scenarios": len(formal_spec["scenarios"]),
     }
 
 

@@ -1,0 +1,19 @@
+{
+  "contract_id": "travelflow.expense-create",
+  "contract_version": "0.1.0",
+  "status": "frozen",
+  "shared_contract_version": "0.1.0",
+  "source_candidate_commit": "94ec1fb",
+  "mobile_review_commit": "8ba3365",
+  "scope": "single-cny-expense-create-and-receipt-lookup",
+  "canonical_profile": "p1-host-intent-c14n-1",
+  "control_profile": "p1-host-control-1",
+  "query_profile": "p1-host-query-1",
+  "files": {
+    "SPEC.md": "686d5e46b8aeacccdccec3fb7f2eab8d5b79f5b53d423e0c1037c33c3f738bdf",
+    "canonical-digests.json": "e0bd02f5112333f03ff9a09dc970ae31223c14bf455a0968549cb5021044c153",
+    "normative-vectors.json": "dc857de23719f605c7c3eceaeb0bcd34e7998d9cf7e4e67500d837d4c63a51a5",
+    "desktop-assertions.json": "284014382d4509e402cf15310b014f09c22f157b733f0f5b7f05b21c99ddfcf1",
+    "result-mapping.json": "33393f24ccb613d5fd8d2b977403e2acf182ece7af222ab401cdd3bf566892d0"
+  }
+}
