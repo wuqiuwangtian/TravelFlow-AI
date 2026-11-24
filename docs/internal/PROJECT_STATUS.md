@@ -6,12 +6,9 @@
 
 ## 当前接续状态
 
-- 2026-11-24 第二阶段桌面执行器首交 `8f93d40aad16fb60e106af914ee066141accb139` 暂缓合入。从固定提交的干净归档运行 `python -m unittest -v desktop.tests.test_expense_executor`，6 项通过，涵盖两个进程中断点、重开、重放、冲突、权限与同键并发。独立临时库追加检查复现三个缺口，原分支返修后复核：
-  1. 在仅含 unrelated 表的 SQLite 上调用 init，返回成功，表数从 1 增至 7。init 应只认领全新隔离库；execute／lookup 只打开已初始化且身份匹配的实验库，在校验前避免创建文件或变更日志模式。对已有无关库及不存在的目标补验。
-  2. 空行程提交 day=60 和 activity_id=unknown-stop 获成功回执。此原型可显式限定两字段均为 null；分别测试各字段，拒绝后核对版本、回执、账目与待发记录。
-  3. 临时库预置同分支 2000 笔后，经实际 execute_command 再建一笔仍返回成功。沿用桌面 add_expense 的单方案上限，在事务内先查旧回执再检查新增数量；补满额拒绝和满额时原操作重放。
+- 2026-11-24 桌面隔离执行器已验收。返修 `d46f638` 的 9 项测试从干净归档通过，覆盖拒绝已有库、未知行程关联、2000 笔上限及满额后的原键重放。集成时另复现并修复主文件缺失时覆盖孤立 SQLite 伴随文件的问题。根目录运行 `python -m unittest desktop.tests.test_expense_executor desktop.tests.test_exchange`（20 项），以及后端 pytest 显式运行 p1_sqlite_commit_boundary_review.py、p1_expense_create_review.py、p1_command_semantics_review.py（44 项），均通过。电脑另从移动 `e5530a7` 的归档冻结安装后复跑 `node scripts/check-p1-desktop-expense-create.mjs`，两种中断与头推进后重放均通过。移动仓 `3499bda` 另记录 Android 原生恢复核实与历史字段两项返修；本次未复验 Android，也未发布写入契约。
 
-- 第二阶段桌面候选已形成：[新增消费的输入、回执与验收表](P1_CROSS_REPO_REVIEW.md#15-第二阶段桌面候选新增一笔消费)。6 项新检查与 36 项既有命令语义检查通过。独立 WAL 临时库已实测子进程在 COMMIT 前退出时只保留初始版本，提交后回包前退出时可重开读到完整四类记录；两项中断检查与上述 42 项合跑通过。桌面执行器本身的持久回执及移动独立执行仍待验。
+- 第二阶段桌面候选已形成：[新增消费的输入、回执与验收表](P1_CROSS_REPO_REVIEW.md#15-第二阶段桌面候选新增一笔消费)。6 项新检查与 36 项既有命令语义检查通过。独立 WAL 临时库已实测子进程在 COMMIT 前退出时只保留初始版本，提交后回包前退出时可重开读到完整四类记录；两项中断检查与上述 42 项合跑通过。执行器后续结果见上条。
 
 - 阶段一桌面交付已接受。首交 `a9cc050` 的 WAL、CRLF 和版本归属三项问题在 `09b30b4649060944c5e17321a73ad15f75124f8f` 修复。从该提交的干净归档运行 10 项交换测试及固定样例 CLI 全部通过。移动侧可按[导出与校验命令](handoff/DEVELOPMENT.md)独立重建候选包，manifest SHA-256 应为 `ec9937ce2a6cd0ef2c9fcf311158ffe536efa30915697ad26ba61dae6090065c`。已接受[移动只读回执及复跑命令](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/120a1d41ac7f10426c80641b3c866821824b40c6/docs/internal/MAINTAINING.md#d1-固定候选交换包的移动只读回执)。电脑侧从双方固定提交重新导出并运行移动 Node 脚本，主支三版分别为零笔、8635 分带票据、同笔带票据并新增封面，备选从主支首版分出且无消费。三份附件摘要相符；等长修改票据预览一个字节后按摘要拒绝。覆盖宿主固定样例只读路径，Android 应用内读取另验。正式写入契约及双向同步尚未验收。
 
