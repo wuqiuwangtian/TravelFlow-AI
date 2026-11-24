@@ -46,12 +46,12 @@
         "includes_intent_sha256": true
       },
       "mobile_host": {
-        "kind": "replayed",
+        "kind": "committed",
         "replayed": true,
         "effect": "changed"
       },
       "mobile_android": {
-        "kind": "replayed",
+        "kind": "committed",
         "replayed": true,
         "effect": "changed"
       }

@@ -89,8 +89,13 @@ assert.equal(mapping.outcomes.rejected_unsupported_capability.mobile_host.observ
 assert.equal(mapping.outcomes.rejected_unsupported_capability.mobile_host.observed_9dec892.unsupported_currency_usd, "currency");
 assert.equal(mapping.outcomes.lookup_committed.mobile_host.includes_intent_sha256, false);
 assert.equal(mapping.outcomes.lookup_committed.mobile_android.includes_intent_sha256, false);
-assert.equal(mapping.outcomes.committed_changed.mobile_host.kind, "committed");
-assert.equal(mapping.outcomes.replayed_committed.mobile_android.kind, "replayed");
+for (const platform of ["mobile_host", "mobile_android"]) {
+  for (const [name, replayed] of [["committed_changed", false], ["replayed_committed", true]]) {
+    const observed = mapping.outcomes[name][platform];
+    assert.equal(observed.kind, "committed");
+    assert.equal(observed.replayed, replayed);
+  }
+}
 
 // Independently recompute canonical wrapper bytes and SHA-256 in Node JS.
 const sortUtf16 = (val) => {
