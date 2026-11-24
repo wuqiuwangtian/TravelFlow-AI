@@ -1,0 +1,210 @@
+{
+  "format": "travelflow-expense-desktop-assertions/0-draft",
+  "contract_id": "travelflow.expense-create",
+  "contract_version": "0.1.0",
+  "status": "frozen",
+  "desktop_baseline_commit": "d7cd845",
+  "scenarios": {
+    "EC01_first_create": {
+      "create_lunch": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      }
+    },
+    "EC02_interrupt_before_commit_then_retry": {
+      "abort_before_commit": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "lookup_after_abort": {
+        "ok": true,
+        "state": "not_found_at_settled_read"
+      },
+      "retry_same_key": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      }
+    },
+    "EC03_interrupt_after_commit_and_replay_after_head_advance": {
+      "abort_after_commit": {
+        "exit_code": 86,
+        "stdout_empty": true
+      },
+      "lookup_committed_after_restart": {
+        "ok": true,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "replay_reordered_keys": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "advance_branch_head": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R2"
+      },
+      "replay_original_after_head_advance": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      }
+    },
+    "EC04_intent_conflict_amount_and_control": {
+      "seed_first": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "conflict_amount_8636": {
+        "ok": false,
+        "error": "intent_conflict"
+      },
+      "conflict_allow_shared_receipts": {
+        "ok": false,
+        "error": "intent_conflict"
+      }
+    },
+    "EC05_baseline_conflict_and_entity_exists": {
+      "seed_first": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "stale_baseline": {
+        "ok": false,
+        "error": "baseline_conflict",
+        "current_revision_var": "R1"
+      },
+      "duplicate_entity_on_current_head": {
+        "ok": false,
+        "error": "entity_exists"
+      }
+    },
+    "EC06_wrong_target_and_lookup_authorization": {
+      "seed_first": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "committed_key_wrong_branch": {
+        "ok": false,
+        "error": "unauthorized"
+      },
+      "new_key_wrong_travel": {
+        "ok": false,
+        "error": "unauthorized"
+      },
+      "lookup_wrong_device": {
+        "ok": false,
+        "error": "unauthorized"
+      },
+      "lookup_without_permission": {
+        "ok": false,
+        "error": "unauthorized"
+      }
+    },
+    "EC07_lookup_busy_and_settled_not_found": {
+      "lookup_while_write_locked": {
+        "ok": true,
+        "state": "unknown",
+        "reason": "storage_busy"
+      },
+      "lookup_after_lock_released": {
+        "ok": true,
+        "state": "not_found_at_settled_read"
+      }
+    },
+    "EC08_limit_1999_to_2000_overflow_and_replay": {
+      "create_1999th": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      },
+      "create_2000th": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R2"
+      },
+      "reject_2001st": {
+        "ok": false,
+        "error": "expense_limit_exceeded"
+      },
+      "replay_1999th_while_at_2000_cap": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "effect": "changed",
+        "result_revision_var": "R1"
+      }
+    },
+    "EC09_invalid_amount_values": {
+      "amount_zero": {
+        "ok": false,
+        "error": "integer_range"
+      },
+      "amount_bool_true": {
+        "ok": false,
+        "error": "type"
+      },
+      "amount_fraction_1_25": {
+        "ok": false,
+        "error": "integer_range"
+      },
+      "amount_overflow_10000000000": {
+        "ok": false,
+        "error": "integer_range"
+      }
+    },
+    "EC10_unsupported_valid_fields_preserve_input": {
+      "non_null_paid_on": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "non_null_day": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "non_null_activity_id": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "non_empty_receipt_ids": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "non_null_budget_item_id": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "unsupported_currency_usd": {
+        "ok": false,
+        "error": "unsupported_capability"
+      }
+    }
+  }
+}

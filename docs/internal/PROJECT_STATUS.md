@@ -6,7 +6,9 @@
 
 ## 当前接续状态
 
-- 共同写入契约的单笔新增范围已通过定版评审，分配独立标识 `travelflow.expense-create`、版本 `0.1.0`。行为基线取桌面第二候选 `94ec1fb8965e788e7d068677d9c864d755bd1379`，清单 SHA-256 `99722538b7c006cc7caaa31612f83d0d831b925bd21296dc5737a0448c1b8642`。已接受[移动固定回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/8ba33654b2a6a4dcae02979f05bc4c37b8269711/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)：桌面独立核对六份文件、四组摘要，并复跑移动宿主从持久意图复算摘要与错误映射；Android API 35 取移动实读证据。共同子集限单笔 CNY 新增与按键查询。移动宿主支持显式付款日的差异仍按能力区分。第二候选留作固定证据；正式版本包、移动导入正式提交与跨设备业务闭环分别待交付。
+- 正式包 [travelflow.expense-create 0.1.0](../../contracts/expense-create-v0.1.0/SPEC.md) 已验收，移动导入使用固定提交 `d916697828ad3d2f0e87a3a231b996c7873d421b`，manifest.json SHA-256 为 `759145bea1b98f086af4c70938ae33932b6cc0ba0527e12dc62faaf90733b8b1`。干净检出独立核对文件集合、五份文件摘要、四份 JSON 与第二候选的逐字段差异，业务规则及样例一致。两包各 10 场景 36 步、12 项契约测试、25 项桌面专项、文档和发布材料检查通过；既有两包字节未变。移动已验候选，正式字节的独立导入待回执。此事件仅交付单笔 CNY 新增与回执查询的契约；应用发布与跨设备传输另验。
+
+- 共同写入契约的单笔新增范围已通过定版评审，分配独立标识 `travelflow.expense-create`、版本 `0.1.0`。行为基线取桌面第二候选 `94ec1fb8965e788e7d068677d9c864d755bd1379`，清单 SHA-256 `99722538b7c006cc7caaa31612f83d0d831b925bd21296dc5737a0448c1b8642`。已接受[移动固定回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/8ba33654b2a6a4dcae02979f05bc4c37b8269711/docs/internal/P1_EXPENSE_VECTOR_REVIEW.md)：桌面独立核对六份文件、四组摘要，并复跑移动宿主从持久意图复算摘要与错误映射；Android API 35 取移动实读证据。共同子集限单笔 CNY 新增与按键查询。移动宿主支持显式付款日的差异仍按能力区分。第二候选留作固定证据；正式包交付见上条。
 
 - 已接受移动 `fb10950aa880a29482621ca06353c8c25f2045c0` 的候选一导入回执。独立比对六份文件、复跑四组规范化摘要及 17 步移动宿主补测；Android 取移动 API 35 回执。本次依据其负例补录宿主 category、budget_link，澄清持久完整意图可复算摘要，未改变仅凭最小回执不能确认的规则。第二候选 `94ec1fb8965e788e7d068677d9c864d755bd1379` 已推送 review/expense-contract-rc2，清单 SHA-256 为 `99722538b7c006cc7caaa31612f83d0d831b925bd21296dc5737a0448c1b8642`。10 项包检查、10 场景及 24 项桌面专项通过。待移动增量复核后评审正式版本。
 
