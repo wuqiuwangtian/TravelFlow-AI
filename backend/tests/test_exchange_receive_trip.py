@@ -693,3 +693,191 @@ async def test_sender_pending_store_delivery_reply_lost_retry_and_confirm_after_
         assert [e.amount_cents for e in state.values["itinerary"].expenses] == [8635]
     finally:
         await _close_isolated_app(conn, cp_cm, client)
+
+
+@pytest.mark.asyncio
+async def test_short_entity_id_receives_reads_back_and_replays_once(tmp_path: Path):
+    """Contract-valid short entity_id ('e1') must bypass old form request_id length rules."""
+    app_db = tmp_path / "desktop_short_entity.db"
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        sid, bid, v1 = await _generate_trip(client)
+        scope = ExchangeReceiveScope(
+            dataset_id="isolated-trip-dataset",
+            authorized_devices=frozenset({"mobile-device-1"}),
+            authorized_targets=frozenset({(sid, bid)}),
+        )
+        cmd_bytes = json.dumps(
+            _make_command(
+                travel_id=sid,
+                branch_id=bid,
+                expected_revision_id=v1,
+                operation_id="op-short-entity-1",
+                entity_id="e1",
+                amount_cents=8635,
+            ),
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        first = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert first["ok"] is True
+        assert first["replayed"] is False
+        assert first["receipt"]["entity_id"] == "e1"
+        assert first["receipt"]["operation"]["operation_id"] == "op-short-entity-1"
+        v2 = first["receipt"]["result_revision_id"]
+
+        replay = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert replay["ok"] is True
+        assert replay["replayed"] is True
+        assert replay["receipt"]["result_revision_id"] == v2
+        assert replay["receipt"]["entity_id"] == "e1"
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # Reopen and verify via app endpoints + independent SQL.
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        versions = (await client.get(f"/api/branches/{bid}/versions")).json()["items"]
+        assert [item["id"] for item in versions] == [v1, v2]
+        detail = (await client.get(f"/api/versions/{v2}")).json()
+        assert len(detail["itinerary"]["expenses"]) == 1
+        assert detail["itinerary"]["expenses"][0]["id"] == "e1"
+        assert detail["itinerary"]["expenses"][0]["amount_cents"] == 8635
+
+        export_res = await client.get(f"/api/versions/{v2}/export")
+        assert export_res.status_code == 200
+        assert "虚构午餐" in export_res.text
+        assert "86.35" in export_res.text
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    with closing(sqlite3.connect(app_db)) as db:
+        db.row_factory = sqlite3.Row
+        p1 = db.execute("SELECT itinerary, requirements FROM plans WHERE version_id = ?", (v1,))
+        row1 = p1.fetchone()
+        p2 = db.execute("SELECT itinerary, requirements FROM plans WHERE version_id = ?", (v2,))
+        row2 = p2.fetchone()
+        it1 = json.loads(row1["itinerary"])
+        it2 = json.loads(row2["itinerary"])
+        assert it1["days"] == it2["days"]
+        assert it1["map_status"] == it2["map_status"]
+        assert json.loads(row1["requirements"]) == json.loads(row2["requirements"])
+
+
+@pytest.mark.asyncio
+async def test_unknown_fields_in_itinerary_or_requirements_reject_before_commit(tmp_path: Path):
+    """Unknown top-level or nested fields in plans JSON must reject fail-closed before commit."""
+    app_db = tmp_path / "desktop_lossless.db"
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        sid, bid, v1 = await _generate_trip(client)
+        scope = ExchangeReceiveScope(
+            dataset_id="isolated-trip-dataset",
+            authorized_devices=frozenset({"mobile-device-1"}),
+            authorized_targets=frozenset({(sid, bid)}),
+        )
+        cmd_bytes = json.dumps(
+            _make_command(
+                travel_id=sid,
+                branch_id=bid,
+                expected_revision_id=v1,
+                operation_id="op-lossless-1",
+                entity_id="e1",
+                amount_cents=8635,
+            ),
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        cur = await conn.execute(
+            "SELECT itinerary, requirements FROM plans WHERE version_id = ?", (v1,)
+        )
+        orig_row = await cur.fetchone()
+        assert orig_row is not None
+        orig_itinerary = json.loads(orig_row["itinerary"])
+        orig_requirements = json.loads(orig_row["requirements"])
+
+        # Case A: top-level unknown field in plans.itinerary.
+        top_unknown = dict(orig_itinerary)
+        top_unknown["future_extension"] = {"v": 1}
+        await conn.execute(
+            "UPDATE plans SET itinerary = ? WHERE version_id = ?",
+            (json.dumps(top_unknown, ensure_ascii=False), v1),
+        )
+        await conn.commit()
+
+        res_top = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert res_top == {"ok": False, "error": "invalid_target_state"}
+
+        # Case B: nested unknown field inside days[0].
+        nested_unknown = json.loads(json.dumps(orig_itinerary))
+        nested_unknown["days"][0]["future_day_meta"] = "keep-me"
+        await conn.execute(
+            "UPDATE plans SET itinerary = ? WHERE version_id = ?",
+            (json.dumps(nested_unknown, ensure_ascii=False), v1),
+        )
+        await conn.commit()
+
+        res_nested = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert res_nested == {"ok": False, "error": "invalid_target_state"}
+
+        # Case C: unknown field in plans.requirements.
+        req_unknown = dict(orig_requirements)
+        req_unknown["future_req_flag"] = True
+        await conn.execute(
+            "UPDATE plans SET itinerary = ?, requirements = ? WHERE version_id = ?",
+            (
+                json.dumps(orig_itinerary, ensure_ascii=False),
+                json.dumps(req_unknown, ensure_ascii=False),
+                v1,
+            ),
+        )
+        await conn.commit()
+
+        res_req = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert res_req == {"ok": False, "error": "invalid_target_state"}
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # Independent SQL audit: 0 new versions, 0 new plans, 0 receipts; source untouched.
+    with closing(sqlite3.connect(app_db)) as db:
+        db.row_factory = sqlite3.Row
+        assert db.execute("SELECT COUNT(*) AS n FROM versions").fetchone()["n"] == 1
+        assert db.execute("SELECT COUNT(*) AS n FROM plans").fetchone()["n"] == 1
+        assert (
+            db.execute("SELECT COUNT(*) AS n FROM exchange_operation_receipts").fetchone()["n"] == 0
+        )
+        req_after = json.loads(
+            db.execute("SELECT requirements FROM plans WHERE version_id = ?", (v1,)).fetchone()[
+                "requirements"
+            ]
+        )
+        assert req_after["future_req_flag"] is True
+
+    # Restore clean requirements -> same command succeeds cleanly with zero lost fields.
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        await conn.execute(
+            "UPDATE plans SET requirements = ? WHERE version_id = ?",
+            (json.dumps(orig_requirements, ensure_ascii=False), v1),
+        )
+        await conn.commit()
+        res_ok = await receive_expense_create(store, cmd_bytes, scope=scope, graph=graph)
+        assert res_ok["ok"] is True
+        v2 = res_ok["receipt"]["result_revision_id"]
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    with closing(sqlite3.connect(app_db)) as db:
+        db.row_factory = sqlite3.Row
+        assert db.execute("SELECT COUNT(*) AS n FROM versions").fetchone()["n"] == 2
+        assert (
+            db.execute("SELECT COUNT(*) AS n FROM exchange_operation_receipts").fetchone()["n"] == 1
+        )
+        row2 = db.execute(
+            "SELECT itinerary, requirements FROM plans WHERE version_id = ?", (v2,)
+        ).fetchone()
+        it2 = json.loads(row2["itinerary"])
+        assert it2["days"] == orig_itinerary["days"]
+        assert json.loads(row2["requirements"]) == orig_requirements
+        assert [e["id"] for e in it2["expenses"]] == ["e1"]
+        assert [e["amount_cents"] for e in it2["expenses"]] == [8635]

@@ -30,14 +30,15 @@ from pathlib import Path
 from typing import Any
 
 import aiosqlite
+from pydantic import ValidationError
 
 from app.agents.checkpoint import thread_config
 from app.domain.enums import PlanStatus
-from app.domain.itinerary import ExpenseCreate, Itinerary
+from app.domain.itinerary import ExpenseInput, Itinerary
 from app.domain.models import Requirements
 from app.services.branch_lock import branch_guard
 from app.services.itinerary_service import sync_markdown
-from app.services.travel_service import add_expense
+from app.services.travel_service import add_expense_with_id
 from app.storage.session_store import SessionStore
 
 CONTRACT_ID = "travelflow.expense-create"
@@ -387,6 +388,24 @@ async def _open_exclusive_connection(
     return conn
 
 
+def _has_unpreserved_keys(raw: Any, dumped: Any) -> bool:
+    """Return True if raw JSON contains any key (top-level or nested) absent after model dump."""
+    if isinstance(raw, dict):
+        if not isinstance(dumped, dict):
+            return True
+        if set(raw.keys()) - set(dumped.keys()):
+            return True
+        return any(_has_unpreserved_keys(value, dumped[key]) for key, value in raw.items())
+    if isinstance(raw, list):
+        if not isinstance(dumped, list) or len(raw) != len(dumped):
+            return True
+        return any(
+            _has_unpreserved_keys(r_item, d_item)
+            for r_item, d_item in zip(raw, dumped, strict=True)
+        )
+    return False
+
+
 async def _begin_immediate(conn: Any) -> bool:
     try:
         await conn.execute("BEGIN IMMEDIATE")
@@ -663,12 +682,26 @@ async def receive_expense_create(
                         await tx_conn.execute("ROLLBACK")
                         return {"ok": False, "error": "invalid_target_state"}
 
-                    itinerary = Itinerary.model_validate_json(plan_row["itinerary"])
-                    requirements = (
-                        Requirements.model_validate_json(plan_row["requirements"])
-                        if plan_row["requirements"]
-                        else Requirements()
-                    )
+                    try:
+                        raw_itinerary = json.loads(plan_row["itinerary"])
+                        itinerary = Itinerary.model_validate(raw_itinerary)
+                        dumped_itinerary = json.loads(itinerary.model_dump_json())
+                        if _has_unpreserved_keys(raw_itinerary, dumped_itinerary):
+                            await tx_conn.execute("ROLLBACK")
+                            return {"ok": False, "error": "invalid_target_state"}
+
+                        if plan_row["requirements"]:
+                            raw_requirements = json.loads(plan_row["requirements"])
+                            requirements = Requirements.model_validate(raw_requirements)
+                            dumped_requirements = json.loads(requirements.model_dump_json())
+                            if _has_unpreserved_keys(raw_requirements, dumped_requirements):
+                                await tx_conn.execute("ROLLBACK")
+                                return {"ok": False, "error": "invalid_target_state"}
+                        else:
+                            requirements = Requirements()
+                    except (json.JSONDecodeError, ValidationError, TypeError):
+                        await tx_conn.execute("ROLLBACK")
+                        return {"ok": False, "error": "invalid_target_state"}
 
                     # 5. Enforce entity uniqueness and 2000-expense single-branch cap.
                     if any(entry.id == target["entity_id"] for entry in itinerary.expenses):
@@ -678,9 +711,8 @@ async def receive_expense_create(
                         await tx_conn.execute("ROLLBACK")
                         return {"ok": False, "error": "expense_limit_exceeded"}
 
-                    # 6. Apply existing domain add_expense + sync_markdown.
-                    expense_create = ExpenseCreate(
-                        request_id=target["entity_id"],
+                    # 6. Apply existing domain add_expense_with_id + sync_markdown.
+                    expense_input = ExpenseInput(
                         title=payload["title"],
                         amount=Decimal(payload["amount_cents"]).scaleb(-2),
                         category=payload["category"],
@@ -692,7 +724,7 @@ async def receive_expense_create(
                         budget_item_id=payload["budget_item_id"],
                         settles_budget=payload["settles_budget"],
                     )
-                    add_expense(itinerary, expense_create)
+                    add_expense_with_id(itinerary, target["entity_id"], expense_input)
                     new_markdown = sync_markdown(
                         plan_row["markdown"] or "", itinerary, requirements
                     )
