@@ -6,6 +6,10 @@
 
 ## 当前接续状态
 
+- 第三阶段返修 `0312126` 暂缓合入。干净归档运行 `cd backend && python -m pytest -q tests/test_exchange_receive_trip.py tests/test_itinerary_api.py`，18 项通过，涵盖上轮事务隔离、重放或正常对话恢复 checkpoint、真实分支头的作用域拒绝及发送方持久确认。独立扩展输入复测发现两项：
+  1. 真实旅行中把合法命令的 target.entity_id 改为 e1，规范化成功，接收入口却因 ExpenseCreate.request_id 的旧表单长度限制抛出未处理 ValidationError。操作键与实体 ID 继续分离；复用领域新增规则但解除旧表单 request_id 对跨端实体 ID 的额外限制。补短 ID 正常写入、应用读取、同键重放仍一笔的回归，对齐正式执行器。
+  2. 在隔离旅行当前 plans.itinerary 原始 JSON 中加入可识别的未知字段，再新增 8635 分。接收返回成功并产生回执，但新版本原始 JSON 缺失该字段。请保留原始行程与需求中未触及的数据（含嵌套扩展），或在无法保证无损映射时于提交前明确拒绝。以独立 SQL 核对源版本和新版本内容，拒绝时版本与回执零新增；确保后续正常编辑／对话不会让被承诺保留的内容悄然丢失。
+
 - 第三阶段桌面接收首交 `21eed88` 暂缓合入。干净归档执行 `cd backend && python -m pytest -q tests/test_exchange_receive_trip.py tests/test_itinerary_api.py`，15 项通过。随后用同一虚构应用做了以下独立复核，Antigravity 在原分支修正并提交确定性回归。
   1. 接收在 INSERT INTO versions 之后暂停，另一协程在同一 SessionStore 上执行 touch_session 并提交，再恢复接收并在 on_before_commit 抛异常。重开实读 exchange_receive 版本 1、关联 plans 0、回执 0。branch_guard 不能隔离同一连接上的其他业务。改用具有独占事务边界的写入方案，并验证失败不留孤版、其他正常写入也不被回滚。
   2. 在业务已提交、图更新前丢回复，重开并按原键重放。版本详情有一笔 8635 分，graph.aget_state 的当前 itinerary.expenses 仍为 0。需要持久、幂等、按版本恢复或等效方案，避免旧 checkpoint 继续生成丢账的新版本；以正常对话或编辑继承该笔及新旧历史读取作验收。无法安全实现时按任务单回报方案及影响。
