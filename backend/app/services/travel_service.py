@@ -58,9 +58,10 @@ def validate_expense_link(itinerary: Itinerary, data: ExpenseInput) -> None:
             raise InvalidRequest("关联活动不存在或不是实际停留点")
 
 
-def add_expense(itinerary: Itinerary, data: ExpenseCreate) -> bool:
+def add_expense_with_id(itinerary: Itinerary, entity_id: str, data: ExpenseInput) -> bool:
+    """Apply domain expense-add rules using an explicit entity ID (shared by form & exchange)."""
     values = expense_values(data)
-    existing = next((e for e in itinerary.expenses if e.id == data.request_id), None)
+    existing = next((e for e in itinerary.expenses if e.id == entity_id), None)
     if existing:
         if all(getattr(existing, key) == value for key, value in values.items()):
             return False
@@ -69,8 +70,12 @@ def add_expense(itinerary: Itinerary, data: ExpenseCreate) -> bool:
     if len(itinerary.expenses) >= 2000:
         raise InvalidRequest("当前方案已达到 2000 笔记录上限")
     now = datetime.now()
-    itinerary.expenses.append(Expense(id=data.request_id, **values, created_at=now, updated_at=now))
+    itinerary.expenses.append(Expense(id=entity_id, **values, created_at=now, updated_at=now))
     return True
+
+
+def add_expense(itinerary: Itinerary, data: ExpenseCreate) -> bool:
+    return add_expense_with_id(itinerary, data.request_id, data)
 
 
 def edit_expense(itinerary: Itinerary, expense_id: str, data: ExpenseInput) -> None:

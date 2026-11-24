@@ -698,9 +698,11 @@ async def create_preview(
 
 
 async def commit_preview(store: SessionStore, graph, preview: AdoptionPreview) -> VersionDetail:
+    from app.services.exchange_receive import recover_exchange_checkpoint
     from app.services.plan_undo import recover_plan_undo
 
     await recover_plan_undo(store, graph, preview.branch_id)
+    await recover_exchange_checkpoint(store, graph, preview.branch_id)
     base = await adoption_base(store, graph, preview.branch_id)
     if base.blocker:
         raise ConflictError(base.blocker)

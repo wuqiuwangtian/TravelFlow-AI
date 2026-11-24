@@ -23,6 +23,7 @@ from app.domain.clarification import clarification_prompt
 from app.domain.enums import DetailLevel, PlanStatus
 from app.domain.models import Requirements
 from app.services.branch_lock import branch_guard
+from app.services.exchange_receive import recover_exchange_checkpoint
 from app.services.plan_undo import recover_plan_undo
 from app.services.planning_context import planning_context
 from app.storage.session_store import SessionStore
@@ -86,6 +87,7 @@ class ChatService:
     ) -> ChatOutcome:
         async with branch_guard(branch_id):
             await recover_plan_undo(self._store, self._graph, branch_id)
+            await recover_exchange_checkpoint(self._store, self._graph, branch_id)
             return await self._send(
                 session_id=session_id,
                 branch_id=branch_id,
@@ -105,6 +107,7 @@ class ChatService:
     ) -> AsyncIterator[dict]:
         async with branch_guard(branch_id):
             await recover_plan_undo(self._store, self._graph, branch_id)
+            await recover_exchange_checkpoint(self._store, self._graph, branch_id)
             async for item in self._send_stream(
                 session_id=session_id,
                 branch_id=branch_id,

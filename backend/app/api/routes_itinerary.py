@@ -405,10 +405,13 @@ async def _save_revision(
     trigger: str = "itinerary_edit",
 ) -> VersionDetail:
     """同时更新图状态和版本快照，下一轮对话接着修改后的行程继续。"""
+    from app.services.exchange_receive import recover_exchange_checkpoint
+
     branch_id = detail.version.branch_id
     recovered = await recover_plan_undo(store, graph, branch_id)
     if recovered:
         raise ConflictError("上次撤销结果已恢复，请刷新后再保存这次修改。")
+    await recover_exchange_checkpoint(store, graph, branch_id)
     config = thread_config(branch_id)
     snapshot = await graph.aget_state(config)
     values = dict(snapshot.values or {})
