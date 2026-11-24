@@ -18,6 +18,10 @@ from pathlib import Path
 CANONICAL_PROFILE = "p1-host-intent-c14n-1"
 CONTROL_PROFILE = "p1-host-control-1"
 QUERY_PROFILE = "p1-host-query-1"
+STORE_FORMAT = "travelflow-p2-expense-executor/0-draft"
+STORE_APPLICATION_ID = 0x54465032
+STORE_SCHEMA_VERSION = 1
+MAX_BRANCH_EXPENSES = 2000
 SAFE_INTEGER = 2**53 - 1
 MAX_CANONICAL_BYTES = 65536
 
@@ -40,6 +44,17 @@ EXPENSE_CREATE_FIELDS = frozenset(
     }
 )
 EXPENSE_CATEGORIES = frozenset({"transport", "lodging", "meal", "ticket", "shopping", "other"})
+REQUIRED_TABLES = frozenset(
+    {
+        "executor_store_meta",
+        "datasets",
+        "branches",
+        "revisions",
+        "expenses",
+        "operation_receipts",
+        "outbox",
+    }
+)
 
 SUPPORTED_CAPABILITIES = {
     "canonical_profile": CANONICAL_PROFILE,
@@ -49,14 +64,26 @@ SUPPORTED_CAPABILITIES = {
     "queries": ("receipt.lookup",),
     "currencies": ("CNY",),
     "paid_on": "null_only",
+    "day": "null_only",
+    "activity_id": "null_only",
     "receipt_ids": "empty_only",
     "budget_item_id": "null_only",
+    "max_expenses_per_branch": MAX_BRANCH_EXPENSES,
     "categories": tuple(sorted(EXPENSE_CATEGORIES)),
 }
 
 NUMBER_RE = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS executor_store_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    store_format TEXT NOT NULL,
+    dataset_id TEXT NOT NULL,
+    travel_id TEXT NOT NULL,
+    branch_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS datasets (
     dataset_id TEXT PRIMARY KEY,
     travel_id TEXT NOT NULL
@@ -401,9 +428,8 @@ def _validate_expense_create_capabilities(payload: dict) -> None:
     _require(isinstance(payload["category"], str), "type")
     _require(payload["category"] in EXPENSE_CATEGORIES, "invalid_field")
 
-    activity_id = payload["activity_id"]
-    if activity_id is not None:
-        _require(isinstance(activity_id, str) and 1 <= len(activity_id) <= 100, "invalid_field")
+    _require(payload["day"] is None, "unsupported_capability")
+    _require(payload["activity_id"] is None, "unsupported_capability")
 
     receipt_ids = payload["receipt_ids"]
     _require(isinstance(receipt_ids, list), "type")
@@ -428,13 +454,52 @@ def _authorize(caller: CallerContext, operation: dict, *, require_write: bool) -
         raise Rejected("unauthorized")
 
 
-def _connect(db_path: str | Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path), timeout=10.0, isolation_level=None)
+def _validate_existing_store(db_path: str | Path, *, expected_dataset_id: str) -> Path:
+    """Validate an already-initialized experimental store read-only without mutating files."""
+    path = Path(db_path)
+    if path.is_symlink() or not path.is_file():
+        raise Rejected("invalid_store")
+    resolved = path.resolve(strict=True)
+    uri = resolved.as_uri() + "?mode=ro"
+    try:
+        with closing(sqlite3.connect(uri, uri=True, timeout=10.0, isolation_level=None)) as db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA trusted_schema=OFF")
+            db.execute("PRAGMA busy_timeout=10000")
+            app_id = db.execute("PRAGMA application_id").fetchone()[0]
+            user_ver = db.execute("PRAGMA user_version").fetchone()[0]
+            if app_id != STORE_APPLICATION_ID or user_ver != STORE_SCHEMA_VERSION:
+                raise Rejected("invalid_store")
+            tables = {
+                row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type='table'")
+            }
+            if not tables >= REQUIRED_TABLES:
+                raise Rejected("invalid_store")
+            meta = db.execute(
+                "SELECT store_format, dataset_id FROM executor_store_meta WHERE id = 1"
+            ).fetchone()
+            if (
+                meta is None
+                or meta["store_format"] != STORE_FORMAT
+                or meta["dataset_id"] != expected_dataset_id
+            ):
+                raise Rejected("invalid_store")
+    except sqlite3.Error:
+        raise Rejected("invalid_store") from None
+    return resolved
+
+
+def _connect_existing(resolved: Path, *, read_only: bool) -> sqlite3.Connection:
+    mode = "ro" if read_only else "rw"
+    conn = sqlite3.connect(
+        f"{resolved.as_uri()}?mode={mode}", uri=True, timeout=10.0, isolation_level=None
+    )
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=FULL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA trusted_schema=OFF")
     conn.execute("PRAGMA busy_timeout=10000")
+    if not read_only:
+        conn.execute("PRAGMA synchronous=FULL")
+        conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -446,30 +511,58 @@ def init_isolated_store(
     branch_id: str = "fixture-branch",
     initial_revision_id: str = "fixture-r0",
 ) -> None:
-    """Initialize a fresh isolated SQLite store seeded with one empty branch head."""
+    """Initialize a brand-new isolated SQLite store. Refuses any pre-existing path."""
     path = Path(db_path)
+    if os.path.lexists(path):
+        raise ValueError("Refusing to initialize existing path; choose a new isolated database.")
     path.parent.mkdir(parents=True, exist_ok=True)
+    target = path.parent.resolve(strict=True) / path.name
+    try:
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+    except FileExistsError:
+        raise ValueError(
+            "Refusing to initialize existing path; choose a new isolated database."
+        ) from None
+
     now = datetime.now(UTC).isoformat()
-    with closing(_connect(path)) as db:
-        db.executescript(SCHEMA)
-        db.execute("BEGIN IMMEDIATE")
-        db.execute(
-            "INSERT OR IGNORE INTO datasets(dataset_id, travel_id) VALUES (?, ?)",
-            (dataset_id, travel_id),
-        )
-        db.execute(
-            "INSERT OR IGNORE INTO branches(dataset_id, travel_id, branch_id, head_revision_id) "
-            "VALUES (?, ?, ?, ?)",
-            (dataset_id, travel_id, branch_id, initial_revision_id),
-        )
-        db.execute(
-            "INSERT OR IGNORE INTO revisions("
-            "dataset_id, travel_id, branch_id, revision_id, parent_revision_id, "
-            "seq, source_operation_id, created_at"
-            ") VALUES (?, ?, ?, ?, NULL, 0, NULL, ?)",
-            (dataset_id, travel_id, branch_id, initial_revision_id, now),
-        )
-        db.execute("COMMIT")
+    try:
+        with closing(sqlite3.connect(str(target), timeout=10.0, isolation_level=None)) as db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=FULL")
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute(f"PRAGMA application_id = {STORE_APPLICATION_ID}")
+            db.execute(f"PRAGMA user_version = {STORE_SCHEMA_VERSION}")
+            db.executescript(SCHEMA)
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "INSERT INTO executor_store_meta("
+                "id, store_format, dataset_id, travel_id, branch_id, created_at"
+                ") VALUES (1, ?, ?, ?, ?, ?)",
+                (STORE_FORMAT, dataset_id, travel_id, branch_id, now),
+            )
+            db.execute(
+                "INSERT INTO datasets(dataset_id, travel_id) VALUES (?, ?)",
+                (dataset_id, travel_id),
+            )
+            db.execute(
+                "INSERT INTO branches(dataset_id, travel_id, branch_id, head_revision_id) "
+                "VALUES (?, ?, ?, ?)",
+                (dataset_id, travel_id, branch_id, initial_revision_id),
+            )
+            db.execute(
+                "INSERT INTO revisions("
+                "dataset_id, travel_id, branch_id, revision_id, parent_revision_id, "
+                "seq, source_operation_id, created_at"
+                ") VALUES (?, ?, ?, ?, NULL, 0, NULL, ?)",
+                (dataset_id, travel_id, branch_id, initial_revision_id, now),
+            )
+            db.execute("COMMIT")
+    except BaseException:
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            Path(f"{target}{suffix}").unlink(missing_ok=True)
+        raise
 
 
 def _format_receipt_row(row: sqlite3.Row) -> dict:
@@ -491,17 +584,18 @@ def _format_receipt_row(row: sqlite3.Row) -> dict:
 
 
 def lookup_receipt(db_path: str | Path, raw_query: bytes, *, caller: CallerContext) -> dict:
-    """Authorize caller first, then query committed operation receipt by operation key."""
+    """Authorize caller first, validate store read-only, then query committed receipt."""
     try:
         if not caller.can_lookup_receipt:
             raise Rejected("unauthorized")
         query, _, _ = canonicalize_intent(raw_query, "receipt-query")
         op = query["operation"]
         _authorize(caller, op, require_write=False)
+        resolved = _validate_existing_store(db_path, expected_dataset_id=op["dataset_id"])
     except Rejected as error:
         return {"ok": False, "error": error.code}
 
-    with closing(_connect(db_path)) as db:
+    with closing(_connect_existing(resolved, read_only=True)) as db:
         row = db.execute(
             "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
             "intent_sha256, effect, result_revision_id, travel_id, branch_id, entity_id "
@@ -541,6 +635,7 @@ def execute_command(
         command, canonical_bytes, intent_sha256 = canonicalize_intent(raw_command, "control")
         op = command["operation"]
         _authorize(caller, op, require_write=True)
+        resolved = _validate_existing_store(db_path, expected_dataset_id=op["dataset_id"])
     except Rejected as error:
         return {"ok": False, "error": error.code}
 
@@ -548,7 +643,7 @@ def execute_command(
     target = command["target"]
     payload = command["payload"]
 
-    with closing(_connect(db_path)) as db:
+    with closing(_connect_existing(resolved, read_only=False)) as db:
         _begin_immediate_with_retry(db)
         try:
             existing = db.execute(
@@ -611,6 +706,15 @@ def execute_command(
             if existing_entity is not None:
                 db.execute("ROLLBACK")
                 return {"ok": False, "error": "entity_exists"}
+
+            expense_count = db.execute(
+                "SELECT COUNT(*) AS cnt FROM expenses "
+                "WHERE dataset_id = ? AND travel_id = ? AND branch_id = ?",
+                (op["dataset_id"], target["travel_id"], target["branch_id"]),
+            ).fetchone()["cnt"]
+            if expense_count >= MAX_BRANCH_EXPENSES:
+                db.execute("ROLLBACK")
+                return {"ok": False, "error": "expense_limit_exceeded"}
 
             max_seq = db.execute(
                 "SELECT COALESCE(MAX(seq), 0) AS max_seq FROM revisions "
@@ -783,13 +887,17 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.action == "init":
-        init_isolated_store(
-            args.database,
-            dataset_id=args.dataset_id,
-            travel_id=args.travel_id,
-            branch_id=args.branch_id,
-            initial_revision_id=args.initial_revision_id,
-        )
+        try:
+            init_isolated_store(
+                args.database,
+                dataset_id=args.dataset_id,
+                travel_id=args.travel_id,
+                branch_id=args.branch_id,
+                initial_revision_id=args.initial_revision_id,
+            )
+        except ValueError as error:
+            print(json.dumps({"ok": False, "error": str(error)}, ensure_ascii=False))
+            return 1
         print(json.dumps({"initialized": True, "database": str(args.database)}))
         return 0
 

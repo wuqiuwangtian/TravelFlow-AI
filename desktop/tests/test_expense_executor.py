@@ -13,6 +13,7 @@ from pathlib import Path
 
 from desktop.expense_executor import (
     CANONICAL_PROFILE,
+    MAX_BRANCH_EXPENSES,
     SUPPORTED_CAPABILITIES,
     CallerContext,
     Rejected,
@@ -384,6 +385,152 @@ class ExpenseExecutorTests(unittest.TestCase):
         self.assertEqual(state["expenses"][0]["amount_cents"], 8635)
         self.assertEqual(len(state["receipts"]), 1)
         self.assertEqual(len(state["outbox"]), 1)
+
+    def test_init_execute_and_lookup_guard_unrelated_and_missing_databases(self):
+        unrelated = self.folder / "unrelated.sqlite"
+        with closing(sqlite3.connect(unrelated)) as db:
+            db.execute("CREATE TABLE unrelated(x INTEGER)")
+            db.execute("INSERT INTO unrelated VALUES (1)")
+            db.commit()
+        before_bytes = unrelated.read_bytes()
+
+        with self.assertRaisesRegex(ValueError, "existing path"):
+            init_isolated_store(unrelated)
+        self.assertEqual(
+            execute_command(unrelated, self.command_bytes, caller=self.caller),
+            {
+                "ok": False,
+                "error": "invalid_store",
+            },
+        )
+        self.assertEqual(
+            lookup_receipt(unrelated, self.query_bytes, caller=self.caller),
+            {
+                "ok": False,
+                "error": "invalid_store",
+            },
+        )
+
+        # Unrelated DB must remain completely untouched: same bytes, 1 table, no WAL sidecars.
+        self.assertEqual(unrelated.read_bytes(), before_bytes)
+        self.assertFalse(Path(f"{unrelated}-wal").exists())
+        self.assertFalse(Path(f"{unrelated}-shm").exists())
+        with closing(sqlite3.connect(unrelated)) as db:
+            tables = [
+                row[0] for row in db.execute("SELECT name FROM sqlite_schema WHERE type='table'")
+            ]
+            journal_mode = db.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(tables, ["unrelated"])
+        self.assertEqual(journal_mode, "delete")
+
+        # Non-existent DB must be rejected without creating a file.
+        missing = self.folder / "does-not-exist.sqlite"
+        self.assertEqual(
+            execute_command(missing, self.command_bytes, caller=self.caller),
+            {
+                "ok": False,
+                "error": "invalid_store",
+            },
+        )
+        self.assertEqual(
+            lookup_receipt(missing, self.query_bytes, caller=self.caller),
+            {
+                "ok": False,
+                "error": "invalid_store",
+            },
+        )
+        self.assertFalse(missing.exists())
+
+        # Re-initializing an already-initialized experimental store is also refused.
+        with self.assertRaisesRegex(ValueError, "existing path"):
+            init_isolated_store(self.db_path)
+
+    def test_non_null_day_and_activity_id_are_rejected_without_writes(self):
+        self.assertEqual(SUPPORTED_CAPABILITIES["day"], "null_only")
+        self.assertEqual(SUPPORTED_CAPABILITIES["activity_id"], "null_only")
+
+        for label, field_name, value in (
+            ("day_60", "day", 60),
+            ("unknown_activity", "activity_id", "unknown-stop"),
+        ):
+            with self.subTest(case=label):
+                cmd = json.loads(self.command_bytes.decode("utf-8"))
+                cmd["operation"]["operation_id"] = f"fixture-op-{label}"
+                cmd["target"]["entity_id"] = f"fixture-{label}"
+                cmd["payload"][field_name] = value
+                res = execute_command(
+                    self.db_path, json.dumps(cmd).encode("utf-8"), caller=self.caller
+                )
+                self.assertEqual(res, {"ok": False, "error": "unsupported_capability"})
+                state = _read_tables(self.db_path)
+                self.assertEqual([r["revision_id"] for r in state["revisions"]], ["fixture-r0"])
+                self.assertEqual(state["receipts"], [])
+                self.assertEqual(state["expenses"], [])
+                self.assertEqual(state["outbox"], [])
+
+    def test_branch_expense_limit_2000_rejects_new_and_allows_replay(self):
+        self.assertEqual(SUPPORTED_CAPABILITIES["max_expenses_per_branch"], MAX_BRANCH_EXPENSES)
+        first = execute_command(self.db_path, self.command_bytes, caller=self.caller)
+        self.assertTrue(first["ok"])
+        rev_id = first["receipt"]["result_revision_id"]
+
+        # Seed 1999 additional expenses in the same branch to reach the 2000-expense cap.
+        rows = [
+            (
+                "fixture-dataset",
+                "fixture-travel",
+                "fixture-branch",
+                f"seed-expense-{idx}",
+                rev_id,
+                f"预置消费 {idx}",
+                100,
+                "CNY",
+                None,
+                "other",
+                None,
+                None,
+                "",
+                "[]",
+                None,
+                0,
+                f"seed-op-{idx}",
+            )
+            for idx in range(MAX_BRANCH_EXPENSES - 1)
+        ]
+        with closing(sqlite3.connect(self.db_path)) as db:
+            db.executemany(
+                "INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                rows,
+            )
+            db.commit()
+
+        # A brand-new expense over the 2000 limit must be rejected with zero new writes.
+        over_cmd = json.loads(self.command_bytes.decode("utf-8"))
+        over_cmd["operation"]["operation_id"] = "fixture-op-over-limit"
+        over_cmd["target"]["entity_id"] = "fixture-over-limit"
+        over_cmd["expected_revision_id"] = rev_id
+        over_res = execute_command(
+            self.db_path, json.dumps(over_cmd).encode("utf-8"), caller=self.caller
+        )
+        self.assertEqual(over_res, {"ok": False, "error": "expense_limit_exceeded"})
+
+        state_after_reject = _read_tables(self.db_path)
+        self.assertEqual(len(state_after_reject["expenses"]), MAX_BRANCH_EXPENSES)
+        self.assertEqual(len(state_after_reject["revisions"]), 2)
+        self.assertEqual(len(state_after_reject["receipts"]), 1)
+        self.assertEqual(len(state_after_reject["outbox"]), 1)
+
+        # Replaying the original committed operation while at 2000 expenses still succeeds.
+        replay = execute_command(self.db_path, self.command_bytes, caller=self.caller)
+        self.assertTrue(replay["ok"])
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(replay["receipt"]["result_revision_id"], rev_id)
+
+        state_after_replay = _read_tables(self.db_path)
+        self.assertEqual(len(state_after_replay["expenses"]), MAX_BRANCH_EXPENSES)
+        self.assertEqual(len(state_after_replay["revisions"]), 2)
+        self.assertEqual(len(state_after_replay["receipts"]), 1)
+        self.assertEqual(len(state_after_replay["outbox"]), 1)
 
 
 if __name__ == "__main__":
