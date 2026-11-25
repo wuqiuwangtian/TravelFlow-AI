@@ -182,58 +182,63 @@ assert.deepEqual(formalBundle.mapping.confirmation_rule, candidateBundle.mapping
 assert.deepEqual(formalBundle.mapping.outcomes, candidateBundle.mapping.outcomes, "Formal 0.1.0 result-mapping outcomes drift from candidate 2");
 console.log("Formal expense-create 0.1.0 parity with 0.1.0-candidate.2 verified.");
 
-const patchDir = path.join(root, "contracts/expense-patch-candidate");
-const expectedPatchFiles = [
-  "SPEC.md",
-  "canonical-digests.json",
-  "normative-vectors.json",
-  "result-mapping.json",
-];
-assert(existsSync(patchDir), "Registered contract directory missing: contracts/expense-patch-candidate");
-const patchManifest = JSON.parse(readFileSync(path.join(patchDir, "manifest.json"), "utf8"));
-assert.equal(patchManifest.contract_id, "travelflow.expense-patch-candidate");
-assert.equal(patchManifest.contract_version, "0.1.0-candidate.1");
-assert.equal(patchManifest.status, "candidate");
-assert.equal(patchManifest.shared_contract_version, null);
-assert.deepEqual(Object.keys(patchManifest.files).sort(), expectedPatchFiles);
-const actualPatchEntries = readdirSync(patchDir, { withFileTypes: true }).map((entry) => {
-  assert(!entry.isSymbolicLink(), `Contract cannot contain symlink: contracts/expense-patch-candidate/${entry.name}`);
-  assert(!entry.isDirectory(), `Contract cannot contain unexpected subdir: contracts/expense-patch-candidate/${entry.name}`);
-  return entry.name;
-}).sort();
-assert.deepEqual(actualPatchEntries, [...expectedPatchFiles, "manifest.json"].sort());
-for (const [name, expectedSha] of Object.entries(patchManifest.files)) {
-  const actualSha = createHash("sha256").update(readFileSync(path.join(patchDir, name))).digest("hex");
-  assert.equal(actualSha, expectedSha, `Contract digest mismatch: contracts/expense-patch-candidate/${name}`);
-}
-const patchDigests = JSON.parse(readFileSync(path.join(patchDir, "canonical-digests.json"), "utf8"));
-const patchNormative = JSON.parse(readFileSync(path.join(patchDir, "normative-vectors.json"), "utf8"));
-const patchMapping = JSON.parse(readFileSync(path.join(patchDir, "result-mapping.json"), "utf8"));
-const patchComputed = new Map();
-for (const item of patchDigests.cases) {
-  const wrapped = {
-    canonical_profile: patchDigests.canonical_profile,
-    channel: item.channel,
-    intent: sortUtf16(JSON.parse(item.raw_json)),
-  };
-  const encoded = Buffer.from(JSON.stringify(wrapped), "utf8");
-  const actualSha = createHash("sha256").update(encoded).digest("hex");
-  assert.equal(encoded.toString("utf8"), item.canonical_json, `Patch canonical JSON mismatch: ${item.id}`);
-  assert.equal(encoded.toString("hex"), item.canonical_utf8_hex, `Patch canonical hex mismatch: ${item.id}`);
-  assert.equal(actualSha, item.sha256, `Patch canonical SHA-256 mismatch: ${item.id}`);
-  patchComputed.set(item.id, actualSha);
-}
-for (const rel of patchDigests.relations) {
-  const unique = new Set(rel.ids.map((id) => patchComputed.get(id)));
-  if (rel.relation === "same") assert.equal(unique.size, 1);
-  else assert.equal(unique.size, rel.ids.length);
-}
-for (const sc of patchNormative.scenarios) {
-  for (const st of sc.steps) {
-    assert(st.expected.business_outcome in patchMapping.outcomes, `Unmapped patch outcome: ${sc.id}/${st.name}`);
+for (const [folder, version] of [
+  ["expense-patch-candidate", "0.1.0-candidate.1"],
+  ["expense-patch-candidate.2", "0.1.0-candidate.2"],
+]) {
+  const patchDir = path.join(root, "contracts", folder);
+  const expectedPatchFiles = [
+    "SPEC.md",
+    "canonical-digests.json",
+    "normative-vectors.json",
+    "result-mapping.json",
+  ];
+  assert(existsSync(patchDir), `Registered contract directory missing: contracts/${folder}`);
+  const patchManifest = JSON.parse(readFileSync(path.join(patchDir, "manifest.json"), "utf8"));
+  assert.equal(patchManifest.contract_id, "travelflow.expense-patch-candidate");
+  assert.equal(patchManifest.contract_version, version);
+  assert.equal(patchManifest.status, "candidate");
+  assert.equal(patchManifest.shared_contract_version, null);
+  assert.deepEqual(Object.keys(patchManifest.files).sort(), expectedPatchFiles);
+  const actualPatchEntries = readdirSync(patchDir, { withFileTypes: true }).map((entry) => {
+    assert(!entry.isSymbolicLink(), `Contract cannot contain symlink: contracts/${folder}/${entry.name}`);
+    assert(!entry.isDirectory(), `Contract cannot contain unexpected subdir: contracts/${folder}/${entry.name}`);
+    return entry.name;
+  }).sort();
+  assert.deepEqual(actualPatchEntries, [...expectedPatchFiles, "manifest.json"].sort());
+  for (const [name, expectedSha] of Object.entries(patchManifest.files)) {
+    const actualSha = createHash("sha256").update(readFileSync(path.join(patchDir, name))).digest("hex");
+    assert.equal(actualSha, expectedSha, `Contract digest mismatch: contracts/${folder}/${name}`);
   }
+  const patchDigests = JSON.parse(readFileSync(path.join(patchDir, "canonical-digests.json"), "utf8"));
+  const patchNormative = JSON.parse(readFileSync(path.join(patchDir, "normative-vectors.json"), "utf8"));
+  const patchMapping = JSON.parse(readFileSync(path.join(patchDir, "result-mapping.json"), "utf8"));
+  const patchComputed = new Map();
+  for (const item of patchDigests.cases) {
+    const wrapped = {
+      canonical_profile: patchDigests.canonical_profile,
+      channel: item.channel,
+      intent: sortUtf16(JSON.parse(item.raw_json)),
+    };
+    const encoded = Buffer.from(JSON.stringify(wrapped), "utf8");
+    const actualSha = createHash("sha256").update(encoded).digest("hex");
+    assert.equal(encoded.toString("utf8"), item.canonical_json, `Patch canonical JSON mismatch: ${item.id}`);
+    assert.equal(encoded.toString("hex"), item.canonical_utf8_hex, `Patch canonical hex mismatch: ${item.id}`);
+    assert.equal(actualSha, item.sha256, `Patch canonical SHA-256 mismatch: ${item.id}`);
+    patchComputed.set(item.id, actualSha);
+  }
+  for (const rel of patchDigests.relations) {
+    const unique = new Set(rel.ids.map((id) => patchComputed.get(id)));
+    if (rel.relation === "same") assert.equal(unique.size, 1);
+    else assert.equal(unique.size, rel.ids.length);
+  }
+  for (const sc of patchNormative.scenarios) {
+    for (const st of sc.steps) {
+      assert(st.expected.business_outcome in patchMapping.outcomes, `Unmapped patch outcome: ${sc.id}/${st.name}`);
+    }
+  }
+  console.log(`Expense-patch candidate ${version} manifest, canonical digests, and bundle checks passed.`);
 }
-console.log("Expense-patch candidate 0.1.0-candidate.1 manifest, canonical digests, and bundle checks passed.");
 
 // 摘要一致不代表版本不可改：同时更新内容与摘要也必须被基线比较拒绝。
 if (baseline && !/^0{40}$/.test(baseline)) {

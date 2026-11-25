@@ -1,0 +1,132 @@
+{
+  "contract_id": "travelflow.expense-patch-candidate",
+  "contract_version": "0.1.0-candidate.2",
+  "status": "candidate",
+  "shared_contract_version": null,
+  "confirmation_rule": {
+    "minimal_receipt_sufficient_for_intent_confirmation": false,
+    "requires_intent_match_evidence_or_full_intent_replay": true,
+    "revision_mapping_rule": "Mobile compares command.expected_revision_id against persisted synced_desktop_revision_id (not local_revision_id) and advances synced_desktop_revision_id to command.source_revision_id on changed commit."
+  },
+  "outcomes": {
+    "committed_changed": {
+      "desktop_reference": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "changed",
+        "advances_local_revision": true,
+        "advances_synced_desktop_revision": true
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "committed_no_change": {
+      "desktop_reference": {
+        "ok": true,
+        "replayed": false,
+        "state": "committed",
+        "effect": "no_change",
+        "advances_local_revision": false,
+        "advances_synced_desktop_revision": false
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "replayed_committed": {
+      "desktop_reference": {
+        "ok": true,
+        "replayed": true,
+        "state": "committed",
+        "advances_local_revision": false,
+        "advances_synced_desktop_revision": false
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_intent_conflict": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "intent_conflict"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_local_pending_conflict": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "local_pending_conflict",
+        "preserves_local_expense_and_pending_outbox": true,
+        "writes_remote_receipt": false
+      },
+      "mobile_review_status": "pending_mobile_review",
+      "required_response_fields": [
+        "ok",
+        "error",
+        "pending_operation_id"
+      ]
+    },
+    "rejected_baseline_conflict": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "baseline_conflict"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_revision_mismatch": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "revision_mismatch"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_entity_not_found": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "entity_not_found"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_unsupported_capability": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "unsupported_capability"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_invalid_input": {
+      "desktop_reference": {
+        "ok": false,
+        "errors": [
+          "invalid_field",
+          "integer_range",
+          "type",
+          "shape",
+          "identity",
+          "json",
+          "duplicate_key"
+        ]
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "rejected_unauthorized": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "unauthorized"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "lookup_committed": {
+      "desktop_reference": {
+        "ok": true,
+        "state": "committed",
+        "includes_intent_sha256": true
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
+    "lookup_not_found_settled": {
+      "desktop_reference": {
+        "ok": true,
+        "state": "not_found_at_settled_read",
+        "receipt": null
+      },
+      "mobile_review_status": "pending_mobile_review"
+    }
+  }
+}

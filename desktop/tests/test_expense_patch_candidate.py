@@ -1,4 +1,4 @@
-"""Unit tests for expense-patch-candidate 0.1.0-candidate.1 bundle and reference executor."""
+"""Unit tests for expense-patch-candidate 0.1.0-candidate.2 bundle and reference executor."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class ExpensePatchCandidateTests(unittest.TestCase):
         summary = verify_bundle(DEFAULT_BUNDLE_DIR)
         self.assertTrue(summary["ok"])
         self.assertEqual(summary["contract_id"], "travelflow.expense-patch-candidate")
-        self.assertEqual(summary["contract_version"], "0.1.0-candidate.1")
+        self.assertEqual(summary["contract_version"], "0.1.0-candidate.2")
         self.assertEqual(summary["scenarios"], 10)
         self.assertEqual(summary["steps"], 21)
 
@@ -47,7 +47,7 @@ class ExpensePatchCandidateTests(unittest.TestCase):
         manifest = json.loads((DEFAULT_BUNDLE_DIR / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["status"], "candidate")
         self.assertIsNone(manifest["shared_contract_version"])
-        self.assertEqual(manifest["base_commit"], "fdefebe")
+        self.assertEqual(manifest["base_commit"], "d24951e")
 
 
 if __name__ == "__main__":

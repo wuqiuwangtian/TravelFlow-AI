@@ -1,4 +1,4 @@
-"""Isolated SQLite reference executor & runner for expense-patch-candidate 0.1.0-candidate.1."""
+"""Isolated SQLite reference executor & runner for expense-patch-candidate 0.1.0-candidate.2."""
 
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BUNDLE_DIR = REPO_ROOT / "contracts" / "expense-patch-candidate"
+DEFAULT_BUNDLE_DIR = REPO_ROOT / "contracts" / "expense-patch-candidate.2"
 
 CONTRACT_ID = "travelflow.expense-patch-candidate"
-CONTRACT_VERSION = "0.1.0-candidate.1"
+CONTRACT_VERSION = "0.1.0-candidate.2"
 CANONICAL_PROFILE = "p1-host-intent-c14n-1"
 CONTROL_PROFILE = "p1-host-control-1"
 QUERY_PROFILE = "p1-host-query-1"
@@ -428,7 +428,7 @@ def _format_receipt(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def apply_desktop_patch(db_path: Path, raw_command: bytes, *, scope: PatchScope) -> dict[str, Any]:
-    """Reference mobile receiver for travelflow.expense-patch-candidate 0.1.0-candidate.1."""
+    """Reference mobile receiver for travelflow.expense-patch-candidate 0.1.0-candidate.2."""
     try:
         if not scope.can_write:
             raise PatchRejected("unauthorized")
@@ -473,7 +473,7 @@ def apply_desktop_patch(db_path: Path, raw_command: bytes, *, scope: PatchScope)
 
             # 3. Local pending outbox protection: preserve unconfirmed local edits fail-closed.
             blocking = db.execute(
-                "SELECT operation_id, entity_id, delivery_state FROM pending_operations "
+                "SELECT operation_id FROM pending_operations "
                 "WHERE dataset_id = ? AND travel_id = ? AND branch_id = ? "
                 "AND delivery_state != 'confirmed' LIMIT 1",
                 (op["dataset_id"], target["travel_id"], target["branch_id"]),
@@ -483,8 +483,7 @@ def apply_desktop_patch(db_path: Path, raw_command: bytes, *, scope: PatchScope)
                 return {
                     "ok": False,
                     "error": "local_pending_conflict",
-                    "blocking_operation_id": blocking["operation_id"],
-                    "blocking_entity_id": blocking["entity_id"],
+                    "pending_operation_id": blocking["operation_id"],
                 }
 
             # 4. Baseline check against synced_desktop_revision_id (NOT local_revision_id).
@@ -728,6 +727,8 @@ def verify_bundle(bundle_dir: Path) -> dict[str, Any]:
 
                 actual_outcome = _classify_outcome(res, step["action"])
                 exp = step["expected"]
+                if "response" in exp and res != exp["response"]:
+                    raise AssertionError(f"{sc['id']}/{step['name']}: response mismatch: {res!r}")
                 if actual_outcome != exp["business_outcome"]:
                     raise AssertionError(
                         f"{sc['id']}/{step['name']}: expected {exp['business_outcome']}, "

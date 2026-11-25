@@ -1,0 +1,727 @@
+{
+  "contract_id": "travelflow.expense-patch-candidate",
+  "contract_version": "0.1.0-candidate.2",
+  "canonical_profile": "p1-host-intent-c14n-1",
+  "control_profile": "p1-host-control-1",
+  "query_profile": "p1-host-query-1",
+  "defaults": {
+    "dataset_id": "p3-d1-handoff-dataset",
+    "desktop_device_id": "desktop-device-1",
+    "mobile_device_id": "mobile-handoff-device-1",
+    "travel_id": "92ba6a148a17",
+    "branch_id": "f4f921d01f4e",
+    "fork_branch_id": "80a581ac74f9",
+    "entity_id": "android-metro-1",
+    "initial_synced_desktop_revision_id": "576d3d5797a3",
+    "initial_local_revision_id": "m-rev-1",
+    "initial_expense": {
+      "id": "android-metro-1",
+      "title": "机场快轨",
+      "amount_cents": 1723,
+      "currency": "CNY",
+      "paid_on": null,
+      "category": "transport",
+      "notes": "手机离线首记",
+      "updated_at": "2026-11-24T12:00:00Z"
+    }
+  },
+  "scenarios": [
+    {
+      "id": "EP01_normal_patch_and_duplicate_replay",
+      "description": "Desktop corrects CNY amount (1723 -> 2150) on R1 -> R2; mobile matches synced_desktop_revision_id=R1, updates amount while preserving untouched fields, advances mapping to R2, and replays duplicate delivery idempotently.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "apply_desktop_patch",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "bind_local_revision": "M2",
+          "expected": {
+            "business_outcome": "committed_changed",
+            "amount_cents": 2150,
+            "synced_desktop_revision_id": "desk-rev-2",
+            "preserved_fields": {
+              "title": "机场快轨",
+              "notes": "手机离线首记",
+              "category": "transport",
+              "currency": "CNY"
+            },
+            "receipt_count": 1
+          }
+        },
+        {
+          "name": "replay_exact_duplicate",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "replayed_committed",
+            "result_revision_var": "M2",
+            "amount_cents": 2150,
+            "synced_desktop_revision_id": "desk-rev-2",
+            "receipt_count": 1
+          }
+        },
+        {
+          "name": "lookup_committed_receipt",
+          "action": "lookup",
+          "query": {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-1"
+            }
+          },
+          "expected": {
+            "business_outcome": "lookup_committed",
+            "result_revision_var": "M2",
+            "synced_desktop_revision_id": "desk-rev-2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP02_same_key_different_amount_intent_conflict",
+      "description": "Reusing an already-committed operation_id with a different amount (2151) fails with intent_conflict and leaves ledger and receipt untouched.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "commit_initial_patch",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-2"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "committed_changed",
+            "amount_cents": 2150,
+            "synced_desktop_revision_id": "desk-rev-2",
+            "receipt_count": 1
+          }
+        },
+        {
+          "name": "same_key_different_amount",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-2"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2151
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_intent_conflict",
+            "amount_cents": 2150,
+            "synced_desktop_revision_id": "desk-rev-2",
+            "receipt_count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP03_stale_baseline_conflict",
+      "description": "A new operation_id referencing an older desktop revision (or using mobile local_revision_id instead of synced_desktop_revision_id) is rejected as baseline_conflict.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_old_desktop_baseline",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-stale-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "9639db1eb3b8",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_baseline_conflict",
+            "amount_cents": 1723,
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_mobile_local_revision_used_as_baseline",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-stale-2"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "m-rev-1",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_baseline_conflict",
+            "amount_cents": 1723,
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "lookup_rejected_stale_is_not_found",
+          "action": "lookup",
+          "query": {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-stale-1"
+            }
+          },
+          "expected": {
+            "business_outcome": "lookup_not_found_settled"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP04_local_pending_same_entity_preserves_local_record",
+      "description": "Mobile already has an unconfirmed local pending edit (1999 cents) on android-metro-1; desktop patch (2150 cents) on R1 is rejected with local_pending_conflict, preserving local amount 1999, pending outbox, and synced_desktop_revision_id=R1 with zero remote receipt.",
+      "initial_expense_override": {
+        "amount_cents": 1999,
+        "notes": "手机本地已改待发"
+      },
+      "initial_pending": [
+        {
+          "operation_id": "op-mobile-local-edit-1",
+          "entity_id": "android-metro-1",
+          "delivery_state": "unsent",
+          "raw_intent_json": "{\"local_amount_cents\":1999}"
+        }
+      ],
+      "steps": [
+        {
+          "name": "reject_desktop_patch_when_same_entity_pending",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-conflict-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_local_pending_conflict",
+            "amount_cents": 1999,
+            "preserved_fields": {
+              "notes": "手机本地已改待发"
+            },
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "pending_count": 1,
+            "preserved_pending": [
+              {
+                "operation_id": "op-mobile-local-edit-1",
+                "entity_id": "android-metro-1",
+                "delivery_state": "unsent",
+                "raw_intent_json": "{\"local_amount_cents\":1999}"
+              }
+            ],
+            "receipt_count": 0,
+            "response": {
+              "ok": false,
+              "error": "local_pending_conflict",
+              "pending_operation_id": "op-mobile-local-edit-1"
+            }
+          }
+        },
+        {
+          "name": "lookup_blocked_remote_patch_is_not_found",
+          "action": "lookup",
+          "query": {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-conflict-1"
+            }
+          },
+          "expected": {
+            "business_outcome": "lookup_not_found_settled"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP05_local_pending_same_branch_verification_pending_preserves_local",
+      "description": "Mobile has an unconfirmed verification_pending operation on the same branch (different entity); desktop patch is rejected with local_pending_conflict so branch baseline and pending outbox stay intact.",
+      "initial_pending": [
+        {
+          "operation_id": "op-mobile-other-2",
+          "entity_id": "android-coffee-2",
+          "delivery_state": "verification_pending",
+          "raw_intent_json": "{\"local_amount_cents\":2800}"
+        }
+      ],
+      "steps": [
+        {
+          "name": "reject_desktop_patch_when_branch_has_unconfirmed_pending",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-patch-conflict-2"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_local_pending_conflict",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "pending_count": 1,
+            "preserved_pending": [
+              {
+                "operation_id": "op-mobile-other-2",
+                "entity_id": "android-coffee-2",
+                "delivery_state": "verification_pending",
+                "raw_intent_json": "{\"local_amount_cents\":2800}"
+              }
+            ],
+            "receipt_count": 0,
+            "response": {
+              "ok": false,
+              "error": "local_pending_conflict",
+              "pending_operation_id": "op-mobile-other-2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP06_no_change_patch_persists_receipt_without_revision_bump",
+      "description": "Reuses eee6cda7 no-change rule: patching amount_cents to the current value (1723) returns effect=no_change, keeps local_revision_id and updated_at unchanged, and persists a durable receipt.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "apply_no_change_patch",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-nochange-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "576d3d5797a3",
+            "patch": {
+              "amount_cents": 1723
+            }
+          },
+          "expected": {
+            "business_outcome": "committed_no_change",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "updated_at": "2026-11-24T12:00:00Z",
+            "receipt_count": 1
+          }
+        },
+        {
+          "name": "replay_no_change_patch",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-nochange-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "576d3d5797a3",
+            "patch": {
+              "amount_cents": 1723
+            }
+          },
+          "expected": {
+            "business_outcome": "replayed_committed",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "receipt_count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP07_capability_and_range_rejections",
+      "description": "Out-of-slice patch fields (paid_on/notes), non-CNY targets, and invalid amount ranges (0 / negative) fail closed with zero mutations and zero receipts.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_unsupported_patch_field_paid_on",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-cap-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150,
+              "paid_on": "2026-11-24"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "amount_cents": 1723,
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_zero_amount",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-range-0"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 0
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_invalid_input",
+            "amount_cents": 1723,
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_unknown_entity",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-missing-entity"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "non-existent-entity"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_entity_not_found",
+            "amount_cents": 1723,
+            "receipt_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP08_non_cny_target_rejected",
+      "description": "Existing non-CNY expense cannot be amount-patched under this CNY-only candidate slice.",
+      "initial_expense_override": {
+        "currency": "USD"
+      },
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_non_cny_expense_patch",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-usd-1"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unsupported_capability",
+            "amount_cents": 1723,
+            "receipt_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP09_unauthorized_target_and_lookup_before_receipt",
+      "description": "Unauthorized branch or caller fails closed before reading receipts or baselines.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_wrong_branch_target",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-wrong-branch"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "80a581ac74f9",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized",
+            "amount_cents": 1723,
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_unauthorized_lookup",
+          "action": "lookup",
+          "scope_override": {
+            "can_lookup_receipt": false
+          },
+          "query": {
+            "profile": "p1-host-query-1",
+            "kind": "receipt.lookup",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-wrong-branch"
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_unauthorized"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP10_revision_consistency_rejections",
+      "description": "Contradictory revision pairs are rejected fail-closed with zero writes: changed amount must carry a different source_revision_id, and unchanged amount must keep source_revision_id == expected_revision_id.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_changed_amount_with_same_source_revision",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-revmismatch-changed"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "576d3d5797a3",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_revision_mismatch",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "updated_at": "2026-11-24T12:00:00Z",
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_unchanged_amount_with_different_source_revision",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-revmismatch-unchanged"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 1723
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_revision_mismatch",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "updated_at": "2026-11-24T12:00:00Z",
+            "receipt_count": 0
+          }
+        }
+      ]
+    }
+  ]
+}
