@@ -178,6 +178,29 @@ CREATE TABLE IF NOT EXISTS exchange_operation_receipts (
     committed_at TEXT NOT NULL,
     PRIMARY KEY (dataset_id, source_device_id, operation_id)
 );
+
+-- 跨端反向更正待发队列：桌面更正已确认的手机消费金额时，与 versions/plans 同事务原子落库。
+CREATE TABLE IF NOT EXISTS exchange_outbound_operations (
+    dataset_id TEXT NOT NULL,
+    source_device_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    canonical_profile TEXT NOT NULL,
+    intent_sha256 TEXT NOT NULL,
+    canonical_intent_json TEXT NOT NULL,
+    raw_command_json TEXT NOT NULL,
+    expected_revision_id TEXT NOT NULL,
+    source_revision_id TEXT NOT NULL REFERENCES versions(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    entity_id TEXT NOT NULL,
+    delivery_state TEXT NOT NULL DEFAULT 'unsent' CHECK (
+        delivery_state IN ('unsent', 'verification_pending', 'confirmed')
+    ),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (dataset_id, source_device_id, operation_id)
+);
 """
 
 

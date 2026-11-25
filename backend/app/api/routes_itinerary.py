@@ -845,10 +845,35 @@ async def update_expense(
     store: SessionStore = Depends(get_store),
     graph=Depends(get_graph),
 ) -> VersionDetail:
+    from app.services.exchange_outbox import (
+        find_received_expense_dataset,
+        is_amount_only_expense_edit,
+        is_no_op_expense_edit,
+        save_expense_patch_with_outbox,
+    )
+
     original = await _detail(store, version_id)
     async with branch_guard(original.version.branch_id):
         detail = await _editable(store, version_id)
         await _validate_receipts(store, detail, payload, expense_id)
+        branch = await store.get_branch(detail.version.branch_id)
+        dataset_id = (
+            await find_received_expense_dataset(
+                store,
+                session_id=branch.session_id,
+                branch_id=detail.version.branch_id,
+                entity_id=expense_id,
+            )
+            if branch is not None
+            else None
+        )
+        if dataset_id is not None:
+            if is_no_op_expense_edit(detail, expense_id, payload):
+                return detail
+            if is_amount_only_expense_edit(detail, expense_id, payload):
+                return await save_expense_patch_with_outbox(
+                    store, graph, detail, expense_id, payload, dataset_id=dataset_id
+                )
         edit_expense(_itinerary(detail), expense_id, payload)
         return await _save_revision(
             store, graph, detail, f"更正消费：{payload.title}", keep_plan_status=True
