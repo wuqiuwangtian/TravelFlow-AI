@@ -448,7 +448,7 @@ async def recover_exchange_checkpoint(
     head_row = await cur.fetchone()
     if (
         head_row is None
-        or head_row["trigger"] != "exchange_receive"
+        or head_row["trigger"] not in ("exchange_receive", "itinerary_edit")
         or head_row["checkpoint_id"] is not None
     ):
         return None
