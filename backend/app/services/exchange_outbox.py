@@ -26,6 +26,7 @@ from app.domain.models import Requirements, VersionDetail
 from app.services.exchange_receive import (
     CANONICAL_PROFILE,
     CONTROL_PROFILE,
+    QUERY_PROFILE,
     _open_exclusive_connection,
     _resolve_store_db_path,
     recover_exchange_checkpoint,
@@ -151,19 +152,40 @@ def is_amount_only_expense_edit(
     )
 
 
+_OUTBOUND_SELECT = (
+    "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
+    "intent_sha256, canonical_intent_json, raw_command_json, expected_revision_id, "
+    "source_revision_id, session_id, branch_id, entity_id, delivery_state, "
+    "confirmed_mobile_revision_id, confirmed_effect, last_error, "
+    "last_raw_response_json, confirmed_at, created_at, updated_at "
+    "FROM exchange_outbound_operations"
+)
+
+
+def _build_lookup_query_bytes(
+    *, dataset_id: str, source_device_id: str, operation_id: str
+) -> bytes:
+    query = {
+        "profile": QUERY_PROFILE,
+        "kind": "receipt.lookup",
+        "operation": {
+            "dataset_id": dataset_id,
+            "source_device_id": source_device_id,
+            "operation_id": operation_id,
+        },
+    }
+    return json.dumps(query, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
 async def list_outbound_operations(
     store: SessionStore,
     *,
     branch_id: str | None = None,
     entity_id: str | None = None,
+    pending_only: bool = False,
 ) -> list[dict[str, Any]]:
     """Read persisted outbound exchange operations from SQLite."""
-    sql = (
-        "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
-        "intent_sha256, canonical_intent_json, raw_command_json, expected_revision_id, "
-        "source_revision_id, session_id, branch_id, entity_id, delivery_state, "
-        "created_at, updated_at FROM exchange_outbound_operations"
-    )
+    sql = _OUTBOUND_SELECT
     clauses: list[str] = []
     params: list[Any] = []
     if branch_id is not None:
@@ -172,12 +194,245 @@ async def list_outbound_operations(
     if entity_id is not None:
         clauses.append("entity_id = ?")
         params.append(entity_id)
+    if pending_only:
+        clauses.append("delivery_state != 'confirmed'")
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY created_at, operation_id"
     cur = await store._conn.execute(sql, params)
     rows = await cur.fetchall()
     return [dict(row) for row in rows]
+
+
+async def prepare_outbound_delivery(
+    store: SessionStore,
+    *,
+    dataset_id: str,
+    source_device_id: str,
+    operation_id: str,
+) -> dict[str, Any]:
+    """Durably mark an outbound operation verification_pending before sending."""
+    db_path = await _resolve_store_db_path(store)
+    tx_conn = (
+        await _open_exclusive_connection(db_path, busy_timeout_ms=5000)
+        if db_path is not None
+        else store._conn
+    )
+    own_conn = db_path is not None
+    try:
+        await tx_conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await tx_conn.execute(
+                _OUTBOUND_SELECT
+                + " WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                await tx_conn.execute("ROLLBACK")
+                return {"ok": False, "error": "outbound_not_found"}
+
+            record = dict(row)
+            lookup_bytes = _build_lookup_query_bytes(
+                dataset_id=dataset_id,
+                source_device_id=source_device_id,
+                operation_id=operation_id,
+            )
+            if record["delivery_state"] == "confirmed":
+                await tx_conn.execute("ROLLBACK")
+                return {
+                    "ok": True,
+                    "already_confirmed": True,
+                    "record": record,
+                    "raw_bytes": None,
+                    "lookup_query_bytes": lookup_bytes,
+                }
+
+            now_utc = datetime.now(UTC).isoformat()
+            await tx_conn.execute(
+                "UPDATE exchange_outbound_operations "
+                "SET delivery_state = 'verification_pending', last_error = 'in_flight', "
+                "updated_at = ? "
+                "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (now_utc, dataset_id, source_device_id, operation_id),
+            )
+            cur = await tx_conn.execute(
+                _OUTBOUND_SELECT
+                + " WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            )
+            updated = dict(await cur.fetchone())  # type: ignore[arg-type]
+            await tx_conn.execute("COMMIT")
+            return {
+                "ok": True,
+                "already_confirmed": False,
+                "record": updated,
+                "raw_bytes": updated["raw_command_json"].encode("utf-8"),
+                "lookup_query_bytes": lookup_bytes,
+            }
+        except BaseException:
+            if tx_conn.in_transaction:
+                await tx_conn.execute("ROLLBACK")
+            raise
+    finally:
+        if own_conn:
+            await tx_conn.close()
+
+
+def _receipt_matches_outbound(raw_response: dict[str, Any], row: dict[str, Any]) -> bool:
+    """Strictly verify operation identity, intent digest, target expense, and desktop version."""
+    if raw_response.get("ok") is not True or raw_response.get("state") != "committed":
+        return False
+    receipt = raw_response.get("receipt")
+    if not isinstance(receipt, dict):
+        return False
+    expected_op = {
+        "dataset_id": row["dataset_id"],
+        "source_device_id": row["source_device_id"],
+        "operation_id": row["operation_id"],
+    }
+    if receipt.get("operation") != expected_op:
+        return False
+    if receipt.get("kind") != row["kind"]:
+        return False
+    if receipt.get("canonical_profile") != row["canonical_profile"]:
+        return False
+    if receipt.get("intent_sha256") != row["intent_sha256"]:
+        return False
+    if receipt.get("travel_id") != row["session_id"]:
+        return False
+    if receipt.get("branch_id") != row["branch_id"]:
+        return False
+    if receipt.get("entity_id") != row["entity_id"]:
+        return False
+    if receipt.get("synced_desktop_revision_id") != row["source_revision_id"]:
+        return False
+    if receipt.get("origin_direction") != "received":
+        return False
+    expected_effect = (
+        "changed" if row["expected_revision_id"] != row["source_revision_id"] else "no_change"
+    )
+    if receipt.get("effect") != expected_effect:
+        return False
+    mobile_rev = receipt.get("result_revision_id")
+    return isinstance(mobile_rev, str) and 1 <= len(mobile_rev) <= 256
+
+
+async def consume_outbound_receipt(
+    store: SessionStore,
+    *,
+    dataset_id: str,
+    source_device_id: str,
+    operation_id: str,
+    raw_response: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify a mobile delivery or lookup response and atomically confirm the outbound row."""
+    if not isinstance(raw_response, dict):
+        return {"ok": False, "error": "invalid_response", "confirmed": False}
+
+    db_path = await _resolve_store_db_path(store)
+    tx_conn = (
+        await _open_exclusive_connection(db_path, busy_timeout_ms=5000)
+        if db_path is not None
+        else store._conn
+    )
+    own_conn = db_path is not None
+    raw_json = json.dumps(raw_response, ensure_ascii=False)
+    try:
+        await tx_conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await tx_conn.execute(
+                _OUTBOUND_SELECT
+                + " WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                await tx_conn.execute("ROLLBACK")
+                return {"ok": False, "error": "outbound_not_found", "confirmed": False}
+
+            record = dict(row)
+            # Never downgrade or rewrite an already confirmed outbound record.
+            if record["delivery_state"] == "confirmed":
+                await tx_conn.execute("ROLLBACK")
+                return {
+                    "ok": True,
+                    "already_confirmed": True,
+                    "confirmed": True,
+                    "record": record,
+                }
+
+            now_utc = datetime.now(UTC).isoformat()
+            if _receipt_matches_outbound(raw_response, record):
+                receipt = raw_response["receipt"]
+                await tx_conn.execute(
+                    "UPDATE exchange_outbound_operations "
+                    "SET delivery_state = 'confirmed', confirmed_mobile_revision_id = ?, "
+                    "confirmed_effect = ?, last_error = NULL, last_raw_response_json = ?, "
+                    "confirmed_at = ?, updated_at = ? "
+                    "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                    (
+                        receipt["result_revision_id"],
+                        receipt["effect"],
+                        raw_json,
+                        now_utc,
+                        now_utc,
+                        dataset_id,
+                        source_device_id,
+                        operation_id,
+                    ),
+                )
+                cur = await tx_conn.execute(
+                    _OUTBOUND_SELECT
+                    + " WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                    (dataset_id, source_device_id, operation_id),
+                )
+                updated = dict(await cur.fetchone())  # type: ignore[arg-type]
+                await tx_conn.execute("COMMIT")
+                return {
+                    "ok": True,
+                    "already_confirmed": False,
+                    "confirmed": True,
+                    "record": updated,
+                }
+
+            # Mismatched receipt or non-committed response keeps verification_pending.
+            if raw_response.get("ok") is True and raw_response.get("state") == "committed":
+                err_code = "receipt_mismatch"
+            else:
+                err_code = str(
+                    raw_response.get("error")
+                    or raw_response.get("reason")
+                    or raw_response.get("state")
+                    or "unconfirmed"
+                )
+            await tx_conn.execute(
+                "UPDATE exchange_outbound_operations "
+                "SET delivery_state = 'verification_pending', last_error = ?, "
+                "last_raw_response_json = ?, updated_at = ? "
+                "WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (err_code, raw_json, now_utc, dataset_id, source_device_id, operation_id),
+            )
+            cur = await tx_conn.execute(
+                _OUTBOUND_SELECT
+                + " WHERE dataset_id = ? AND source_device_id = ? AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            )
+            updated = dict(await cur.fetchone())  # type: ignore[arg-type]
+            await tx_conn.execute("COMMIT")
+            return {
+                "ok": False,
+                "error": err_code,
+                "confirmed": False,
+                "record": updated,
+            }
+        except BaseException:
+            if tx_conn.in_transaction:
+                await tx_conn.execute("ROLLBACK")
+            raise
+    finally:
+        if own_conn:
+            await tx_conn.close()
 
 
 async def save_expense_patch_with_outbox(

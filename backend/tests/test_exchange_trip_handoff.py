@@ -22,6 +22,12 @@ HANDOFF_CLI = REPO_ROOT / "backend" / "scripts" / "exchange_trip_handoff.py"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from desktop.expense_patch_candidate import (  # noqa: E402
+    PatchScope,
+    apply_desktop_patch,
+    init_mobile_replica,
+    lookup_patch_receipt,
+)
 from desktop.expense_pending import (  # noqa: E402
     consume_delivery_response,
     consume_lookup_response,
@@ -669,3 +675,207 @@ def test_init_trip_context_out_exclusive_creation_and_reserved_path_guards(tmp_p
         assert p_res.returncode == 1, reserved_name
         assert not (work_res / "travel.sqlite").exists()
         assert not (work_res / "scope.json").exists()
+
+
+def test_subprocess_outbound_prepare_confirm_and_status_for_joint_script(tmp_path: Path):
+    """Isolated CLI supports prepare-outbound, confirm-outbound, and outbound-status cleanly."""
+    work_dir = tmp_path / "joint-handoff"
+    init_proc = _run_handoff("init-trip", "--work-dir", str(work_dir))
+    assert init_proc.returncode == 0
+    ctx = json.loads(init_proc.stdout.decode("utf-8"))
+
+    # 1. Receive mobile 1723-cent expense via CLI.
+    device_id = ctx["authorized_devices"][0]
+    create_cmd = _make_desktop_stub_command(
+        dataset_id=ctx["dataset_id"],
+        source_device_id=device_id,
+        operation_id="op-joint-create-1",
+        travel_id=ctx["travel_id"],
+        branch_id=ctx["branch_id"],
+        entity_id="android-metro-1",
+        expected_revision_id=ctx["current_revision_id"],
+        title="机场快轨",
+        amount_cents=1723,
+        category="transport",
+    )
+    recv_proc = _run_handoff(
+        "receive",
+        "--database",
+        ctx["database"],
+        "--scope",
+        ctx["scope_config"],
+        "--input",
+        "-",
+        input_bytes=create_cmd,
+    )
+    assert recv_proc.returncode == 0
+    v_confirmed = json.loads(recv_proc.stdout.decode("utf-8"))["receipt"]["result_revision_id"]
+
+    # 2. Desktop updates ONLY amount (17.23 -> 21.50) via existing PUT endpoint on the same DB.
+    put_script = (
+        "import asyncio, json, sys\n"
+        "from pathlib import Path\n"
+        "sys.path.insert(0, str(Path('backend').resolve()))\n"
+        "sys.path.insert(0, str(Path('backend/tests').resolve()))\n"
+        "from test_exchange_receive_trip import _open_isolated_app, _close_isolated_app\n"
+        "async def run():\n"
+        "  conn, store, cp_cm, graph, client = await _open_isolated_app(Path(sys.argv[1]))\n"
+        "  try:\n"
+        "    r = await client.put(f'/api/versions/{sys.argv[2]}/expenses/android-metro-1', "
+        "json={'title':'机场快轨','amount':'21.50','category':'transport',"
+        "'notes':'桌面替身发送方隔离交接样例'})\n"
+        "    assert r.status_code == 200, r.text\n"
+        "    print(r.json()['version']['id'])\n"
+        "  finally:\n"
+        "    await _close_isolated_app(conn, cp_cm, client)\n"
+        "asyncio.run(run())\n"
+    )
+    put_proc = subprocess.run(
+        [sys.executable, "-c", put_script, ctx["database"], v_confirmed],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert put_proc.returncode == 0, put_proc.stderr.decode("utf-8", errors="replace")
+    v_patched = put_proc.stdout.decode("utf-8").strip()
+
+    # 3. Subprocess: prepare-outbound marks verification_pending and writes command/query files.
+    cmd_out = tmp_path / "outbound-patch.json"
+    qry_out = tmp_path / "outbound-lookup.json"
+    for conflicting_path in (cmd_out, Path(ctx["database"] + "-journal")):
+        invalid = _run_handoff(
+            "prepare-outbound",
+            "--database",
+            ctx["database"],
+            "--command-out",
+            str(cmd_out),
+            "--query-out",
+            str(conflicting_path),
+        )
+        assert invalid.returncode == 1
+        assert "reserved path" in json.loads(invalid.stdout)["error"]
+        assert not cmd_out.exists()
+    with closing(sqlite3.connect(ctx["database"])) as db:
+        assert db.execute("SELECT delivery_state FROM exchange_outbound_operations").fetchall() == [
+            ("unsent",)
+        ]
+    prep_proc = _run_handoff(
+        "prepare-outbound",
+        "--database",
+        ctx["database"],
+        "--command-out",
+        str(cmd_out),
+        "--query-out",
+        str(qry_out),
+    )
+    assert prep_proc.returncode == 0, prep_proc.stderr.decode("utf-8", errors="replace")
+    prep_json = json.loads(prep_proc.stdout.decode("utf-8"))
+    op_id = prep_json["record"]["operation_id"]
+    assert prep_json["record"]["delivery_state"] == "verification_pending"
+    assert prep_json["record"]["source_revision_id"] == v_patched
+
+    # 4. Deliver to mobile replica (reply lost), then query receipt.
+    mobile_db = tmp_path / "mobile_joint.sqlite"
+    init_mobile_replica(
+        mobile_db,
+        defaults={
+            "dataset_id": ctx["dataset_id"],
+            "travel_id": ctx["travel_id"],
+            "branch_id": ctx["branch_id"],
+            "entity_id": "android-metro-1",
+            "initial_local_revision_id": "m-rev-1",
+            "initial_synced_desktop_revision_id": v_confirmed,
+            "initial_expense": {
+                "id": "android-metro-1",
+                "title": "机场快轨",
+                "amount_cents": 1723,
+                "currency": "CNY",
+                "paid_on": None,
+                "category": "transport",
+                "notes": "桌面替身发送方隔离交接样例",
+                "updated_at": "2026-11-24T12:00:00Z",
+            },
+        },
+    )
+    mobile_scope = PatchScope(
+        dataset_id=ctx["dataset_id"],
+        authorized_devices=frozenset({"desktop-device-1"}),
+        authorized_targets=frozenset({(ctx["travel_id"], ctx["branch_id"])}),
+    )
+    mobile_apply = apply_desktop_patch(mobile_db, cmd_out.read_bytes(), scope=mobile_scope)
+    assert mobile_apply["ok"] is True
+    mobile_lookup = lookup_patch_receipt(mobile_db, qry_out.read_bytes(), scope=mobile_scope)
+    assert mobile_lookup["ok"] is True and mobile_lookup["state"] == "committed"
+
+    # 5. Subprocess: tampered receipt is rejected; valid lookup receipt confirms; duplicate is safe.
+    tampered = {
+        **mobile_lookup,
+        "receipt": {**mobile_lookup["receipt"], "intent_sha256": "f" * 64},
+    }
+    bad_conf = _run_handoff(
+        "confirm-outbound",
+        "--database",
+        ctx["database"],
+        "--operation-id",
+        op_id,
+        "--input",
+        "-",
+        input_bytes=json.dumps(tampered, ensure_ascii=False).encode("utf-8"),
+    )
+    assert bad_conf.returncode == 1
+    assert json.loads(bad_conf.stdout.decode("utf-8"))["error"] == "receipt_mismatch"
+
+    ok_conf = _run_handoff(
+        "confirm-outbound",
+        "--database",
+        ctx["database"],
+        "--operation-id",
+        op_id,
+        "--input",
+        "-",
+        input_bytes=json.dumps(mobile_lookup, ensure_ascii=False).encode("utf-8"),
+    )
+    assert ok_conf.returncode == 0
+    ok_conf_json = json.loads(ok_conf.stdout.decode("utf-8"))
+    assert ok_conf_json["confirmed"] is True
+    assert ok_conf_json["record"]["delivery_state"] == "confirmed"
+    assert ok_conf_json["record"]["confirmed_mobile_revision_id"] == "m-rev-2"
+
+    dup_conf = _run_handoff(
+        "confirm-outbound",
+        "--database",
+        ctx["database"],
+        "--operation-id",
+        op_id,
+        "--input",
+        "-",
+        input_bytes=json.dumps(mobile_apply, ensure_ascii=False).encode("utf-8"),
+    )
+    assert dup_conf.returncode == 0
+    assert json.loads(dup_conf.stdout.decode("utf-8"))["already_confirmed"] is True
+
+    # 6. Fresh subprocess outbound-status & inspect-trip confirm 0 pending and 1 confirmed.
+    stat_proc = _run_handoff(
+        "outbound-status", "--database", ctx["database"], "--branch-id", ctx["branch_id"]
+    )
+    assert stat_proc.returncode == 0
+    stat = json.loads(stat_proc.stdout.decode("utf-8"))
+    assert stat["pending_count"] == 0
+    assert stat["confirmed_count"] == 1
+    assert stat["confirmed"][0]["confirmed_mobile_revision_id"] == "m-rev-2"
+
+    insp_proc = _run_handoff(
+        "inspect-trip",
+        "--database",
+        ctx["database"],
+        "--branch-id",
+        ctx["branch_id"],
+        "--fork-branch-id",
+        ctx["fork_branch_id"],
+    )
+    assert insp_proc.returncode == 0
+    insp = json.loads(insp_proc.stdout.decode("utf-8"))
+    assert insp["pending_outbound_count"] == 0
+    assert insp["head_revision_id"] == v_patched
+    assert insp["head_paid_cents"] == 8635 + 2150

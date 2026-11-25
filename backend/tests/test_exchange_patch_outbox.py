@@ -22,7 +22,9 @@ from app.agents.checkpoint import thread_config
 from app.domain.itinerary import ExpenseInput
 from app.services.exchange_outbox import (
     DESKTOP_SOURCE_DEVICE_ID,
+    consume_outbound_receipt,
     list_outbound_operations,
+    prepare_outbound_delivery,
     save_expense_patch_with_outbox,
 )
 from app.services.exchange_receive import ExchangeReceiveScope, receive_expense_create
@@ -36,6 +38,7 @@ from desktop.expense_patch_candidate import (  # noqa: E402
     apply_desktop_patch,
     canonicalize_patch_intent,
     init_mobile_replica,
+    lookup_patch_receipt,
 )
 
 
@@ -496,3 +499,198 @@ async def test_noop_save_then_amount_edit_preserves_baseline_and_applies_on_mobi
         db.row_factory = sqlite3.Row
         row = db.execute("SELECT amount_cents FROM expenses WHERE entity_id = 'android-metro-1'")
         assert row.fetchone()["amount_cents"] == 2150
+
+
+@pytest.mark.asyncio
+async def test_outbound_prepare_reply_lost_mismatched_receipt_duplicate_and_restart_confirm(
+    tmp_path: Path,
+):
+    """Prepare marks verification_pending; mismatched receipts fail; lookup confirms atomically."""
+    app_db = tmp_path / "desktop_outbox_confirm.db"
+    mobile_db = tmp_path / "mobile_replica_confirm.sqlite"
+
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        sid, bid, v1, v2, fork_bid, fork_v1, dataset_id = await _seed_trip_with_mobile_expense(
+            client, store, graph
+        )
+        put_res = await client.put(
+            f"/api/versions/{v2}/expenses/android-metro-1",
+            json={
+                "title": "机场快轨",
+                "amount": "21.50",
+                "category": "transport",
+                "notes": "手机离线首记",
+            },
+        )
+        assert put_res.status_code == 200
+        v3 = put_res.json()["version"]["id"]
+        outbound = await list_outbound_operations(store, branch_id=bid)
+        assert len(outbound) == 1
+        op_id = outbound[0]["operation_id"]
+        assert outbound[0]["delivery_state"] == "unsent"
+
+        # 1. Prepare before sending -> durably transitions to verification_pending.
+        prep1 = await prepare_outbound_delivery(
+            store,
+            dataset_id=dataset_id,
+            source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+            operation_id=op_id,
+        )
+        assert prep1["ok"] is True
+        assert prep1["already_confirmed"] is False
+        assert prep1["record"]["delivery_state"] == "verification_pending"
+        raw_bytes_1 = prep1["raw_bytes"]
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # Deliver to mobile replica and simulate reply loss (desktop never sees first response).
+    init_mobile_replica(
+        mobile_db,
+        defaults={
+            "dataset_id": dataset_id,
+            "travel_id": sid,
+            "branch_id": bid,
+            "entity_id": "android-metro-1",
+            "initial_local_revision_id": "m-rev-1",
+            "initial_synced_desktop_revision_id": v2,
+            "initial_expense": {
+                "id": "android-metro-1",
+                "title": "机场快轨",
+                "amount_cents": 1723,
+                "currency": "CNY",
+                "paid_on": None,
+                "category": "transport",
+                "notes": "手机离线首记",
+                "updated_at": "2026-11-24T12:00:00Z",
+            },
+        },
+    )
+    mobile_scope = PatchScope(
+        dataset_id=dataset_id,
+        authorized_devices=frozenset({DESKTOP_SOURCE_DEVICE_ID}),
+        authorized_targets=frozenset({(sid, bid)}),
+    )
+    first_mobile_res = apply_desktop_patch(mobile_db, raw_bytes_1, scope=mobile_scope)
+    assert first_mobile_res["ok"] is True
+    mobile_rev = first_mobile_res["receipt"]["result_revision_id"]
+
+    # 2. Restart desktop after reply loss: state is still verification_pending, same raw bytes.
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        prep2 = await prepare_outbound_delivery(
+            store,
+            dataset_id=dataset_id,
+            source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+            operation_id=op_id,
+        )
+        assert prep2["ok"] is True
+        assert prep2["already_confirmed"] is False
+        assert prep2["raw_bytes"] == raw_bytes_1
+        lookup_bytes = prep2["lookup_query_bytes"]
+
+        # 3. Mismatched receipts (wrong op, wrong digest, missing digest, wrong entity, wrong v3)
+        #    must NEVER confirm.
+        valid_receipt = first_mobile_res["receipt"]
+        bad_variants = [
+            {**first_mobile_res, "receipt": {**valid_receipt, "effect": "no_change"}},
+            {**first_mobile_res, "receipt": {**valid_receipt, "origin_direction": "sent"}},
+            {
+                **first_mobile_res,
+                "receipt": {k: v for k, v in valid_receipt.items() if k != "origin_direction"},
+            },
+            {
+                **first_mobile_res,
+                "receipt": {
+                    **valid_receipt,
+                    "operation": {**valid_receipt["operation"], "operation_id": "wrong-op"},
+                },
+            },
+            {
+                **first_mobile_res,
+                "receipt": {**valid_receipt, "intent_sha256": "0" * 64},
+            },
+            {
+                **first_mobile_res,
+                "receipt": {k: v for k, v in valid_receipt.items() if k != "intent_sha256"},
+            },
+            {
+                **first_mobile_res,
+                "receipt": {**valid_receipt, "entity_id": "wrong-entity"},
+            },
+            {
+                **first_mobile_res,
+                "receipt": {**valid_receipt, "synced_desktop_revision_id": v2},
+            },
+        ]
+        for bad in bad_variants:
+            bad_res = await consume_outbound_receipt(
+                store,
+                dataset_id=dataset_id,
+                source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+                operation_id=op_id,
+                raw_response=bad,
+            )
+            assert bad_res["ok"] is False
+            assert bad_res["error"] == "receipt_mismatch"
+            assert bad_res["confirmed"] is False
+            assert bad_res["record"]["delivery_state"] == "verification_pending"
+            assert bad_res["record"]["confirmed_mobile_revision_id"] is None
+
+        # 4. Independent receipt lookup on mobile -> desktop verifies and atomically confirms.
+        mobile_lookup = lookup_patch_receipt(mobile_db, lookup_bytes, scope=mobile_scope)
+        assert mobile_lookup["ok"] is True and mobile_lookup["state"] == "committed"
+
+        confirm_res = await consume_outbound_receipt(
+            store,
+            dataset_id=dataset_id,
+            source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+            operation_id=op_id,
+            raw_response=mobile_lookup,
+        )
+        assert confirm_res["ok"] is True
+        assert confirm_res["confirmed"] is True
+        assert confirm_res["already_confirmed"] is False
+        assert confirm_res["record"]["delivery_state"] == "confirmed"
+        assert confirm_res["record"]["confirmed_mobile_revision_id"] == mobile_rev
+        assert confirm_res["record"]["confirmed_effect"] == "changed"
+
+        # 5. Duplicate receipt and late stale not_found response do not downgrade or add versions.
+        dup_res = await consume_outbound_receipt(
+            store,
+            dataset_id=dataset_id,
+            source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+            operation_id=op_id,
+            raw_response=first_mobile_res,
+        )
+        assert dup_res["ok"] is True and dup_res["already_confirmed"] is True
+
+        stale_res = await consume_outbound_receipt(
+            store,
+            dataset_id=dataset_id,
+            source_device_id=DESKTOP_SOURCE_DEVICE_ID,
+            operation_id=op_id,
+            raw_response={"ok": True, "state": "not_found_at_settled_read", "receipt": None},
+        )
+        assert stale_res["ok"] is True and stale_res["already_confirmed"] is True
+        assert stale_res["record"]["delivery_state"] == "confirmed"
+        assert stale_res["record"]["confirmed_mobile_revision_id"] == mobile_rev
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # 6. Restart desktop again: confirmed result persists, pending queue is empty, versions intact.
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        assert await list_outbound_operations(store, branch_id=bid, pending_only=True) == []
+        all_out = await list_outbound_operations(store, branch_id=bid)
+        assert len(all_out) == 1
+        assert all_out[0]["delivery_state"] == "confirmed"
+        assert all_out[0]["confirmed_mobile_revision_id"] == mobile_rev
+        assert all_out[0]["source_revision_id"] == v3
+
+        versions = (await client.get(f"/api/branches/{bid}/versions")).json()["items"]
+        assert [item["id"] for item in versions] == [v1, v2, v3]
+        fork_versions = (await client.get(f"/api/branches/{fork_bid}/versions")).json()["items"]
+        assert [item["id"] for item in fork_versions] == [fork_v1]
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
