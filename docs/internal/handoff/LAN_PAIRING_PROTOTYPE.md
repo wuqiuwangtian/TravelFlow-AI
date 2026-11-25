@@ -148,6 +148,79 @@ Content-Type: application/json; charset=utf-8
 
 - 命中已提交回执：`200 OK`，返回 `state: "committed"` 及含 `intent_sha256`、`result_revision_id` 的完整回执；未授权或已撤销分别返回 `403 unauthorized` / `403 device_revoked` 且不泄露回执。
 
+### 2.7 已配对且已绑定作用域：手机主动领取 `expense.patch` 待发原命令
+
+沿用手机主动连接桌面的方式，手机在固定证书 TLS 上调用 `POST /exchange/expense-patch/pull`，桌面按 `(dataset_id, travel_id, branch_id, 原记账设备 source_device_id)` 过滤仅属于该设备的待发更正命令，复用 `prepare_outbound_delivery` 持久标记 `verification_pending` 后返回原始字节：
+
+```http
+POST /exchange/expense-patch/pull HTTP/1.1
+Authorization: Bearer <device_token>
+X-Device-Id: android-paired-1
+Content-Type: application/json; charset=utf-8
+
+{}
+```
+
+响应（`200 OK`）：
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "operation_id": "op-desktop-patch-...",
+      "dataset_id": "p3-d1-handoff-dataset",
+      "source_device_id": "desktop-device-1",
+      "expected_revision_id": "<R1>",
+      "source_revision_id": "<R2>",
+      "entity_id": "https-metro-1",
+      "intent_sha256": "<64-hex>",
+      "delivery_state": "verification_pending",
+      "raw_command_json": "{\"profile\":\"p1-host-control-1\",\"kind\":\"expense.patch\",...}"
+    }
+  ]
+}
+```
+
+- 若拉取响应丢失，手机再次调用 `POST /exchange/expense-patch/pull` 仍可重领完全相同的 `raw_command_json` 原字节。
+- 其他业务设备、未绑定授权或已撤销设备无法领取（分别返回空列表 / `403 exchange_not_authorized` / `403 device_revoked`）。
+
+### 2.8 已配对且已绑定作用域：手机交回 `expense.patch` 完整回执
+
+手机应用 `raw_command_json`（或本地查询已提交回执）后，将完整移动回执 JSON 直接提交到 `POST /exchange/expense-patch/confirm`：
+
+```http
+POST /exchange/expense-patch/confirm HTTP/1.1
+Authorization: Bearer <device_token>
+X-Device-Id: android-paired-1
+Content-Type: application/json; charset=utf-8
+
+{
+  "ok": true,
+  "state": "committed",
+  "receipt": {
+    "operation": {
+      "dataset_id": "p3-d1-handoff-dataset",
+      "source_device_id": "desktop-device-1",
+      "operation_id": "op-desktop-patch-..."
+    },
+    "kind": "expense.patch",
+    "canonical_profile": "p1-host-intent-c14n-1",
+    "intent_sha256": "<64-hex>",
+    "effect": "changed",
+    "result_revision_id": "m-rev-2",
+    "synced_desktop_revision_id": "<R2>",
+    "travel_id": "92ba6a148a17",
+    "branch_id": "f4f921d01f4e",
+    "entity_id": "https-metro-1",
+    "origin_direction": "received"
+  }
+}
+```
+
+- 桌面核对归属（数据集、旅行、分支、原记账设备）及完整回执字段后，原子保存 `confirmed_mobile_revision_id` 并标记 `confirmed`（`200 OK`）；重复提交返回 `200 OK`（`already_confirmed: true`）且不重复写账；重启桌面后待发队列为 0。
+- 错配回执保持 `verification_pending` 返回 `400 receipt_mismatch`；其他设备、未绑定授权或已撤销设备返回 `403`。
+
 ## 3. 复跑命令
 
 ### Linux / WSL
