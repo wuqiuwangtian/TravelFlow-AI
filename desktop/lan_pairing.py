@@ -448,36 +448,29 @@ class _TripExchangeBridge:
 
         async def _pull() -> dict[str, Any]:
             from app.services.exchange_outbox import (  # type: ignore[import-not-found]
+                _OUTBOUND_SELECT,
+                outbound_patch_matches_grant,
                 prepare_outbound_delivery,
             )
 
             cur = await self._store._conn.execute(
-                "SELECT o.dataset_id, o.source_device_id, o.operation_id "
-                "FROM exchange_outbound_operations o "
-                "INNER JOIN exchange_operation_receipts r "
-                "  ON r.dataset_id = o.dataset_id "
-                " AND r.session_id = o.session_id "
-                " AND r.branch_id = o.branch_id "
-                " AND r.entity_id = o.entity_id "
-                " AND r.kind = 'expense.create' "
-                " AND r.origin_direction = 'received' "
-                "WHERE o.kind = 'expense.patch' "
-                "  AND o.delivery_state != 'confirmed' "
-                "  AND o.dataset_id = ? "
-                "  AND o.session_id = ? "
-                "  AND o.branch_id = ? "
-                "  AND r.source_device_id = ? "
-                "ORDER BY o.created_at ASC, o.operation_id ASC",
+                _OUTBOUND_SELECT + " WHERE kind = 'expense.patch' "
+                "  AND delivery_state != 'confirmed' "
+                "  AND dataset_id = ? "
+                "  AND session_id = ? "
+                "  AND branch_id = ? "
+                "ORDER BY created_at ASC, operation_id ASC",
                 (
                     str(grant["dataset_id"]),
                     str(grant["travel_id"]),
                     str(grant["branch_id"]),
-                    str(grant["source_device_id"]),
                 ),
             )
             rows = await cur.fetchall()
             items: list[dict[str, Any]] = []
             for row in rows:
+                if not await outbound_patch_matches_grant(self._store._conn, row, grant):
+                    continue
                 prep = await prepare_outbound_delivery(
                     self._store,
                     dataset_id=str(row["dataset_id"]),
@@ -527,41 +520,21 @@ class _TripExchangeBridge:
 
         async def _confirm() -> dict[str, Any]:
             from app.services.exchange_outbox import (  # type: ignore[import-not-found]
+                _OUTBOUND_SELECT,
                 consume_outbound_receipt,
+                outbound_patch_matches_grant,
             )
 
-            # Verify this outbound patch belongs to this grant's dataset, travel, branch,
-            # AND original mobile creator device BEFORE consuming the receipt.
+            # Use the exact same ownership check as pull before consuming the receipt.
             cur = await self._store._conn.execute(
-                "SELECT o.operation_id "
-                "FROM exchange_outbound_operations o "
-                "INNER JOIN exchange_operation_receipts r "
-                "  ON r.dataset_id = o.dataset_id "
-                " AND r.session_id = o.session_id "
-                " AND r.branch_id = o.branch_id "
-                " AND r.entity_id = o.entity_id "
-                " AND r.kind = 'expense.create' "
-                " AND r.origin_direction = 'received' "
-                "WHERE o.kind = 'expense.patch' "
-                "  AND o.dataset_id = ? "
-                "  AND o.source_device_id = ? "
-                "  AND o.operation_id = ? "
-                "  AND o.dataset_id = ? "
-                "  AND o.session_id = ? "
-                "  AND o.branch_id = ? "
-                "  AND r.source_device_id = ?",
-                (
-                    dataset_id,
-                    source_device_id,
-                    operation_id,
-                    str(grant["dataset_id"]),
-                    str(grant["travel_id"]),
-                    str(grant["branch_id"]),
-                    str(grant["source_device_id"]),
-                ),
+                _OUTBOUND_SELECT + " WHERE kind = 'expense.patch' "
+                "  AND dataset_id = ? "
+                "  AND source_device_id = ? "
+                "  AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
             )
-            owned = await cur.fetchone()
-            if owned is None:
+            row = await cur.fetchone()
+            if row is None or not await outbound_patch_matches_grant(self._store._conn, row, grant):
                 return {"ok": False, "error": "unauthorized", "confirmed": False}
 
             return await consume_outbound_receipt(
