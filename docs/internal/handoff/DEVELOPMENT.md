@@ -366,3 +366,41 @@ python -m unittest desktop.tests.test_exchange -v
 ```
 
 未覆盖项：本产物为阶段一只读候选，不是已冻结的跨端写入契约；不含 LangGraph `checkpoints`／`writes`、`chat_receipts`、`travel_preferences` 及 `workflow_*` 表；移动端独立读取回执、Android 真机运行、写入命令、冲突合并与个人主库迁移均不在本阶段覆盖范围内。
+
+### 第三阶段跨仓隔离投递入口
+
+[跨仓隔离投递 CLI](../../../backend/scripts/exchange_trip_handoff.py) 为维护者提供不启动监听端口、不读取 `.env` 与个人库、不改动 `contracts/` 冻结包的隔离文件／标准输入交接入口：
+
+1. **初始化虚构旅行副本与显式授权配置**：从 `desktop/tests/fixtures/d1/fictional-trip.sqlite.gz` 解压并校验 `database_sha256` 至全新隔离目录，生成 `travel.sqlite`、`scope.json`（仅显式授权主分支 `(travel_id, branch_id)` 与约定设备）及交接上下文 JSON（含 `dataset_id`、`travel_id`、`branch_id`、`current_revision_id`、`fork_branch_id`、`fork_revision_id`）。
+2. **投递发送方持久保存的正式 0.1.0 命令原字节**：通过 `--input <command.json>` 或标准输入 `--input -` 读取原始命令字节，调用 `backend/app/services/exchange_receive.py` 的 `receive_expense_create` 并将原始回执 JSON 输出至标准输出（支持 `--fault before_commit` / `--fault after_commit_before_reply` 分别以退出码 `85` / `86` 与空标准输出模拟进程中断）。
+3. **查询回执与通过现有应用接口核对真实账本**：`lookup` 接受正式 0.1.0 `receipt.lookup` 原字节并输出原始查询结果；`inspect-trip` 通过现有 FastAPI 读入口（`GET /api/branches/{bid}/versions`、`GET /api/versions/{vid}`、`GET /api/versions/{vid}/export`）汇总版本链、实付账本、导出文本、备选分支及持久回执表。
+
+从仓库根目录复跑维护者 CLI 与独立进程回归：
+
+```sh
+# 1. 初始化全新隔离虚构旅行副本与交接上下文
+backend/.venv/bin/python backend/scripts/exchange_trip_handoff.py init-trip \
+  --work-dir /tmp/travelflow-p3-handoff \
+  --context-out /tmp/travelflow-p3-handoff/context.json
+
+# 2. 投递发送方持久保存的 0.1.0 命令原字节（支持文件路径或 '-' 标准输入）
+backend/.venv/bin/python backend/scripts/exchange_trip_handoff.py receive \
+  --database /tmp/travelflow-p3-handoff/travel.sqlite \
+  --scope /tmp/travelflow-p3-handoff/scope.json \
+  --input /path/to/persisted-command.json
+
+# 3. 查询回执与核对桌面真实账本
+backend/.venv/bin/python backend/scripts/exchange_trip_handoff.py lookup \
+  --database /tmp/travelflow-p3-handoff/travel.sqlite \
+  --scope /tmp/travelflow-p3-handoff/scope.json \
+  --input /path/to/receipt-query.json
+backend/.venv/bin/python backend/scripts/exchange_trip_handoff.py inspect-trip \
+  --database /tmp/travelflow-p3-handoff/travel.sqlite \
+  --branch-id f4f921d01f4e \
+  --fork-branch-id 80a581ac74f9
+
+# 4. 独立进程端到端回归（含提交后丢回包、重开原字节重投、应用读回与越权分支拒绝）
+(cd backend && .venv/bin/pytest -v tests/test_exchange_trip_handoff.py tests/test_exchange_receive_trip.py)
+```
+
+验证边界说明：`backend/tests/test_exchange_trip_handoff.py` 中生成的 `35.00` 元（`3500` 分）`地铁交通卡充值` 命令属于**桌面替身发送方输入**（由 `desktop/expense_pending.py` 持久保存并投递），仅用于验证桌面隔离交接入口与独立进程重试回执闭环；真实 Android 记账路径产出的待发送字节与移动侧最终确认仍由后续移动固定回执独立覆盖。
