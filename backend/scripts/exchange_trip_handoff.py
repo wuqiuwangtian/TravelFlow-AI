@@ -52,6 +52,11 @@ from app.api import (  # noqa: E402
 )
 from app.core.config import Settings, get_settings  # noqa: E402
 from app.core.errors import register_exception_handlers  # noqa: E402
+from app.services.exchange_outbox import (  # noqa: E402
+    consume_outbound_receipt,
+    list_outbound_operations,
+    prepare_outbound_delivery,
+)
 from app.services.exchange_receive import (  # noqa: E402
     CONTRACT_ID,
     CONTRACT_VERSION,
@@ -509,6 +514,15 @@ async def _inspect_trip(
                 "FROM exchange_operation_receipts ORDER BY committed_at, operation_id"
             ).fetchall()
         ]
+        outbound_rows = [
+            dict(row)
+            for row in db.execute(
+                "SELECT dataset_id, source_device_id, operation_id, kind, intent_sha256, "
+                "expected_revision_id, source_revision_id, entity_id, delivery_state, "
+                "confirmed_mobile_revision_id, confirmed_effect, last_error "
+                "FROM exchange_outbound_operations ORDER BY created_at, operation_id"
+            ).fetchall()
+        ]
 
     return {
         "branch_id": branch_id,
@@ -531,6 +545,119 @@ async def _inspect_trip(
         "export_markdown": export_res.text,
         "fork": fork_summary,
         "receipts": receipts,
+        "outbound_operations": outbound_rows,
+        "pending_outbound_count": sum(
+            1 for row in outbound_rows if row["delivery_state"] != "confirmed"
+        ),
+    }
+
+
+async def _prepare_outbound(
+    db_path: Path,
+    *,
+    operation_id: str | None = None,
+    command_out: Path | None = None,
+    query_out: Path | None = None,
+) -> dict[str, Any]:
+    """Durably mark an outbound patch verification_pending and return/write raw command bytes."""
+    resolved_db = _validate_handoff_database(db_path)
+    if command_out is not None and os.path.lexists(command_out):
+        raise ValueError(f"Refusing to overwrite existing command output path: {command_out}")
+    if query_out is not None and os.path.lexists(query_out):
+        raise ValueError(f"Refusing to overwrite existing query output path: {query_out}")
+
+    conn = await create_connection(resolved_db)
+    try:
+        store = SessionStore(conn)
+        rows = await list_outbound_operations(store)
+        if operation_id is not None:
+            matches = [r for r in rows if r["operation_id"] == operation_id]
+        else:
+            matches = [r for r in rows if r["delivery_state"] != "confirmed"]
+        if len(matches) != 1:
+            return {
+                "ok": False,
+                "error": "outbound_not_found" if not matches else "ambiguous_outbound_operation",
+            }
+        target = matches[0]
+        res = await prepare_outbound_delivery(
+            store,
+            dataset_id=target["dataset_id"],
+            source_device_id=target["source_device_id"],
+            operation_id=target["operation_id"],
+        )
+    finally:
+        await conn.close()
+
+    if not res.get("ok"):
+        return res
+
+    raw_bytes: bytes | None = res.pop("raw_bytes")
+    lookup_bytes: bytes = res.pop("lookup_query_bytes")
+    if command_out is not None and raw_bytes is not None:
+        command_out.parent.mkdir(parents=True, exist_ok=True)
+        _write_exclusive_bytes(command_out, raw_bytes)
+    if query_out is not None:
+        query_out.parent.mkdir(parents=True, exist_ok=True)
+        _write_exclusive_bytes(query_out, lookup_bytes)
+
+    res["raw_command_json"] = raw_bytes.decode("utf-8") if raw_bytes is not None else None
+    res["lookup_query_json"] = lookup_bytes.decode("utf-8")
+    return res
+
+
+async def _confirm_outbound(
+    db_path: Path,
+    *,
+    operation_id: str,
+    raw_response_bytes: bytes,
+) -> dict[str, Any]:
+    """Verify a raw mobile receipt/lookup response and atomically confirm the outbound row."""
+    resolved_db = _validate_handoff_database(db_path)
+    try:
+        raw_response = json.loads(raw_response_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {"ok": False, "error": "invalid_response", "confirmed": False}
+    if not isinstance(raw_response, dict):
+        return {"ok": False, "error": "invalid_response", "confirmed": False}
+
+    conn = await create_connection(resolved_db)
+    try:
+        store = SessionStore(conn)
+        rows = await list_outbound_operations(store)
+        matches = [r for r in rows if r["operation_id"] == operation_id]
+        if len(matches) != 1:
+            return {"ok": False, "error": "outbound_not_found", "confirmed": False}
+        target = matches[0]
+        return await consume_outbound_receipt(
+            store,
+            dataset_id=target["dataset_id"],
+            source_device_id=target["source_device_id"],
+            operation_id=target["operation_id"],
+            raw_response=raw_response,
+        )
+    finally:
+        await conn.close()
+
+
+async def _outbound_status(db_path: Path, *, branch_id: str | None = None) -> dict[str, Any]:
+    """Read persisted outbound operations (pending vs confirmed) on an isolated handoff DB."""
+    resolved_db = _validate_handoff_database(db_path)
+    conn = await create_connection(resolved_db)
+    try:
+        store = SessionStore(conn)
+        all_rows = await list_outbound_operations(store, branch_id=branch_id)
+    finally:
+        await conn.close()
+    pending = [r for r in all_rows if r["delivery_state"] != "confirmed"]
+    confirmed = [r for r in all_rows if r["delivery_state"] == "confirmed"]
+    return {
+        "ok": True,
+        "all": all_rows,
+        "pending": pending,
+        "confirmed": confirmed,
+        "pending_count": len(pending),
+        "confirmed_count": len(confirmed),
     }
 
 
@@ -574,6 +701,32 @@ def main(argv: list[str] | None = None) -> int:
     insp_p.add_argument("--branch-id", required=True)
     insp_p.add_argument("--fork-branch-id", default=None)
 
+    prep_p = sub.add_parser(
+        "prepare-outbound",
+        help="Mark an outbound patch verification_pending and emit its raw command & lookup JSON.",
+    )
+    prep_p.add_argument("--database", type=Path, required=True)
+    prep_p.add_argument("--operation-id", default=None)
+    prep_p.add_argument("--command-out", type=Path, default=None)
+    prep_p.add_argument("--query-out", type=Path, default=None)
+
+    conf_p = sub.add_parser(
+        "confirm-outbound",
+        help="Verify mobile delivery/lookup response and atomically confirm the outbound row.",
+    )
+    conf_p.add_argument("--database", type=Path, required=True)
+    conf_p.add_argument("--operation-id", required=True)
+    conf_p.add_argument(
+        "--input", default="-", help="Path to mobile raw JSON response, or '-' stdin."
+    )
+
+    stat_p = sub.add_parser(
+        "outbound-status",
+        help="Read pending and confirmed outbound patch operations from an isolated handoff DB.",
+    )
+    stat_p.add_argument("--database", type=Path, required=True)
+    stat_p.add_argument("--branch-id", default=None)
+
     args = parser.parse_args(argv)
     try:
         if args.action == "init-trip":
@@ -601,6 +754,35 @@ def main(argv: list[str] | None = None) -> int:
             result = asyncio.run(_run_lookup(args.database, args.scope, raw_bytes))
             print(json.dumps(result, ensure_ascii=False))
             return 0 if result.get("ok") else 1
+
+        if args.action == "prepare-outbound":
+            result = asyncio.run(
+                _prepare_outbound(
+                    args.database,
+                    operation_id=args.operation_id,
+                    command_out=args.command_out,
+                    query_out=args.query_out,
+                )
+            )
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result.get("ok") else 1
+
+        if args.action == "confirm-outbound":
+            raw_bytes = _read_raw_input(args.input)
+            result = asyncio.run(
+                _confirm_outbound(
+                    args.database,
+                    operation_id=args.operation_id,
+                    raw_response_bytes=raw_bytes,
+                )
+            )
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result.get("ok") else 1
+
+        if args.action == "outbound-status":
+            result = asyncio.run(_outbound_status(args.database, branch_id=args.branch_id))
+            print(json.dumps(result, ensure_ascii=False))
+            return 0
 
         result = asyncio.run(
             _inspect_trip(

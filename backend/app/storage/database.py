@@ -197,6 +197,11 @@ CREATE TABLE IF NOT EXISTS exchange_outbound_operations (
     delivery_state TEXT NOT NULL DEFAULT 'unsent' CHECK (
         delivery_state IN ('unsent', 'verification_pending', 'confirmed')
     ),
+    confirmed_mobile_revision_id TEXT,
+    confirmed_effect TEXT,
+    last_error TEXT,
+    last_raw_response_json TEXT,
+    confirmed_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (dataset_id, source_device_id, operation_id)
@@ -222,6 +227,13 @@ async def create_connection(db_path: str | Path) -> aiosqlite.Connection:
     await _ensure_column(conn, "plans", "itinerary", "TEXT")
     await _ensure_column(conn, "plans", "requirements", "TEXT")
     await _ensure_column(conn, "sessions", "initial_preferences", "TEXT NOT NULL DEFAULT '[]'")
+    await _ensure_column(
+        conn, "exchange_outbound_operations", "confirmed_mobile_revision_id", "TEXT"
+    )
+    await _ensure_column(conn, "exchange_outbound_operations", "confirmed_effect", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "last_error", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "last_raw_response_json", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "confirmed_at", "TEXT")
     await conn.commit()
 
     logger.info("数据库就绪", extra={"extra_fields": {"path": str(path)}})
