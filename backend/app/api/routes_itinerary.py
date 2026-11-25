@@ -848,6 +848,7 @@ async def update_expense(
     from app.services.exchange_outbox import (
         find_received_expense_dataset,
         is_amount_only_expense_edit,
+        is_no_op_expense_edit,
         save_expense_patch_with_outbox,
     )
 
@@ -866,10 +867,13 @@ async def update_expense(
             if branch is not None
             else None
         )
-        if dataset_id is not None and is_amount_only_expense_edit(detail, expense_id, payload):
-            return await save_expense_patch_with_outbox(
-                store, graph, detail, expense_id, payload, dataset_id=dataset_id
-            )
+        if dataset_id is not None:
+            if is_no_op_expense_edit(detail, expense_id, payload):
+                return detail
+            if is_amount_only_expense_edit(detail, expense_id, payload):
+                return await save_expense_patch_with_outbox(
+                    store, graph, detail, expense_id, payload, dataset_id=dataset_id
+                )
         edit_expense(_itinerary(detail), expense_id, payload)
         return await _save_revision(
             store, graph, detail, f"更正消费：{payload.title}", keep_plan_status=True

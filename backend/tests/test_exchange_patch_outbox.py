@@ -360,7 +360,7 @@ async def test_multifield_and_local_expense_edits_keep_working_without_misemitti
         assert local_res.status_code == 200, local_res.text
         v6 = local_res.json()["version"]["id"]
 
-        # 4. No-op edit on mobile expense (identical fields and amount).
+        # 4. No-op edit on mobile expense (identical fields and amount) returns current version.
         noop_res = await client.put(
             f"/api/versions/{v6}/expenses/android-metro-1",
             json={
@@ -371,6 +371,7 @@ async def test_multifield_and_local_expense_edits_keep_working_without_misemitti
             },
         )
         assert noop_res.status_code == 200, noop_res.text
+        assert noop_res.json()["version"]["id"] == v6
 
         outbound = await list_outbound_operations(store, branch_id=bid)
         assert outbound == []
@@ -379,3 +380,119 @@ async def test_multifield_and_local_expense_edits_keep_working_without_misemitti
         assert [item["id"] for item in fork_versions] == [fork_v1]
     finally:
         await _close_isolated_app(conn, cp_cm, client)
+
+
+@pytest.mark.asyncio
+async def test_noop_save_then_amount_edit_preserves_baseline_and_applies_on_mobile(
+    tmp_path: Path,
+):
+    """No-op PUT (17.23) returns v2 & keeps updated_at/outbox; next PUT (21.50) applies cleanly."""
+    app_db = tmp_path / "desktop_outbox_noop_then_edit.db"
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        sid, bid, v1, v2, fork_bid, fork_v1, dataset_id = await _seed_trip_with_mobile_expense(
+            client, store, graph
+        )
+        v2_before = (await client.get(f"/api/versions/{v2}")).json()
+        orig_updated_at = v2_before["itinerary"]["expenses"][0]["updated_at"]
+
+        # Step 1: Save unchanged 17.23 CNY via existing PUT endpoint.
+        noop_res = await client.put(
+            f"/api/versions/{v2}/expenses/android-metro-1",
+            json={
+                "title": "机场快轨",
+                "amount": "17.23",
+                "category": "transport",
+                "notes": "手机离线首记",
+            },
+        )
+        assert noop_res.status_code == 200, noop_res.text
+        noop_body = noop_res.json()
+        assert noop_body["version"]["id"] == v2
+        assert noop_body["itinerary"]["expenses"][0]["updated_at"] == orig_updated_at
+        assert await list_outbound_operations(store, branch_id=bid) == []
+
+        # Step 2: Change ONLY amount from 17.23 to 21.50 on v2.
+        edit_res = await client.put(
+            f"/api/versions/{v2}/expenses/android-metro-1",
+            json={
+                "title": "机场快轨",
+                "amount": "21.50",
+                "category": "transport",
+                "notes": "手机离线首记",
+            },
+        )
+        assert edit_res.status_code == 200, edit_res.text
+        v3 = edit_res.json()["version"]["id"]
+        assert v3 != v2
+
+        # Historical version protection still rejects edits against superseded v2.
+        stale_put = await client.put(
+            f"/api/versions/{v2}/expenses/android-metro-1",
+            json={
+                "title": "机场快轨",
+                "amount": "17.23",
+                "category": "transport",
+                "notes": "手机离线首记",
+            },
+        )
+        assert stale_put.status_code == 409
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # Reopen desktop DB: only 1 new version (v3) and 1 outbound command rooted at original v2.
+    conn, store, cp_cm, graph, client = await _open_isolated_app(app_db)
+    try:
+        versions = (await client.get(f"/api/branches/{bid}/versions")).json()["items"]
+        assert [item["id"] for item in versions] == [v1, v2, v3]
+
+        outbound = await list_outbound_operations(store, branch_id=bid)
+        assert len(outbound) == 1
+        assert outbound[0]["expected_revision_id"] == v2
+        assert outbound[0]["source_revision_id"] == v3
+        raw_bytes = outbound[0]["raw_command_json"].encode("utf-8")
+
+        fork_versions = (await client.get(f"/api/branches/{fork_bid}/versions")).json()["items"]
+        assert [item["id"] for item in fork_versions] == [fork_v1]
+    finally:
+        await _close_isolated_app(conn, cp_cm, client)
+
+    # Mobile reference receiver initialized at original confirmed v2 applies raw_bytes cleanly.
+    mobile_db = tmp_path / "mobile_replica_noop.sqlite"
+    init_mobile_replica(
+        mobile_db,
+        defaults={
+            "dataset_id": dataset_id,
+            "travel_id": sid,
+            "branch_id": bid,
+            "entity_id": "android-metro-1",
+            "initial_local_revision_id": "m-rev-1",
+            "initial_synced_desktop_revision_id": v2,
+            "initial_expense": {
+                "id": "android-metro-1",
+                "title": "机场快轨",
+                "amount_cents": 1723,
+                "currency": "CNY",
+                "paid_on": None,
+                "category": "transport",
+                "notes": "手机离线首记",
+                "updated_at": "2026-11-24T12:00:00Z",
+            },
+        },
+    )
+    mobile_res = apply_desktop_patch(
+        mobile_db,
+        raw_bytes,
+        scope=PatchScope(
+            dataset_id=dataset_id,
+            authorized_devices=frozenset({DESKTOP_SOURCE_DEVICE_ID}),
+            authorized_targets=frozenset({(sid, bid)}),
+        ),
+    )
+    assert mobile_res["ok"] is True
+    assert mobile_res["receipt"]["effect"] == "changed"
+    assert mobile_res["receipt"]["synced_desktop_revision_id"] == v3
+    with closing(sqlite3.connect(mobile_db)) as db:
+        db.row_factory = sqlite3.Row
+        row = db.execute("SELECT amount_cents FROM expenses WHERE entity_id = 'android-metro-1'")
+        assert row.fetchone()["amount_cents"] == 2150

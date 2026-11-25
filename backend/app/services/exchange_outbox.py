@@ -121,6 +121,19 @@ async def find_received_expense_dataset(
     return str(row["dataset_id"]) if row is not None else None
 
 
+def is_no_op_expense_edit(detail: VersionDetail, expense_id: str, payload: ExpenseInput) -> bool:
+    """True iff expense_id exists and payload changes no persisted expense fields."""
+    if detail.itinerary is None:
+        return False
+    existing = next((e for e in detail.itinerary.expenses if e.id == expense_id), None)
+    if existing is None:
+        return False
+    new_values = expense_values(payload)
+    return existing.amount_cents == new_values["amount_cents"] and all(
+        getattr(existing, field) == new_values[field] for field in _NON_AMOUNT_EXPENSE_FIELDS
+    )
+
+
 def is_amount_only_expense_edit(
     detail: VersionDetail, expense_id: str, payload: ExpenseInput
 ) -> bool:
