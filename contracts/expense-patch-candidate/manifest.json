@@ -1,0 +1,17 @@
+{
+  "contract_id": "travelflow.expense-patch-candidate",
+  "contract_version": "0.1.0-candidate.1",
+  "status": "candidate",
+  "shared_contract_version": null,
+  "base_commit": "fdefebe",
+  "frozen_dependency": {
+    "contract_id": "travelflow.expense-create",
+    "contract_version": "0.1.0"
+  },
+  "files": {
+    "SPEC.md": "78a88920bf3c6e6aee9f74b799ae02ce20ce006dfaf5707c496ea742d68a82bb",
+    "canonical-digests.json": "4a1cd3d67f557f31cb2a6e6ce2d160d4a6a1d2ec81c412ba8560bae4e3225808",
+    "normative-vectors.json": "86e8cdd44797de1c33b3996144335684c163b68a5b1fb4f494069a309899cf58",
+    "result-mapping.json": "2aa2ff3e792de9ce643e4d53c52fcc9178a2f64612fce8e3618f478ad3a30c0e"
+  }
+}

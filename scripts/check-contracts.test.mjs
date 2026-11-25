@@ -23,6 +23,11 @@ function fixture() {
     path.join(folder, "contracts/expense-create-v0.1.0"),
     { recursive: true },
   );
+  cpSync(
+    path.join(root, "contracts/expense-patch-candidate"),
+    path.join(folder, "contracts/expense-patch-candidate"),
+    { recursive: true },
+  );
   const git = (...args) => execFileSync("git", args, { cwd: folder, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "-q");
   git("config", "user.name", "Contract test");

@@ -6,6 +6,8 @@
 
 ## 当前接续状态
 
+- 桌面已验 [人民币消费金额更正候选](../../contracts/expense-patch-candidate/SPEC.md) ebf1c2f。10 组 21 步通过；对两种金额与版本矛盾、两种本地待发冲突另做 SQLite 全表前后比对，四次拒绝均保留原记录、待发原文、版本和回执。执行端为桌面 Python 参考实现，移动侧独立回执待收。
+
 - 已接受移动 [f196725 联合投递回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/f19672511616cbf535aaa6f13349773ecb57e4dd/docs/internal/PROJECT_STATUS.md#android-单笔消费跨仓隔离投递)。桌面固定 aeb4a3e。移动维护者在 API 35 飞行模式下用记账入口保存 1723 分，桌面提交后丢回包，手机冷重开并重投原 612 字节。桌面从 8635 分到 10358 分，消费从一笔到两笔，只增一个版本和一份回执，原分叉保持一致。手机再次重开后，查询前从 SQLite 读出的桌面确认版本 576d3d5797a3 与桌面分支头相同，待发送为零。桌面侧审阅固定提交的联合脚本和回执，并复跑 test_exchange_trip_handoff.py，4 项通过。模拟器实跑归移动侧。手机账本只含本次新增，传输由测试进程完成。
 
 - 已接受移动 [b1d6c2f 离线记账入口回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/b1d6c2f02220a1454008bb6e0aea5b7e97c4f50b/docs/internal/PROJECT_STATUS.md#android-旅行账本离线新增集成复验)。电脑从固定归档复跑 typecheck、check:contracts、check:ledger、check:p1-bridge-command，四项通过。移动维护者对最终 APK 两次全新安装验证离线触摸保存、冷重开、待发送记录和等值重放；原桥 17/17 通过，本轮电脑未重跑模拟器。移动发送端与桌面接收端 aeb4a3e 的单端前置均已验。

@@ -1,0 +1,61 @@
+{
+  "contract_id": "travelflow.expense-patch-candidate",
+  "contract_version": "0.1.0-candidate.1",
+  "canonical_profile": "p1-host-intent-c14n-1",
+  "wrapper_schema": {
+    "canonical_profile": "p1-host-intent-c14n-1",
+    "channel": "<control|receipt-query>",
+    "intent": "<UTF-16BE sorted intent object>"
+  },
+  "cases": [
+    {
+      "id": "patch_base",
+      "channel": "control",
+      "raw_json": "{\"profile\": \"p1-host-control-1\", \"kind\": \"expense.patch\", \"operation\": {\"dataset_id\": \"p3-d1-handoff-dataset\", \"source_device_id\": \"desktop-device-1\", \"operation_id\": \"op-desktop-patch-1\"}, \"target\": {\"travel_id\": \"92ba6a148a17\", \"branch_id\": \"f4f921d01f4e\", \"entity_id\": \"android-metro-1\"}, \"expected_revision_id\": \"576d3d5797a3\", \"source_revision_id\": \"desk-rev-2\", \"patch\": {\"amount_cents\": 2150}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"576d3d5797a3\",\"kind\":\"expense.patch\",\"operation\":{\"dataset_id\":\"p3-d1-handoff-dataset\",\"operation_id\":\"op-desktop-patch-1\",\"source_device_id\":\"desktop-device-1\"},\"patch\":{\"amount_cents\":2150},\"profile\":\"p1-host-control-1\",\"source_revision_id\":\"desk-rev-2\",\"target\":{\"branch_id\":\"f4f921d01f4e\",\"entity_id\":\"android-metro-1\",\"travel_id\":\"92ba6a148a17\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22353736643364353739376133222c226b696e64223a22657870656e73652e7061746368222c226f7065726174696f6e223a7b22646174617365745f6964223a2270332d64312d68616e646f66662d64617461736574222c226f7065726174696f6e5f6964223a226f702d6465736b746f702d70617463682d31222c22736f757263655f6465766963655f6964223a226465736b746f702d6465766963652d31227d2c227061746368223a7b22616d6f756e745f63656e7473223a323135307d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22736f757263655f7265766973696f6e5f6964223a226465736b2d7265762d32222c22746172676574223a7b226272616e63685f6964223a22663466393231643031663465222c22656e746974795f6964223a22616e64726f69642d6d6574726f2d31222c2274726176656c5f6964223a22393262613661313438613137227d7d7d",
+      "sha256": "ca3c5df6c6ab9738c95c85a286af61e980e6a515505c64fbe55f90aadddf7bd0"
+    },
+    {
+      "id": "patch_reordered",
+      "channel": "control",
+      "raw_json": "{\"patch\": {\"amount_cents\": 2150}, \"source_revision_id\": \"desk-rev-2\", \"expected_revision_id\": \"576d3d5797a3\", \"target\": {\"entity_id\": \"android-metro-1\", \"branch_id\": \"f4f921d01f4e\", \"travel_id\": \"92ba6a148a17\"}, \"operation\": {\"operation_id\": \"op-desktop-patch-1\", \"source_device_id\": \"desktop-device-1\", \"dataset_id\": \"p3-d1-handoff-dataset\"}, \"kind\": \"expense.patch\", \"profile\": \"p1-host-control-1\"}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"576d3d5797a3\",\"kind\":\"expense.patch\",\"operation\":{\"dataset_id\":\"p3-d1-handoff-dataset\",\"operation_id\":\"op-desktop-patch-1\",\"source_device_id\":\"desktop-device-1\"},\"patch\":{\"amount_cents\":2150},\"profile\":\"p1-host-control-1\",\"source_revision_id\":\"desk-rev-2\",\"target\":{\"branch_id\":\"f4f921d01f4e\",\"entity_id\":\"android-metro-1\",\"travel_id\":\"92ba6a148a17\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22353736643364353739376133222c226b696e64223a22657870656e73652e7061746368222c226f7065726174696f6e223a7b22646174617365745f6964223a2270332d64312d68616e646f66662d64617461736574222c226f7065726174696f6e5f6964223a226f702d6465736b746f702d70617463682d31222c22736f757263655f6465766963655f6964223a226465736b746f702d6465766963652d31227d2c227061746368223a7b22616d6f756e745f63656e7473223a323135307d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22736f757263655f7265766973696f6e5f6964223a226465736b2d7265762d32222c22746172676574223a7b226272616e63685f6964223a22663466393231643031663465222c22656e746974795f6964223a22616e64726f69642d6d6574726f2d31222c2274726176656c5f6964223a22393262613661313438613137227d7d7d",
+      "sha256": "ca3c5df6c6ab9738c95c85a286af61e980e6a515505c64fbe55f90aadddf7bd0"
+    },
+    {
+      "id": "patch_diff_amount",
+      "channel": "control",
+      "raw_json": "{\"profile\": \"p1-host-control-1\", \"kind\": \"expense.patch\", \"operation\": {\"dataset_id\": \"p3-d1-handoff-dataset\", \"source_device_id\": \"desktop-device-1\", \"operation_id\": \"op-desktop-patch-1\"}, \"target\": {\"travel_id\": \"92ba6a148a17\", \"branch_id\": \"f4f921d01f4e\", \"entity_id\": \"android-metro-1\"}, \"expected_revision_id\": \"576d3d5797a3\", \"source_revision_id\": \"desk-rev-2\", \"patch\": {\"amount_cents\": 2151}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"control\",\"intent\":{\"expected_revision_id\":\"576d3d5797a3\",\"kind\":\"expense.patch\",\"operation\":{\"dataset_id\":\"p3-d1-handoff-dataset\",\"operation_id\":\"op-desktop-patch-1\",\"source_device_id\":\"desktop-device-1\"},\"patch\":{\"amount_cents\":2151},\"profile\":\"p1-host-control-1\",\"source_revision_id\":\"desk-rev-2\",\"target\":{\"branch_id\":\"f4f921d01f4e\",\"entity_id\":\"android-metro-1\",\"travel_id\":\"92ba6a148a17\"}}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22636f6e74726f6c222c22696e74656e74223a7b2265787065637465645f7265766973696f6e5f6964223a22353736643364353739376133222c226b696e64223a22657870656e73652e7061746368222c226f7065726174696f6e223a7b22646174617365745f6964223a2270332d64312d68616e646f66662d64617461736574222c226f7065726174696f6e5f6964223a226f702d6465736b746f702d70617463682d31222c22736f757263655f6465766963655f6964223a226465736b746f702d6465766963652d31227d2c227061746368223a7b22616d6f756e745f63656e7473223a323135317d2c2270726f66696c65223a2270312d686f73742d636f6e74726f6c2d31222c22736f757263655f7265766973696f6e5f6964223a226465736b2d7265762d32222c22746172676574223a7b226272616e63685f6964223a22663466393231643031663465222c22656e746974795f6964223a22616e64726f69642d6d6574726f2d31222c2274726176656c5f6964223a22393262613661313438613137227d7d7d",
+      "sha256": "bddaee79eec9c3cfc43c063575118ef3dafc2c2e3ca8e881e915059d0d2cf937"
+    },
+    {
+      "id": "patch_lookup",
+      "channel": "receipt-query",
+      "raw_json": "{\"profile\": \"p1-host-query-1\", \"kind\": \"receipt.lookup\", \"operation\": {\"dataset_id\": \"p3-d1-handoff-dataset\", \"source_device_id\": \"desktop-device-1\", \"operation_id\": \"op-desktop-patch-1\"}}",
+      "canonical_json": "{\"canonical_profile\":\"p1-host-intent-c14n-1\",\"channel\":\"receipt-query\",\"intent\":{\"kind\":\"receipt.lookup\",\"operation\":{\"dataset_id\":\"p3-d1-handoff-dataset\",\"operation_id\":\"op-desktop-patch-1\",\"source_device_id\":\"desktop-device-1\"},\"profile\":\"p1-host-query-1\"}}",
+      "canonical_utf8_hex": "7b2263616e6f6e6963616c5f70726f66696c65223a2270312d686f73742d696e74656e742d6331346e2d31222c226368616e6e656c223a22726563656970742d7175657279222c22696e74656e74223a7b226b696e64223a22726563656970742e6c6f6f6b7570222c226f7065726174696f6e223a7b22646174617365745f6964223a2270332d64312d68616e646f66662d64617461736574222c226f7065726174696f6e5f6964223a226f702d6465736b746f702d70617463682d31222c22736f757263655f6465766963655f6964223a226465736b746f702d6465766963652d31227d2c2270726f66696c65223a2270312d686f73742d71756572792d31227d7d",
+      "sha256": "f061fa75520e4851ac8902808d7d258748a4a0bc28d7bde9b4417dce842f5681"
+    }
+  ],
+  "relations": [
+    {
+      "ids": [
+        "patch_base",
+        "patch_reordered"
+      ],
+      "relation": "same"
+    },
+    {
+      "ids": [
+        "patch_base",
+        "patch_diff_amount",
+        "patch_lookup"
+      ],
+      "relation": "distinct"
+    }
+  ]
+}
