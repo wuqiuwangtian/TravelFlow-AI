@@ -405,5 +405,9 @@ backend/.venv/bin/python backend/scripts/exchange_trip_handoff.py inspect-trip \
 
 验证边界说明：`backend/tests/test_exchange_trip_handoff.py` 中生成的 `35.00` 元（`3500` 分）`地铁交通卡充值` 命令属于**桌面替身发送方输入**（由 `desktop/expense_pending.py` 持久保存并投递），仅用于验证桌面隔离交接入口与独立进程重试回执闭环；真实 Android 记账路径产出的待发送字节与移动侧最终确认仍由后续移动固定回执独立覆盖。
 
+### 第四阶段同网前台配对原型
+
+同网前台配对原型（TLS 1.2+/1.3 证书指纹固定 + 双方 6 位 SAS 确认 + 重开重连 + 撤销拒绝 + 控制面隔离）的握手规范、Android 可复用最小请求样例、WSL 与 Windows 原生实测地址记录及复跑命令见 [同网前台配对原型说明](./LAN_PAIRING_PROTOTYPE.md)。
+
 
 在同一隔离库完成桌面金额更正后，用 `exchange_trip_handoff.py prepare-outbound --database DB --operation-id OP` 取回 `raw_command_json` 和 `lookup_query_json`。传给 Android 时保留字符串的原始 UTF-8 字节。也可用 `--command-out FILE --query-out FILE` 写到两个新文件。发送前操作已持久标记为 verification_pending。将 Android 投递或独立查询返回的完整响应经标准输入交给 `confirm-outbound --database DB --operation-id OP --input -`，再用新进程调用 `outbound-status --database DB`，核对 pending、confirmed 列表及 confirmed_mobile_revision_id。已确认操作再次 prepare 不返回可投递命令。
