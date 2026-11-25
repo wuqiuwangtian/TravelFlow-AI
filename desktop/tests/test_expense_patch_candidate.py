@@ -20,8 +20,8 @@ class ExpensePatchCandidateTests(unittest.TestCase):
         self.assertTrue(summary["ok"])
         self.assertEqual(summary["contract_id"], "travelflow.expense-patch-candidate")
         self.assertEqual(summary["contract_version"], "0.1.0-candidate.1")
-        self.assertEqual(summary["scenarios"], 9)
-        self.assertEqual(summary["steps"], 19)
+        self.assertEqual(summary["scenarios"], 10)
+        self.assertEqual(summary["steps"], 21)
 
     def test_tampered_vector_amount_fails_non_zero(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

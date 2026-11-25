@@ -64,6 +64,13 @@
       },
       "mobile_review_status": "pending_mobile_review"
     },
+    "rejected_revision_mismatch": {
+      "desktop_reference": {
+        "ok": false,
+        "error": "revision_mismatch"
+      },
+      "mobile_review_status": "pending_mobile_review"
+    },
     "rejected_entity_not_found": {
       "desktop_reference": {
         "ok": false,

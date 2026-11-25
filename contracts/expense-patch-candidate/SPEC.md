@@ -24,7 +24,10 @@
   2. `synced_desktop_revision_id`：手机最近一次已确认的桌面版本 ID（例如由 `expense.create 0.1.0` 确认回执写入的 `576d3d5797a3`）。
 - 电脑在 `R1`（即手机已保存的 `synced_desktop_revision_id`）基础上更正该笔消费，生成桌面新版本 `R2` 后，构造 `expense.patch` 命令：
   - `expected_revision_id` = `R1`（桌面此次更正所基于的旧桌面版本）。
-  - `source_revision_id` = `R2`（桌面此次更正产生的新桌面版本；无变化更正时等于 `R1`）。
+  - `source_revision_id` = `R2`（桌面此次更正产生的新桌面版本）。
+  - **版本一致性约束（严格校验）**：
+    - 金额实际发生改变时，**必须**满足 `source_revision_id != expected_revision_id`；若两者相同，拒绝并返回 `revision_mismatch`（零写入）。
+    - 金额未发生改变（无变化更正）时，**必须**满足 `source_revision_id == expected_revision_id`；若两者不同，拒绝并返回 `revision_mismatch`（零写入）。
   - `target` = `{travel_id, branch_id, entity_id}`（指向同一笔已确认消费实体）。
   - `operation` = `{dataset_id, source_device_id, operation_id}`（与 `entity_id` 严格分离）。
 - **手机识别与推进规则**：
@@ -63,13 +66,13 @@
 
 - `manifest.json`：候选标识、来源提交 `fdefebe` 与四份文件 SHA-256 清单。
 - `canonical-digests.json`：正常更正、键重排、异金额对照与 `receipt.lookup` 的规范化字节、UTF-8 十六进制与 SHA-256。
-- `normative-vectors.json`：9 组场景、19 步规范样例（覆盖正常更正、重复投递、同键异金额、基线过期、手机本地同实体／同分支待发修改保留、无变化更正、能力／范围拒绝、越权目标与独立查询）。
+- `normative-vectors.json`：10 组场景、21 步规范样例（覆盖正常更正、重复投递、同键异金额、基线过期、手机本地同实体／同分支待发修改逐字段保留、无变化更正、金额变化与桌面版本矛盾反例、能力／范围拒绝、越权目标与独立查询）。
 - `result-mapping.json`：桌面参考实现实测映射与移动侧待评审占位（明确标注移动宿主／Android 尚未实测，等待移动评审回执）。
 
 ### 桌面复跑命令
 
 ```sh
-node scripts/check-contracts.mjs --baseline fdefebe
+node scripts/check-contracts.mjs --baseline fdefebe3d4e1e34807093459ed9269f88b4d9feb
 python3 -m desktop.expense_patch_candidate --contract-bundle contracts/expense-patch-candidate
 python3 -m unittest desktop.tests.test_expense_patch_candidate -v
 ```

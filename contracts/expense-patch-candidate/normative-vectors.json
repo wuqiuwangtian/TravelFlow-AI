@@ -307,8 +307,17 @@
             "preserved_fields": {
               "notes": "手机本地已改待发"
             },
+            "local_revision_id": "m-rev-1",
             "synced_desktop_revision_id": "576d3d5797a3",
             "pending_count": 1,
+            "preserved_pending": [
+              {
+                "operation_id": "op-mobile-local-edit-1",
+                "entity_id": "android-metro-1",
+                "delivery_state": "unsent",
+                "raw_intent_json": "{\"local_amount_cents\":1999}"
+              }
+            ],
             "receipt_count": 0
           }
         },
@@ -367,8 +376,17 @@
           "expected": {
             "business_outcome": "rejected_local_pending_conflict",
             "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
             "synced_desktop_revision_id": "576d3d5797a3",
             "pending_count": 1,
+            "preserved_pending": [
+              {
+                "operation_id": "op-mobile-other-2",
+                "entity_id": "android-coffee-2",
+                "delivery_state": "verification_pending",
+                "raw_intent_json": "{\"local_amount_cents\":2800}"
+              }
+            ],
             "receipt_count": 0
           }
         }
@@ -622,6 +640,75 @@
           },
           "expected": {
             "business_outcome": "rejected_unauthorized"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EP10_revision_consistency_rejections",
+      "description": "Contradictory revision pairs are rejected fail-closed with zero writes: changed amount must carry a different source_revision_id, and unchanged amount must keep source_revision_id == expected_revision_id.",
+      "initial_pending": [],
+      "steps": [
+        {
+          "name": "reject_changed_amount_with_same_source_revision",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-revmismatch-changed"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "576d3d5797a3",
+            "patch": {
+              "amount_cents": 2150
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_revision_mismatch",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "updated_at": "2026-11-24T12:00:00Z",
+            "receipt_count": 0
+          }
+        },
+        {
+          "name": "reject_unchanged_amount_with_different_source_revision",
+          "action": "patch",
+          "command": {
+            "profile": "p1-host-control-1",
+            "kind": "expense.patch",
+            "operation": {
+              "dataset_id": "p3-d1-handoff-dataset",
+              "source_device_id": "desktop-device-1",
+              "operation_id": "op-desktop-revmismatch-unchanged"
+            },
+            "target": {
+              "travel_id": "92ba6a148a17",
+              "branch_id": "f4f921d01f4e",
+              "entity_id": "android-metro-1"
+            },
+            "expected_revision_id": "576d3d5797a3",
+            "source_revision_id": "desk-rev-2",
+            "patch": {
+              "amount_cents": 1723
+            }
+          },
+          "expected": {
+            "business_outcome": "rejected_revision_mismatch",
+            "amount_cents": 1723,
+            "local_revision_id": "m-rev-1",
+            "synced_desktop_revision_id": "576d3d5797a3",
+            "updated_at": "2026-11-24T12:00:00Z",
+            "receipt_count": 0
           }
         }
       ]

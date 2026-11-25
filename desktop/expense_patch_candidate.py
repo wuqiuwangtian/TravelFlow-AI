@@ -517,9 +517,15 @@ def apply_desktop_patch(db_path: Path, raw_command: bytes, *, scope: PatchScope)
                 db.execute("ROLLBACK")
                 return {"ok": False, "error": "unsupported_capability"}
 
-            # 6. Apply partial patch (reusing eee6cda7 no-change rule).
+            # 6. Apply partial patch (reusing eee6cda7 no-change rule + revision consistency).
             new_amount = cmd["patch"].get("amount_cents", exp["amount_cents"])
             changed = new_amount != exp["amount_cents"]
+            if changed and cmd["source_revision_id"] == cmd["expected_revision_id"]:
+                db.execute("ROLLBACK")
+                return {"ok": False, "error": "revision_mismatch"}
+            if not changed and cmd["source_revision_id"] != cmd["expected_revision_id"]:
+                db.execute("ROLLBACK")
+                return {"ok": False, "error": "revision_mismatch"}
             now_utc = datetime.now(UTC).isoformat()
 
             if changed:
@@ -640,6 +646,7 @@ def _classify_outcome(raw: dict[str, Any], action: str) -> str:
         "intent_conflict": "rejected_intent_conflict",
         "local_pending_conflict": "rejected_local_pending_conflict",
         "baseline_conflict": "rejected_baseline_conflict",
+        "revision_mismatch": "rejected_revision_mismatch",
         "entity_not_found": "rejected_entity_not_found",
         "unsupported_capability": "rejected_unsupported_capability",
         "unauthorized": "rejected_unauthorized",
@@ -743,7 +750,19 @@ def verify_bundle(bundle_dir: Path) -> dict[str, Any]:
                     ).fetchone()
                     b_row = db.execute("SELECT * FROM branch_state").fetchone()
                     r_cnt = db.execute("SELECT COUNT(*) FROM received_receipts").fetchone()[0]
-                    p_cnt = db.execute("SELECT COUNT(*) FROM pending_operations").fetchone()[0]
+                    p_rows = [
+                        {
+                            "operation_id": r["operation_id"],
+                            "entity_id": r["entity_id"],
+                            "delivery_state": r["delivery_state"],
+                            "raw_intent_json": r["raw_intent_json"],
+                        }
+                        for r in db.execute(
+                            "SELECT operation_id, entity_id, delivery_state, raw_intent_json "
+                            "FROM pending_operations ORDER BY operation_id"
+                        ).fetchall()
+                    ]
+                    p_cnt = len(p_rows)
 
                 if "amount_cents" in exp and e_row["amount_cents"] != exp["amount_cents"]:
                     raise AssertionError(
@@ -774,6 +793,15 @@ def verify_bundle(bundle_dir: Path) -> dict[str, Any]:
                     raise AssertionError(
                         f"{sc['id']}/{step['name']}: pending {p_cnt} != {exp['pending_count']}"
                     )
+                if "preserved_pending" in exp:
+                    expected_pending = sorted(
+                        exp["preserved_pending"], key=lambda item: item["operation_id"]
+                    )
+                    if p_rows != expected_pending:
+                        raise AssertionError(
+                            f"{sc['id']}/{step['name']}: preserved_pending mismatch: "
+                            f"{p_rows!r} != {expected_pending!r}"
+                        )
                 for field, want_val in (exp.get("preserved_fields") or {}).items():
                     if e_row[field] != want_val:
                         raise AssertionError(
