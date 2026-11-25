@@ -10,7 +10,7 @@
 | [expense-create-candidate](expense-create-candidate/SPEC.md) | `travelflow.expense-create-candidate` `0.1.0-candidate.2` | 历史评审候选（`shared_contract_version: null`），单笔 CNY 新增与回执查询，保留原字节 | 桌面 `94ec1fb` 与移动 `8ba3365` 已验收 |
 | [expense-create-v0.1.0](expense-create-v0.1.0/SPEC.md) | `travelflow.expense-create` `0.1.0` | 已冻结（`shared_contract_version: 0.1.0`），单笔 CNY 新增与回执查询，来源 `94ec1fb` | 桌面 `d916697` 已验，移动 [250acac](https://github.com/wuqiuwangtian/TravelFlow-Mobile/commit/250acac3ff4cbe5ef1879ab2a6e096dd0279ff75) 已独立导入并校验正式包 |
 | [expense-patch-candidate](expense-patch-candidate/SPEC.md) | `travelflow.expense-patch-candidate` `0.1.0-candidate.1` | 反向更正评审候选（`shared_contract_version: null`），单笔 CNY 金额更正、版本映射与本地待发保护，来源 `fdefebe` | 桌面 ebf1c2f 与移动宿主 5f505ac 已评审，冲突诊断字段见第二候选 |
-| [expense-patch-candidate.2](expense-patch-candidate.2/SPEC.md) | `travelflow.expense-patch-candidate` `0.1.0-candidate.2` | 反向更正评审候选（`shared_contract_version: null`），单笔 CNY 金额更正、版本映射与本地待发保护，来源 `d24951e` | 首候选已获移动宿主回执，第二候选待复核 |
+| [expense-patch-candidate.2](expense-patch-candidate.2/SPEC.md) | `travelflow.expense-patch-candidate` `0.1.0-candidate.2` | 反向更正评审候选（`shared_contract_version: null`），单笔 CNY 金额更正、版本映射与本地待发保护，来源 `d24951e` | 桌面 cfc7a1c 与移动宿主 5d34b2d 已复核，Android 持久化待验 |
 
 已发布或已冻结目录不可原地修改；新规则建立新版本，桌面保留旧版本／检查方式，移动仓库通过固定 Git 提交显式导入并核对摘要。一方升级不等于另一方已兼容，联合验收通过后才能更新支持声明。Python 生成器当前核对 `ledger-v1`；新增消费 `0.1.0` 与候选包由 `desktop/expense_vectors.py` 与 `scripts/check-contracts.mjs` 核对。
 
