@@ -102,6 +102,50 @@ X-Device-Id: android-pixel-1
 - 未配对 / 错 token：`401 {"ok":false,"error":"unauthorized"}`。
 - 已撤销：`403 {"ok":false,"error":"device_revoked"}`。
 
+### 2.5 已配对且已绑定作用域：投递正式 0.1.0 `expense.create`
+
+启动服务端时须显式传入经 `init-trip` 创建的隔离旅行库 `--trip-db <travel.sqlite>`，并由桌面经本地控制面绑定已配对设备到获准的业务设备身份与旅行分支：
+
+```sh
+backend/.venv/bin/python -m desktop.lan_pairing bind-exchange \
+  --state-dir /tmp/travelflow-lan-proto \
+  --device-id android-paired-1 \
+  --dataset-id p3-d1-handoff-dataset \
+  --source-device-id android-business-1 \
+  --travel-id 92ba6a148a17 \
+  --branch-id f4f921d01f4e
+```
+
+移动客户端携带固定证书 TLS 与已配对凭据，直接发送持久保存的 0.1.0 原命令字节（不重排、不改写）：
+
+```http
+POST /exchange/expense-create HTTP/1.1
+Authorization: Bearer <device_token>
+X-Device-Id: android-paired-1
+Content-Type: application/json; charset=utf-8
+
+{"profile":"p1-host-control-1","kind":"expense.create","operation":{"dataset_id":"p3-d1-handoff-dataset","source_device_id":"android-business-1","operation_id":"op-https-metro-1"},"target":{"travel_id":"92ba6a148a17","branch_id":"f4f921d01f4e","entity_id":"https-metro-1"},"expected_revision_id":"9639db1eb3b8","payload":{"title":"机场快轨","amount_cents":1723,"currency":"CNY","paid_on":null,"category":"transport","day":null,"activity_id":null,"notes":"HTTPS 实连测试","receipt_ids":[],"allow_shared_receipts":false,"budget_item_id":null,"settles_budget":false}}
+```
+
+- 首次提交成功或同键原意图重放：`200 OK`，返回完整 0.1.0 原始回执（含 `replayed`、`state: "committed"`、`receipt.result_revision_id`、`receipt.intent_sha256`）。
+- 已配对但未绑定旅行授权：`403 {"ok":false,"error":"exchange_not_authorized"}`（零写入）。
+- 伪造 `source_device_id` 或投向未授权分支：`403 {"ok":false,"error":"unauthorized"}`（零写入）。
+- 设备已撤销：`403 {"ok":false,"error":"device_revoked"}`（零写入）。
+- 冲突（同键异意图 / 过期基线 / 实体已存在）：`409` 并返回原契约错误码。
+
+### 2.6 已配对且已绑定作用域：独立查询 `receipt.lookup`
+
+```http
+POST /exchange/receipt-lookup HTTP/1.1
+Authorization: Bearer <device_token>
+X-Device-Id: android-paired-1
+Content-Type: application/json; charset=utf-8
+
+{"profile":"p1-host-query-1","kind":"receipt.lookup","operation":{"dataset_id":"p3-d1-handoff-dataset","source_device_id":"android-business-1","operation_id":"op-https-metro-1"}}
+```
+
+- 命中已提交回执：`200 OK`，返回 `state: "committed"` 及含 `intent_sha256`、`result_revision_id` 的完整回执；未授权或已撤销分别返回 `403 unauthorized` / `403 device_revoked` 且不泄露回执。
+
 ## 3. 复跑命令
 
 ### Linux / WSL

@@ -14,6 +14,7 @@ Boundaries:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import hmac
 import http.client
@@ -48,6 +49,17 @@ CREATE TABLE IF NOT EXISTS paired_devices (
     status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
     paired_at TEXT NOT NULL,
     revoked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS device_exchange_grants (
+    paired_device_id TEXT PRIMARY KEY REFERENCES paired_devices(device_id) ON DELETE CASCADE,
+    dataset_id TEXT NOT NULL,
+    source_device_id TEXT NOT NULL,
+    travel_id TEXT NOT NULL,
+    branch_id TEXT NOT NULL,
+    can_write INTEGER NOT NULL DEFAULT 1,
+    can_lookup_receipt INTEGER NOT NULL DEFAULT 1,
+    granted_at TEXT NOT NULL
 );
 """
 
@@ -220,6 +232,200 @@ class PairingStore:
                 "FROM paired_devices ORDER BY paired_at, device_id"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def bind_exchange_grant(
+        self,
+        *,
+        paired_device_id: str,
+        dataset_id: str,
+        source_device_id: str,
+        travel_id: str,
+        branch_id: str,
+        can_write: bool = True,
+        can_lookup_receipt: bool = True,
+    ) -> dict[str, Any] | None:
+        """Bind an active paired device to its authorized business identity and trip branch."""
+        now = datetime.now(UTC).isoformat()
+        with closing(sqlite3.connect(self.db_path, isolation_level=None)) as db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("BEGIN IMMEDIATE")
+            dev = db.execute(
+                "SELECT status FROM paired_devices WHERE device_id = ?", (paired_device_id,)
+            ).fetchone()
+            if dev is None or dev["status"] != "active":
+                db.execute("ROLLBACK")
+                return None
+            db.execute(
+                "INSERT INTO device_exchange_grants("
+                "paired_device_id, dataset_id, source_device_id, travel_id, branch_id, "
+                "can_write, can_lookup_receipt, granted_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(paired_device_id) DO UPDATE SET "
+                "dataset_id = excluded.dataset_id, "
+                "source_device_id = excluded.source_device_id, "
+                "travel_id = excluded.travel_id, "
+                "branch_id = excluded.branch_id, "
+                "can_write = excluded.can_write, "
+                "can_lookup_receipt = excluded.can_lookup_receipt, "
+                "granted_at = excluded.granted_at",
+                (
+                    paired_device_id,
+                    dataset_id,
+                    source_device_id,
+                    travel_id,
+                    branch_id,
+                    1 if can_write else 0,
+                    1 if can_lookup_receipt else 0,
+                    now,
+                ),
+            )
+            row = db.execute(
+                "SELECT * FROM device_exchange_grants WHERE paired_device_id = ?",
+                (paired_device_id,),
+            ).fetchone()
+            db.execute("COMMIT")
+            return dict(row) if row is not None else None
+
+    def get_exchange_grant(self, paired_device_id: str) -> dict[str, Any] | None:
+        with closing(sqlite3.connect(self.db_path)) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute(
+                "SELECT * FROM device_exchange_grants WHERE paired_device_id = ?",
+                (paired_device_id,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_exchange_grants(self) -> list[dict[str, Any]]:
+        with closing(sqlite3.connect(self.db_path)) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute(
+                "SELECT * FROM device_exchange_grants ORDER BY granted_at, paired_device_id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+class _DropReplyAfterCommit(Exception):
+    """Internal signal to drop the HTTPS connection after atomic SQLite commit."""
+
+
+class _TripExchangeBridge:
+    """Async bridge executing real 0.1.0 receive/lookup against an isolated handoff trip DB."""
+
+    def __init__(self, trip_db: Path) -> None:
+        backend_root = REPO_ROOT / "backend"
+        scripts_root = backend_root / "scripts"
+        for p in (str(backend_root), str(scripts_root)):
+            if p not in sys.path:
+                sys.path.insert(0, p)
+
+        from exchange_trip_handoff import (  # type: ignore[import-not-found]
+            _OfflineNoopLLM,
+            _OfflineNoopSearch,
+            _validate_handoff_database,
+        )
+
+        self.trip_db = _validate_handoff_database(trip_db)
+        self._noop_llm_cls = _OfflineNoopLLM
+        self._noop_search_cls = _OfflineNoopSearch
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+        self._conn: Any = None
+        self._store: Any = None
+        self._cp_cm: Any = None
+        self._graph: Any = None
+        self._fault_lock = threading.Lock()
+        self._fault_once: str | None = None
+        asyncio.run_coroutine_threadsafe(self._open(), self._loop).result(timeout=15.0)
+
+    async def _open(self) -> None:
+        from app.agents.checkpoint import open_checkpointer  # type: ignore[import-not-found]
+        from app.agents.graph import build_graph  # type: ignore[import-not-found]
+        from app.core.config import Settings  # type: ignore[import-not-found]
+        from app.storage.database import create_connection  # type: ignore[import-not-found]
+        from app.storage.session_store import SessionStore  # type: ignore[import-not-found]
+
+        self._conn = await create_connection(self.trip_db)
+        self._store = SessionStore(self._conn)
+        self._cp_cm = open_checkpointer(self.trip_db)
+        checkpointer = await self._cp_cm.__aenter__()
+        settings = Settings(_env_file=None, amap_api_key=None)
+        self._graph = build_graph(
+            self._noop_llm_cls(),
+            self._noop_search_cls(),
+            settings=settings,
+            checkpointer=checkpointer,
+        )
+
+    async def _close(self) -> None:
+        if self._cp_cm is not None:
+            await self._cp_cm.__aexit__(None, None, None)
+        if self._conn is not None:
+            await self._conn.close()
+
+    def close(self) -> None:
+        try:
+            asyncio.run_coroutine_threadsafe(self._close(), self._loop).result(timeout=10.0)
+        finally:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            self._thread.join(timeout=2.0)
+            self._loop.close()
+
+    def arm_fault_once(self, fault: str | None) -> None:
+        with self._fault_lock:
+            self._fault_once = fault
+
+    def _consume_fault(self) -> str | None:
+        with self._fault_lock:
+            fault = self._fault_once
+            self._fault_once = None
+            return fault
+
+    def receive_expense_create(self, raw_bytes: bytes, grant: dict[str, Any]) -> dict[str, Any]:
+        from app.services.exchange_receive import (  # type: ignore[import-not-found]
+            ExchangeReceiveScope,
+            receive_expense_create,
+        )
+
+        scope = ExchangeReceiveScope(
+            dataset_id=str(grant["dataset_id"]),
+            authorized_devices=frozenset({str(grant["source_device_id"])}),
+            authorized_targets=frozenset({(str(grant["travel_id"]), str(grant["branch_id"]))}),
+            can_write=bool(grant["can_write"]),
+            can_lookup_receipt=bool(grant["can_lookup_receipt"]),
+        )
+        fault = self._consume_fault()
+
+        def _drop_reply(_version_id: str) -> None:
+            raise _DropReplyAfterCommit("simulated HTTPS reply loss after commit")
+
+        coro = receive_expense_create(
+            self._store,
+            raw_bytes,
+            scope=scope,
+            graph=self._graph,
+            on_after_commit_before_reply=_drop_reply
+            if fault == "after_commit_before_reply"
+            else None,
+        )
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=30.0)
+
+    def lookup_receipt(self, raw_bytes: bytes, grant: dict[str, Any]) -> dict[str, Any]:
+        from app.services.exchange_receive import (  # type: ignore[import-not-found]
+            ExchangeReceiveScope,
+            lookup_exchange_receipt,
+        )
+
+        scope = ExchangeReceiveScope(
+            dataset_id=str(grant["dataset_id"]),
+            authorized_devices=frozenset({str(grant["source_device_id"])}),
+            authorized_targets=frozenset({(str(grant["travel_id"]), str(grant["branch_id"]))}),
+            can_write=bool(grant["can_write"]),
+            can_lookup_receipt=bool(grant["can_lookup_receipt"]),
+        )
+        coro = lookup_exchange_receipt(self._store, raw_bytes, scope=scope)
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=30.0)
 
 
 class PairingCoordinator:
@@ -449,10 +655,53 @@ def _send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, 
     handler.wfile.write(data)
 
 
-def _make_lan_handler(coordinator: PairingCoordinator) -> type[BaseHTTPRequestHandler]:
+def _read_raw_body(handler: BaseHTTPRequestHandler) -> bytes | None:
+    length_hdr = handler.headers.get("Content-Length")
+    if not length_hdr:
+        return b""
+    try:
+        length = int(length_hdr)
+    except ValueError:
+        return None
+    if length < 0 or length > 65536:
+        return None
+    return handler.rfile.read(length) if length > 0 else b""
+
+
+def _exchange_http_status(result: dict[str, Any]) -> int:
+    if result.get("ok") is True:
+        return 200
+    err = str(result.get("error", ""))
+    if err == "unauthorized":
+        return 403
+    if err in ("intent_conflict", "baseline_conflict", "entity_exists"):
+        return 409
+    return 400
+
+
+def _make_lan_handler(
+    coordinator: PairingCoordinator,
+    exchange_bridge: _TripExchangeBridge | None = None,
+) -> type[BaseHTTPRequestHandler]:
     class LanHandler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             return
+
+        def _authenticate_paired_device(self) -> str | None:
+            auth = self.headers.get("Authorization", "")
+            device_id = self.headers.get("X-Device-Id", "")
+            if not auth.startswith("Bearer ") or not device_id:
+                _send_json(self, 401, {"ok": False, "error": "unauthorized"})
+                return None
+            token = auth[len("Bearer ") :]
+            verdict = coordinator.store.verify_bearer(device_id, token)
+            if verdict == "revoked":
+                _send_json(self, 403, {"ok": False, "error": "device_revoked"})
+                return None
+            if verdict != "active":
+                _send_json(self, 401, {"ok": False, "error": "unauthorized"})
+                return None
+            return device_id
 
         def do_GET(self) -> None:
             if self.path == "/health":
@@ -464,28 +713,44 @@ def _make_lan_handler(coordinator: PairingCoordinator) -> type[BaseHTTPRequestHa
                         "status": "ok",
                         "protocol": PROTOCOL_VERSION,
                         "cert_sha256": coordinator.cert_sha256,
+                        "exchange_enabled": exchange_bridge is not None,
                     },
                 )
                 return
             if self.path == "/trip/fictional":
-                auth = self.headers.get("Authorization", "")
-                device_id = self.headers.get("X-Device-Id", "")
-                if not auth.startswith("Bearer ") or not device_id:
-                    _send_json(self, 401, {"ok": False, "error": "unauthorized"})
-                    return
-                token = auth[len("Bearer ") :]
-                verdict = coordinator.store.verify_bearer(device_id, token)
-                if verdict == "revoked":
-                    _send_json(self, 403, {"ok": False, "error": "device_revoked"})
-                    return
-                if verdict != "active":
-                    _send_json(self, 401, {"ok": False, "error": "unauthorized"})
+                if self._authenticate_paired_device() is None:
                     return
                 _send_json(self, 200, {"ok": True, "trip": coordinator.fictional_trip})
                 return
             _send_json(self, 404, {"ok": False, "error": "not_found"})
 
         def do_POST(self) -> None:
+            if self.path in ("/exchange/expense-create", "/exchange/receipt-lookup"):
+                device_id = self._authenticate_paired_device()
+                if device_id is None:
+                    return
+                if exchange_bridge is None:
+                    _send_json(self, 503, {"ok": False, "error": "exchange_not_enabled"})
+                    return
+                grant = coordinator.store.get_exchange_grant(device_id)
+                if grant is None:
+                    _send_json(self, 403, {"ok": False, "error": "exchange_not_authorized"})
+                    return
+                raw_bytes = _read_raw_body(self)
+                if raw_bytes is None:
+                    _send_json(self, 400, {"ok": False, "error": "invalid_body"})
+                    return
+                try:
+                    if self.path == "/exchange/expense-create":
+                        result = exchange_bridge.receive_expense_create(raw_bytes, grant)
+                    else:
+                        result = exchange_bridge.lookup_receipt(raw_bytes, grant)
+                except _DropReplyAfterCommit:
+                    self.close_connection = True
+                    return
+                _send_json(self, _exchange_http_status(result), result)
+                return
+
             body = _read_json_body(self)
             if body is None:
                 _send_json(self, 400, {"ok": False, "error": "invalid_json"})
@@ -507,6 +772,7 @@ def _make_control_handler(
     coordinator: PairingCoordinator,
     control_token: str,
     stop_event: threading.Event,
+    exchange_bridge: _TripExchangeBridge | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     class ControlHandler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
@@ -529,8 +795,10 @@ def _make_control_handler(
                     {
                         "ok": True,
                         "cert_sha256": coordinator.cert_sha256,
+                        "exchange_enabled": exchange_bridge is not None,
                         "pending_requests": coordinator.list_pending_requests(),
                         "devices": coordinator.store.list_devices(),
+                        "exchange_grants": coordinator.store.list_exchange_grants(),
                     },
                 )
                 return
@@ -566,6 +834,50 @@ def _make_control_handler(
                     {"ok": revoked, "device_id": device_id, "revoked": revoked},
                 )
                 return
+            if self.path == "/control/devices/bind-exchange":
+                req_str_fields = (
+                    "device_id",
+                    "dataset_id",
+                    "source_device_id",
+                    "travel_id",
+                    "branch_id",
+                )
+                if not all(
+                    isinstance(body.get(k), str) and 1 <= len(body[k]) <= 256
+                    for k in req_str_fields
+                ):
+                    _send_json(self, 400, {"ok": False, "error": "invalid_grant"})
+                    return
+                can_write = body.get("can_write", True)
+                can_lookup = body.get("can_lookup_receipt", True)
+                if type(can_write) is not bool or type(can_lookup) is not bool:
+                    _send_json(self, 400, {"ok": False, "error": "invalid_grant"})
+                    return
+                grant = coordinator.store.bind_exchange_grant(
+                    paired_device_id=body["device_id"],
+                    dataset_id=body["dataset_id"],
+                    source_device_id=body["source_device_id"],
+                    travel_id=body["travel_id"],
+                    branch_id=body["branch_id"],
+                    can_write=can_write,
+                    can_lookup_receipt=can_lookup,
+                )
+                if grant is None:
+                    _send_json(self, 404, {"ok": False, "error": "active_device_not_found"})
+                    return
+                _send_json(self, 200, {"ok": True, "grant": grant})
+                return
+            if self.path == "/control/exchange/fault":
+                if exchange_bridge is None:
+                    _send_json(self, 503, {"ok": False, "error": "exchange_not_enabled"})
+                    return
+                fault = body.get("fault")
+                if fault not in (None, "after_commit_before_reply"):
+                    _send_json(self, 400, {"ok": False, "error": "invalid_fault"})
+                    return
+                exchange_bridge.arm_fault_once(fault)
+                _send_json(self, 200, {"ok": True, "fault": fault})
+                return
             if self.path == "/control/stop":
                 _send_json(self, 200, {"ok": True, "stopping": True})
                 stop_event.set()
@@ -595,6 +907,7 @@ class ForegroundPairingServer:
         bind_host: str = "127.0.0.1",
         port: int = 0,
         san_ips: list[str] | None = None,
+        trip_db: Path | None = None,
     ) -> None:
         self.state_dir = state_dir.resolve()
         self.bind_host = bind_host
@@ -602,11 +915,12 @@ class ForegroundPairingServer:
         self.cert_path, self.key_path, self.cert_sha256 = ensure_tls_identity(self.state_dir, ips)
         self.store = PairingStore(self.state_dir / "pairing.sqlite")
         self.coordinator = PairingCoordinator(self.store, self.cert_sha256)
+        self.exchange_bridge = _TripExchangeBridge(trip_db) if trip_db is not None else None
         self.control_token = secrets.token_urlsafe(32)
         self.stop_event = threading.Event()
 
         self.lan_server = _QuietThreadingHTTPServer(
-            (bind_host, port), _make_lan_handler(self.coordinator)
+            (bind_host, port), _make_lan_handler(self.coordinator, self.exchange_bridge)
         )
         tls_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -615,7 +929,9 @@ class ForegroundPairingServer:
 
         self.control_server = _QuietThreadingHTTPServer(
             ("127.0.0.1", 0),
-            _make_control_handler(self.coordinator, self.control_token, self.stop_event),
+            _make_control_handler(
+                self.coordinator, self.control_token, self.stop_event, self.exchange_bridge
+            ),
         )
         self.lan_port = int(self.lan_server.server_address[1])
         self.control_port = int(self.control_server.server_address[1])
@@ -657,6 +973,8 @@ class ForegroundPairingServer:
             srv.server_close()
         for t in self._threads:
             t.join(timeout=2.0)
+        if self.exchange_bridge is not None:
+            self.exchange_bridge.close()
         (self.state_dir / "control.json").unlink(missing_ok=True)
 
 
@@ -668,6 +986,7 @@ def pinned_https_request(
     *,
     expected_cert_sha256: str,
     body: dict[str, Any] | None = None,
+    raw_body: bytes | None = None,
     headers: dict[str, str] | None = None,
     timeout: float = 5.0,
 ) -> tuple[int, dict[str, Any]]:
@@ -692,12 +1011,16 @@ def pinned_https_request(
         conn = http.client.HTTPSConnection(host, port, timeout=timeout, context=ctx)
         conn.sock = tls_sock
         req_headers = {"Host": f"{host}:{port}", **(headers or {})}
-        payload = b""
-        if body is not None:
+        payload: bytes | None = None
+        if raw_body is not None:
+            payload = raw_body
+            req_headers.setdefault("Content-Type", "application/json; charset=utf-8")
+            req_headers["Content-Length"] = str(len(payload))
+        elif body is not None:
             payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
             req_headers["Content-Type"] = "application/json; charset=utf-8"
             req_headers["Content-Length"] = str(len(payload))
-        conn.request(method, path, body=payload if body is not None else None, headers=req_headers)
+        conn.request(method, path, body=payload, headers=req_headers)
         resp = conn.getresponse()
         raw_resp = resp.read()
         return resp.status, json.loads(raw_resp.decode("utf-8"))
@@ -732,6 +1055,7 @@ def main(argv: list[str] | None = None) -> int:
     serve_p.add_argument("--bind", default="127.0.0.1")
     serve_p.add_argument("--port", type=int, default=0)
     serve_p.add_argument("--san-ip", action="append", default=[])
+    serve_p.add_argument("--trip-db", type=Path, default=None)
     serve_p.add_argument("--open-pairing", action="store_true")
 
     open_p = sub.add_parser("open-pairing", help="Open a new single-use pairing session.")
@@ -742,6 +1066,17 @@ def main(argv: list[str] | None = None) -> int:
     app_p.add_argument("--state-dir", type=Path, required=True)
     app_p.add_argument("--request-id", required=True)
     app_p.add_argument("--sas-code", required=True)
+
+    bind_p = sub.add_parser(
+        "bind-exchange",
+        help="Bind an active paired device to an authorized business identity and trip branch.",
+    )
+    bind_p.add_argument("--state-dir", type=Path, required=True)
+    bind_p.add_argument("--device-id", required=True)
+    bind_p.add_argument("--dataset-id", required=True)
+    bind_p.add_argument("--source-device-id", required=True)
+    bind_p.add_argument("--travel-id", required=True)
+    bind_p.add_argument("--branch-id", required=True)
 
     rev_p = sub.add_parser("revoke", help="Revoke a paired device immediately.")
     rev_p.add_argument("--state-dir", type=Path, required=True)
@@ -756,7 +1091,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.action == "serve":
         srv = ForegroundPairingServer(
-            args.state_dir, bind_host=args.bind, port=args.port, san_ips=args.san_ip
+            args.state_dir,
+            bind_host=args.bind,
+            port=args.port,
+            san_ips=args.san_ip,
+            trip_db=args.trip_db,
         )
         info = srv.start()
         if args.open_pairing:
@@ -786,6 +1125,21 @@ def main(argv: list[str] | None = None) -> int:
             "POST",
             "/control/pairing/approve",
             {"request_id": args.request_id, "sas_code": args.sas_code},
+        )
+    elif args.action == "bind-exchange":
+        code, res = _control_call(
+            args.state_dir,
+            "POST",
+            "/control/devices/bind-exchange",
+            {
+                "device_id": args.device_id,
+                "dataset_id": args.dataset_id,
+                "source_device_id": args.source_device_id,
+                "travel_id": args.travel_id,
+                "branch_id": args.branch_id,
+                "can_write": True,
+                "can_lookup_receipt": True,
+            },
         )
     elif args.action == "revoke":
         code, res = _control_call(
