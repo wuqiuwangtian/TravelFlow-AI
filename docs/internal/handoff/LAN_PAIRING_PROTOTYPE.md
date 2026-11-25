@@ -1,0 +1,146 @@
+# 同网前台配对原型说明（阶段四 · Android 可复用握手）
+
+本原型实现位于 [lan_pairing.py](../../../desktop/lan_pairing.py)，回归测试位于 [test_lan_pairing.py](../../../desktop/tests/test_lan_pairing.py)。原型仅在前台显式启停、仅暴露虚构旅行数据（来自 `desktop/tests/fixtures/d1/expected.json`），不打开个人数据库或 `.env`，不安装后台常驻服务。
+
+## 1. 认证与加密机制
+
+- **传输层加密**：标准 OpenSSL ECDSA P-256 自签名 X.509 证书 + TLS 1.2+/1.3（`ssl.TLSVersion.TLSv1_2` 及以上），服务端证书包含 `IP:127.0.0.1` 与绑定地址的 SAN。
+- **证书指纹固定（Pinning）与初始可信传递**：
+  - 当前原型用 serve --open-pairing 的前台 JSON 展示地址、端口和一次性配对信息，供手机从桌面屏幕核对；二维码属于后续界面。配对信息**必须带外（out-of-band）包含** `host`、`port`、`cert_sha256`（服务端证书 DER 字节的 64 位小写十六进制 SHA-256）、`pairing_session_id` 与 6 位 `pairing_code`。
+  - **Android 必须从桌面屏幕／二维码等可信带外通道取得初始 `cert_sha256`**，并在每次 TLS 握手后核对对端证书 DER SHA-256 与该固定指纹完全一致；**禁止**在未固定指纹前先明文或免校验调用 `GET /health` 来“自动信任”局域网返回的地址或证书指纹（否则同网中间人可替换证书与指纹）。
+- **首次配对双方确认（SAS）与延迟激活**：
+  1. 桌面在前台生成一次性短时效配对会话（`pairing_session_id` + 6 位 `pairing_code`，默认 120 秒过期）。
+  2. 手机在固定证书 TLS 上提交 `POST /pair/request`，双方独立按 `HMAC-SHA256(key=pairing_code, msg=cert_sha256|pairing_session_id|device_id|client_nonce|server_nonce)` 取前 4 字节大端无符号整数模 `1000000` 得到 6 位核对码 `sas_code`（零填充）。
+  3. 桌面用户核对设备名与 6 位 `sas_code` 后，通过**仅监听 `127.0.0.1` 且受 `0600` 私有 `X-Control-Token` 保护的控制面**显式批准（LAN HTTPS 监听端口不暴露任何 `/control/*` 路径）。批准后请求进入**待领取（`approved_pending_claim`）**状态，**此时不写入也不覆盖 `paired_devices` 中的已有凭据**（同设备重配若在领取前中断，旧凭据完整保留）。
+  4. 手机在配对有效期内提交 `POST /pair/complete` 携带同一 `sas_code` 与 `client_nonce`，服务端校验未过期、未被撤销后，**此刻才原子激活** 256 位随机 `device_token`（仅保存 `SHA-256` 哈希至 `pairing.sqlite`）并一次性返回给手机（`POST /pair/complete` 不可重放）。若请求超时过期、被撤销或桌面重启，未完成请求即刻失效。
+  5. 若服务端已处理领取、手机却未收到响应，旧凭据此时已被替换。手机重新发起一次配对并由桌面再次批准。
+- **重连与撤销**：
+  - 已配对设备在固定证书 TLS 上携带 `Authorization: Bearer <device_token>` 与 `X-Device-Id: <device_id>` 访问 `GET /trip/fictional`；服务端显式停止并重开后仍可重连。
+  - 桌面撤销设备后，`paired_devices.status` 置为 `revoked`，访问立即返回 `403 device_revoked`（零数据返回）且重启后持续生效。未配对或错误 token 返回 `401 unauthorized`。
+
+## 2. Android 可复用最小请求样例
+
+### 2.1 健康检查（不含旅行数据）
+
+```http
+GET /health HTTP/1.1
+Host: <desktop_ip>:<port>
+```
+
+```json
+{
+  "ok": true,
+  "status": "ok",
+  "protocol": "travelflow-lan-pairing/0-draft",
+  "cert_sha256": "<64-hex-der-sha256>"
+}
+```
+
+### 2.2 首次配对步骤 1：手机发起请求（尚未授权读数据）
+
+```http
+POST /pair/request HTTP/1.1
+Content-Type: application/json
+
+{
+  "pairing_session_id": "<session_id>",
+  "pairing_code": "123456",
+  "device_id": "android-pixel-1",
+  "device_name": "Pixel 9",
+  "client_nonce": "<32-hex-random>"
+}
+```
+
+响应（`200 OK`，此时 `GET /trip/fictional` 仍返回 `401 unauthorized`）：
+
+```json
+{
+  "ok": true,
+  "request_id": "<24-hex>",
+  "server_nonce": "<32-hex>",
+  "sas_code": "482910",
+  "status": "awaiting_desktop_confirm"
+}
+```
+
+### 2.3 首次配对步骤 2：桌面显式批准后，手机一次性领取凭据
+
+```http
+POST /pair/complete HTTP/1.1
+Content-Type: application/json
+
+{
+  "request_id": "<24-hex>",
+  "device_id": "android-pixel-1",
+  "client_nonce": "<32-hex-random>",
+  "sas_code": "482910"
+}
+```
+
+- 桌面尚未批准时返回 `409 {"ok":false,"error":"awaiting_desktop_confirm"}`。
+- 桌面批准后返回 `200 OK`（仅此一次，重放返回 `409 token_already_delivered`）：
+
+```json
+{
+  "ok": true,
+  "status": "paired",
+  "device_id": "android-pixel-1",
+  "device_token": "<base64url-256bit>",
+  "cert_sha256": "<64-hex-der-sha256>"
+}
+```
+
+### 2.4 已配对重连读取虚构旅行
+
+```http
+GET /trip/fictional HTTP/1.1
+Authorization: Bearer <device_token>
+X-Device-Id: android-pixel-1
+```
+
+- 已配对且活跃：`200 OK` 返回虚构旅行摘要（`fictional_only: true`、`travel_id: "92ba6a148a17"`、`sample_expense_amount_cents: 8635`）。
+- 未配对 / 错 token：`401 {"ok":false,"error":"unauthorized"}`。
+- 已撤销：`403 {"ok":false,"error":"device_revoked"}`。
+
+## 3. 复跑命令
+
+### Linux / WSL
+
+```sh
+# 1. 自动化回归（配对双方确认、重开重连、撤销、错证书指纹、控制面隔离）
+backend/.venv/bin/python -m unittest desktop.tests.test_lan_pairing -v
+
+# 2. 前台手动启停示例（独立临时目录）
+backend/.venv/bin/python -m desktop.lan_pairing serve \
+  --state-dir /tmp/travelflow-lan-proto --bind 127.0.0.1 --port 0 --open-pairing
+# 另一终端批准、撤销或停止：
+backend/.venv/bin/python -m desktop.lan_pairing status --state-dir /tmp/travelflow-lan-proto
+backend/.venv/bin/python -m desktop.lan_pairing approve --state-dir /tmp/travelflow-lan-proto --request-id <id> --sas-code <6位>
+backend/.venv/bin/python -m desktop.lan_pairing revoke --state-dir /tmp/travelflow-lan-proto --device-id <device_id>
+backend/.venv/bin/python -m desktop.lan_pairing stop --state-dir /tmp/travelflow-lan-proto
+```
+
+### Windows 原生（Python 3.12+ 与 Git OpenSSL）
+
+```powershell
+python -m unittest desktop.tests.test_lan_pairing -v
+python -m desktop.lan_pairing serve --state-dir "$env:TEMP\travelflow-lan-proto" --bind 10.226.92.198 --port 0 --open-pairing
+```
+
+## 4. Windows 原生与 WSL 实测可达性记录（2026-11-25）
+
+本机网络环境观察：Windows 原生存在无线网卡 `WLAN`（`10.226.92.198`）、WSL 虚拟桥 `vEthernet (WSL (Hyper-V firewall))`（`172.20.16.1`）以及代理虚拟网卡 `Meta`（`198.18.0.1`）；WSL2 内部存在 `lo`（`127.0.0.1`）与 `eth0`（`172.20.31.170/20`）。
+
+| 服务端运行环境 | 绑定地址（示例端口） | 测试对端与连接类别 | 实测结果 | 边界说明 |
+| --- | --- | --- | --- | --- |
+| WSL2 (Python 3.13.13 / OpenSSL 3.5.6) | `127.0.0.1:45895` | WSL 本机回环；Windows 原生本机回环 | 均 `HTTP 200`（证书指纹校验通过） | **仅本机回环**（WSL localhost 转发），不可供局域网手机连接 |
+| WSL2 (Python 3.13.13 / OpenSSL 3.5.6) | `172.20.31.170:44291` | WSL 自测；Windows 原生跨虚拟网卡访问 | 均 `HTTP 200`（证书指纹校验通过） | **同机 Hyper-V 私有子网**，物理 Wi-Fi 手机默认不可直达（需 Windows 端口转发或镜像网络） |
+| Windows 原生 (Python 3.12.10 / OpenSSL 3.0.16) | `127.0.0.1:9950` | Windows 本机回环；WSL 访问 `127.0.0.1` | Windows `HTTP 200`；WSL `ConnectionRefusedError` | **仅本机回环**，WSL 的 `127.0.0.1` 指向 WSL 自身 |
+| Windows 原生 (Python 3.12.10 / OpenSSL 3.0.16) | `172.20.16.1:9956` | Windows 自测；WSL 跨虚拟桥访问 | 均 `HTTP 200`（证书指纹校验通过） | **同机 WSL 桥接地址**，不面向物理局域网 |
+| Windows 原生 (Python 3.12.10 / OpenSSL 3.0.16) | `10.226.92.198:9953` | Windows 自测；WSL 跨虚拟网卡访问物理 WLAN IP | 均 `HTTP 200`（证书指纹校验通过） | **物理 WLAN 地址（同机实测通过）**；**真实跨设备 Android 手机同 Wi-Fi / 热点连接、Windows 防火墙入站放行及 `Meta` 代理共存尚未在本轮实测** |
+
+自动化单元测试实测：
+- WSL2（Python 3.13.13 / OpenSSL 3.5.6）：`test_lan_pairing` 通过（1/1，0.62s）。
+- Windows 原生（Python 3.12.10 / OpenSSL 3.0.16）：`test_lan_pairing` 通过（1/1，0.99s）。
+
+未覆盖项：真实 Android 手机经同 Wi-Fi／热点连接 `10.226.92.198`、Windows 防火墙入站弹窗实测、异地网络与 VPN／代理共存、以及将真实业务 `expense.create` / `expense.patch` 通道接入本传输层。
