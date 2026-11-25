@@ -5,12 +5,14 @@
 ## 1. 认证与加密机制
 
 - **传输层加密**：标准 OpenSSL ECDSA P-256 自签名 X.509 证书 + TLS 1.2+/1.3（`ssl.TLSVersion.TLSv1_2` 及以上），服务端证书包含 `IP:127.0.0.1` 与绑定地址的 SAN。
-- **证书指纹固定（Pinning）**：配对信息携带服务端证书 DER 字节的 64 位小写十六进制 SHA-256 指纹 `cert_sha256`。客户端（Android / Python）必须在 TLS 握手后核对对端证书 DER SHA-256 与 `cert_sha256` 完全一致，禁止仅凭局域网 IP 信任或盲目跳过校验。
-- **首次配对双方确认（SAS）**：
+- **证书指纹固定（Pinning）与初始可信传递**：
+  - 桌面端在前台启动时展示一次性配对信息包（二维码或桌面屏幕人工核对文本），其中**必须带外（out-of-band）包含** `host`、`port`、`cert_sha256`（服务端证书 DER 字节的 64 位小写十六进制 SHA-256）、`pairing_session_id` 与 6 位 `pairing_code`。
+  - **Android 必须从桌面屏幕／二维码等可信带外通道取得初始 `cert_sha256`**，并在每次 TLS 握手后核对对端证书 DER SHA-256 与该固定指纹完全一致；**禁止**在未固定指纹前先明文或免校验调用 `GET /health` 来“自动信任”局域网返回的地址或证书指纹（否则同网中间人可替换证书与指纹）。
+- **首次配对双方确认（SAS）与延迟激活**：
   1. 桌面在前台生成一次性短时效配对会话（`pairing_session_id` + 6 位 `pairing_code`，默认 120 秒过期）。
   2. 手机在固定证书 TLS 上提交 `POST /pair/request`，双方独立按 `HMAC-SHA256(key=pairing_code, msg=cert_sha256|pairing_session_id|device_id|client_nonce|server_nonce)` 取前 4 字节大端无符号整数模 `1000000` 得到 6 位核对码 `sas_code`（零填充）。
-  3. 桌面用户核对设备名与 6 位 `sas_code` 后，通过**仅监听 `127.0.0.1` 且受 `0600` 私有 `X-Control-Token` 保护的控制面**显式批准（LAN HTTPS 监听端口不暴露任何 `/control/*` 路径）。
-  4. 手机提交 `POST /pair/complete` 携带同一 `sas_code` 与 `client_nonce`，一次性领取 256 位随机 `device_token`（服务端仅在隔离 `pairing.sqlite` 持久保存 `SHA-256(device_token)`；`POST /pair/complete` 不可重放）。
+  3. 桌面用户核对设备名与 6 位 `sas_code` 后，通过**仅监听 `127.0.0.1` 且受 `0600` 私有 `X-Control-Token` 保护的控制面**显式批准（LAN HTTPS 监听端口不暴露任何 `/control/*` 路径）。批准后请求进入**待领取（`approved_pending_claim`）**状态，**此时不写入也不覆盖 `paired_devices` 中的已有凭据**（同设备重配若在领取前中断，旧凭据完整保留）。
+  4. 手机在配对有效期内提交 `POST /pair/complete` 携带同一 `sas_code` 与 `client_nonce`，服务端校验未过期、未被撤销后，**此刻才原子激活** 256 位随机 `device_token`（仅保存 `SHA-256` 哈希至 `pairing.sqlite`）并一次性返回给手机（`POST /pair/complete` 不可重放）。若请求超时过期、被撤销或桌面重启，未完成请求即刻失效。
 - **重连与撤销**：
   - 已配对设备在固定证书 TLS 上携带 `Authorization: Bearer <device_token>` 与 `X-Device-Id: <device_id>` 访问 `GET /trip/fictional`；服务端显式停止并重开后仍可重连。
   - 桌面撤销设备后，`paired_devices.status` 置为 `revoked`，访问立即返回 `403 device_revoked`（零数据返回）且重启后持续生效。未配对或错误 token 返回 `401 unauthorized`。
@@ -121,7 +123,7 @@ backend/.venv/bin/python -m desktop.lan_pairing stop --state-dir /tmp/travelflow
 
 ```powershell
 python -m unittest desktop.tests.test_lan_pairing -v
-python -m desktop.lan_pairing serve --state-dir %TEMP%\travelflow-lan-proto --bind 10.226.92.198 --port 0 --open-pairing
+python -m desktop.lan_pairing serve --state-dir "$env:TEMP\travelflow-lan-proto" --bind 10.226.92.198 --port 0 --open-pairing
 ```
 
 ## 4. Windows 原生与 WSL 实测可达性记录（2026-11-25）

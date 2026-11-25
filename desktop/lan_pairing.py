@@ -295,8 +295,8 @@ class PairingCoordinator:
                 "client_nonce": client_nonce,
                 "server_nonce": server_nonce,
                 "sas_code": sas_code,
+                "expires_at": sess["expires_at"],
                 "status": "awaiting_desktop_confirm",
-                "one_time_token": None,
                 "token_delivered": False,
             }
         return 200, {
@@ -308,6 +308,7 @@ class PairingCoordinator:
         }
 
     def approve_request(self, request_id: str, sas_code: str) -> tuple[int, dict[str, Any]]:
+        """Approve pairing into approved_pending_claim; do NOT overwrite active credentials yet."""
         with self._lock:
             req = self._requests.get(request_id)
             if req is None:
@@ -318,19 +319,16 @@ class PairingCoordinator:
                 return 403, {"ok": False, "error": "sas_mismatch"}
             sess = self._sessions.get(req["pairing_session_id"])
             if sess is None or sess["consumed"] or datetime.now(UTC) > sess["expires_at"]:
+                req["status"] = "expired"
                 return 409, {"ok": False, "error": "pairing_session_unavailable"}
 
-            raw_token = secrets.token_urlsafe(32)
-            token_sha256 = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-            self.store.save_paired_device(req["device_id"], req["device_name"], token_sha256)
             sess["consumed"] = True
-            req["status"] = "approved"
-            req["one_time_token"] = raw_token
+            req["status"] = "approved_pending_claim"
             return 200, {
                 "ok": True,
                 "request_id": request_id,
                 "device_id": req["device_id"],
-                "status": "approved",
+                "status": "approved_pending_claim",
             }
 
     def reject_request(self, request_id: str) -> tuple[int, dict[str, Any]]:
@@ -339,8 +337,21 @@ class PairingCoordinator:
             if req is None:
                 return 404, {"ok": False, "error": "request_not_found"}
             req["status"] = "rejected"
-            req["one_time_token"] = None
             return 200, {"ok": True, "request_id": request_id, "status": "rejected"}
+
+    def revoke_device(self, device_id: str) -> bool:
+        """Revoke active paired credential AND invalidate any in-flight requests for device_id."""
+        revoked_active = self.store.revoke_device(device_id)
+        invalidated_pending = False
+        with self._lock:
+            for req in self._requests.values():
+                if req["device_id"] == device_id and req["status"] in (
+                    "awaiting_desktop_confirm",
+                    "approved_pending_claim",
+                ):
+                    req["status"] = "revoked"
+                    invalidated_pending = True
+        return revoked_active or invalidated_pending
 
     def handle_pair_complete(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         request_id = body.get("request_id")
@@ -366,20 +377,33 @@ class PairingCoordinator:
             ):
                 return 403, {"ok": False, "error": "pairing_proof_mismatch"}
             if req["status"] == "awaiting_desktop_confirm":
+                if datetime.now(UTC) > req["expires_at"]:
+                    req["status"] = "expired"
+                    return 403, {"ok": False, "error": "pairing_request_expired"}
                 return 409, {"ok": False, "error": "awaiting_desktop_confirm"}
             if req["status"] == "rejected":
                 return 403, {"ok": False, "error": "pairing_rejected"}
-            if req["token_delivered"] or not req["one_time_token"]:
+            if req["status"] == "revoked":
+                return 403, {"ok": False, "error": "pairing_revoked"}
+            if req["status"] == "expired" or datetime.now(UTC) > req["expires_at"]:
+                req["status"] = "expired"
+                return 403, {"ok": False, "error": "pairing_request_expired"}
+            if req["token_delivered"] or req["status"] == "completed":
                 return 409, {"ok": False, "error": "token_already_delivered"}
+            if req["status"] != "approved_pending_claim":
+                return 409, {"ok": False, "error": f"invalid_state:{req['status']}"}
 
-            token = req["one_time_token"]
-            req["one_time_token"] = None
+            # Activate new credential atomically ONLY when mobile claims within TTL.
+            raw_token = secrets.token_urlsafe(32)
+            token_sha256 = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+            self.store.save_paired_device(req["device_id"], req["device_name"], token_sha256)
+            req["status"] = "completed"
             req["token_delivered"] = True
             return 200, {
                 "ok": True,
                 "status": "paired",
                 "device_id": device_id,
-                "device_token": token,
+                "device_token": raw_token,
                 "cert_sha256": self.cert_sha256,
             }
 
@@ -534,7 +558,7 @@ def _make_control_handler(
                 return
             if self.path == "/control/devices/revoke":
                 device_id = str(body.get("device_id", ""))
-                revoked = coordinator.store.revoke_device(device_id)
+                revoked = coordinator.revoke_device(device_id)
                 _send_json(
                     self,
                     200 if revoked else 404,
