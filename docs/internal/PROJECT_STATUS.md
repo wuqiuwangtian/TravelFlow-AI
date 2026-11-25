@@ -6,6 +6,8 @@
 
 ## 当前接续状态
 
+- 已接受移动 [9408ef5 Android 与 WSL 配对回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/9408ef538513f83fa7d01ed8adbe16d58f23a8e6/docs/internal/PROJECT_STATUS.md#android-与-wsl-桌面隔离配对)。桌面固定 7680433。API 35 模拟器经虚拟网关以 HTTPS 连接同机 WSL eth0，ADB 转发用于操作页面。错误证书指纹在桌面产生零条待审请求；双方确认后读取虚构旅行，强停重开后凭 AndroidKeyStore 保护的记录重连；桌面撤销后再次读取返回 403。桌面复跑 3 项回环测试并核对移动脚本与契约检查，Android 实跑由移动维护者完成。已验证的是配对和虚构摘要读取；物理 Wi-Fi／热点、Android 到 Windows 原生及通过此通道提交消费仍待验。
+
 - [同网前台配对桌面原型](handoff/LAN_PAIRING_PROTOTYPE.md) 已接受 6465ecd 返修。桌面批准进入待领取；重配在领取前过期或服务重启，旧凭据仍可重连。成功领取才轮换凭据；撤销同时失效待领请求。集成修正撤销与领取的并发顺序，补验成功重配后新旧凭据的访问结果。最终版本在 Windows 原生 Python 与 WSL 分别复跑 3 项 TLS 回环测试，通过。服务端已完成领取但响应丢失时需重新配对。既有网络记录仅覆盖同机路径，物理 Android 的同 Wi-Fi／热点可达性待验。
 
 - 已接受移动 [66cf165 桌面持久确认实读](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/66cf165ef785cd05cb200aea18f703b67eccfaa5/docs/internal/PROJECT_STATUS.md#桌面持久确认实读)。APK 固定 641fd85，桌面固定 f5f8a98。414 字节原命令投递后丢弃首次成功回包，Android 冷重开、桌面新进程仍读到待核实 1 条。用独立查询取得 Android 完整回执后再开桌面进程，待发 0、已确认 1；持久手机版本与 Android SQLite 分支头和接收回执相同。重复确认后桌面账本和队列读数相同，Android 数据库逻辑导出逐字节相同，原分叉未动。单笔 CNY 新增与金额更正的隔离往返已验；当前传输使用测试桥，设备配对和真实网络待验。
