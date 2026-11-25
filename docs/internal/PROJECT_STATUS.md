@@ -6,6 +6,8 @@
 
 ## 当前接续状态
 
+- 已接受移动 [f944d01 Android SQLite 更正回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/f944d014362ededc2624f6d49f4ad5c7835a2649/docs/internal/PROJECT_STATUS.md#android-sqlite-接收更正实测)。移动维护者在 API 35 从旧版覆盖升级，验证原消费 1723→2150 分、冷重启、回执重放、待发冲突及回执写失败全事务回滚。本轮电脑复跑移动宿主 10 组 21 步；模拟器使用候选派生输入与样例桌面新版本。桌面分支 497fcc6 的 23 项测试通过，另以正常 PUT 实测发现保存未改动的已确认消费会推进桌面版本而未入队，随后真正改金额发出的命令引用手机未知基线。桌面实现留在原分支返修，真实桌面命令至 Android 的联合验收待做。
+
 - 桌面已验 [人民币消费金额更正候选](../../contracts/expense-patch-candidate/SPEC.md) ebf1c2f。10 组 21 步通过；对两种金额与版本矛盾、两种本地待发冲突另做 SQLite 全表前后比对，四次拒绝均保留原记录、待发原文、版本和回执。移动 [5f505ac 宿主回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/5f505aca9e85626f5ccdd98d6b5b32082707b8a5/docs/internal/PROJECT_STATUS.md#桌面更正已确认消费的候选评审)已核对：导入文件逐字节相同，独立复跑四组摘要、10 组 21 步及版本推进后带新待发的旧命令重放。首候选发现冲突诊断字段名不同；[第二候选](../../contracts/expense-patch-candidate.2/SPEC.md)采用移动已实现的 pending_operation_id，EP04/05 在桌面精确核对完整拒绝响应。已接受移动 [5d34b2d 第二候选宿主回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/5d34b2ddd5e90de3261f81b6392b7928ee106ff7/docs/internal/PROJECT_STATUS.md#更正第二候选增量复核)。两仓候选文件逐字节相同，桌面和移动宿主各复跑 10 组 21 步通过，EP04/05 完整响应一致，冲突后待发原文、版本和回执集合均保留。Android SQLite 对反向更正尚待实测。
 
 - 已接受移动 [f196725 联合投递回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/f19672511616cbf535aaa6f13349773ecb57e4dd/docs/internal/PROJECT_STATUS.md#android-单笔消费跨仓隔离投递)。桌面固定 aeb4a3e。移动维护者在 API 35 飞行模式下用记账入口保存 1723 分，桌面提交后丢回包，手机冷重开并重投原 612 字节。桌面从 8635 分到 10358 分，消费从一笔到两笔，只增一个版本和一份回执，原分叉保持一致。手机再次重开后，查询前从 SQLite 读出的桌面确认版本 576d3d5797a3 与桌面分支头相同，待发送为零。桌面侧审阅固定提交的联合脚本和回执，并复跑 test_exchange_trip_handoff.py，4 项通过。模拟器实跑归移动侧。手机账本只含本次新增，传输由测试进程完成。
