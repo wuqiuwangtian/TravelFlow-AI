@@ -27,7 +27,7 @@ import logging
 import os
 import sqlite3
 import sys
-from contextlib import closing
+from contextlib import closing, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -133,6 +133,8 @@ def _write_exclusive_bytes(path: Path, content: bytes) -> None:
     if os.path.lexists(path):
         raise ValueError(f"Refusing to overwrite existing path: {path}")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     fd = os.open(path, flags, 0o600)
@@ -645,6 +647,91 @@ async def _confirm_outbound(
         await conn.close()
 
 
+async def _edit_expense_amount(
+    db_path: Path,
+    *,
+    version_id: str,
+    expense_id: str,
+    amount: str,
+) -> dict[str, Any]:
+    """Edit only the amount of an expense via the real FastAPI PUT /api/versions/... endpoint."""
+    resolved_db = _validate_handoff_database(db_path)
+    conn = await create_connection(resolved_db)
+    settings = Settings(_env_file=None, amap_api_key=None)
+    try:
+        async with open_checkpointer(resolved_db) as checkpointer:
+            graph = build_graph(
+                _OfflineNoopLLM(),  # type: ignore[arg-type]
+                _OfflineNoopSearch(),  # type: ignore[arg-type]
+                settings=settings,
+                checkpointer=checkpointer,
+            )
+            store = SessionStore(conn)
+            test_app = FastAPI()
+            test_app.state.store = store
+            test_app.state.graph = graph
+            test_app.dependency_overrides[get_settings] = lambda: settings
+            register_exception_handlers(test_app)
+            for router in (routes_session, routes_itinerary, routes_export):
+                test_app.include_router(router.router)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://handoff.local"
+            ) as client:
+                cur_res = await client.get(f"/api/versions/{version_id}")
+                if cur_res.status_code != 200:
+                    return {
+                        "ok": False,
+                        "error": "version_lookup_failed",
+                        "status_code": cur_res.status_code,
+                        "detail": cur_res.text,
+                    }
+                detail = cur_res.json()
+                expenses = (detail.get("itinerary") or {}).get("expenses") or []
+                target = next((e for e in expenses if e.get("id") == expense_id), None)
+                if target is None:
+                    return {"ok": False, "error": "expense_not_found"}
+
+                payload: dict[str, Any] = {
+                    "title": target["title"],
+                    "amount": amount,
+                    "category": target.get("category", "other"),
+                    "day": target.get("day"),
+                    "activity_id": target.get("activity_id"),
+                    "notes": target.get("notes", ""),
+                    "receipt_ids": target.get("receipt_ids", []),
+                    "allow_shared_receipts": False,
+                    "budget_item_id": target.get("budget_item_id"),
+                    "settles_budget": bool(target.get("settles_budget", False)),
+                }
+                put_res = await client.put(
+                    f"/api/versions/{version_id}/expenses/{expense_id}", json=payload
+                )
+                if put_res.status_code != 200:
+                    return {
+                        "ok": False,
+                        "error": "expense_edit_failed",
+                        "status_code": put_res.status_code,
+                        "detail": put_res.text,
+                    }
+                updated = put_res.json()
+                updated_expenses = (updated.get("itinerary") or {}).get("expenses") or []
+                updated_entry = next(
+                    (e for e in updated_expenses if e.get("id") == expense_id), None
+                )
+                return {
+                    "ok": True,
+                    "previous_version_id": version_id,
+                    "version_id": updated["version"]["id"],
+                    "expense_id": expense_id,
+                    "amount_cents": (
+                        int(updated_entry["amount_cents"]) if updated_entry is not None else None
+                    ),
+                }
+    finally:
+        await conn.close()
+
+
 async def _outbound_status(db_path: Path, *, branch_id: str | None = None) -> dict[str, Any]:
     """Read persisted outbound operations (pending vs confirmed) on an isolated handoff DB."""
     resolved_db = _validate_handoff_database(db_path)
@@ -666,7 +753,16 @@ async def _outbound_status(db_path: Path, *, branch_id: str | None = None) -> di
     }
 
 
+def _ensure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            with suppress(Exception):
+                reconfigure(encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _ensure_utf8_stdio()
     parser = argparse.ArgumentParser(
         description="Isolated cross-repo 0.1.0 expense handoff CLI for fictional desktop trips."
     )
@@ -732,6 +828,15 @@ def main(argv: list[str] | None = None) -> int:
     stat_p.add_argument("--database", type=Path, required=True)
     stat_p.add_argument("--branch-id", default=None)
 
+    edit_p = sub.add_parser(
+        "edit-expense",
+        help="Edit only an expense's amount via the real FastAPI PUT endpoint on a handoff DB.",
+    )
+    edit_p.add_argument("--database", type=Path, required=True)
+    edit_p.add_argument("--version-id", required=True)
+    edit_p.add_argument("--expense-id", required=True)
+    edit_p.add_argument("--amount", required=True, help="New CNY decimal amount, e.g. 21.50")
+
     args = parser.parse_args(argv)
     try:
         if args.action == "init-trip":
@@ -788,6 +893,18 @@ def main(argv: list[str] | None = None) -> int:
             result = asyncio.run(_outbound_status(args.database, branch_id=args.branch_id))
             print(json.dumps(result, ensure_ascii=False))
             return 0
+
+        if args.action == "edit-expense":
+            result = asyncio.run(
+                _edit_expense_amount(
+                    args.database,
+                    version_id=args.version_id,
+                    expense_id=args.expense_id,
+                    amount=args.amount,
+                )
+            )
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result.get("ok") else 1
 
         result = asyncio.run(
             _inspect_trip(

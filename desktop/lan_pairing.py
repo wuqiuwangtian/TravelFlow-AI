@@ -30,7 +30,7 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import closing
+from contextlib import closing, suppress
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -918,6 +918,9 @@ def _make_control_handler(
     control_token: str,
     stop_event: threading.Event,
     exchange_bridge: _TripExchangeBridge | None = None,
+    *,
+    lan_host: str = "127.0.0.1",
+    lan_port_getter: Any = None,
 ) -> type[BaseHTTPRequestHandler]:
     class ControlHandler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
@@ -930,6 +933,10 @@ def _make_control_handler(
                 return False
             return True
 
+        def _lan_endpoint(self) -> dict[str, Any]:
+            port_val = int(lan_port_getter()) if callable(lan_port_getter) else 0
+            return {"lan_host": lan_host, "lan_port": port_val}
+
         def do_GET(self) -> None:
             if not self._check_auth():
                 return
@@ -939,6 +946,7 @@ def _make_control_handler(
                     200,
                     {
                         "ok": True,
+                        **self._lan_endpoint(),
                         "cert_sha256": coordinator.cert_sha256,
                         "exchange_enabled": exchange_bridge is not None,
                         "pending_requests": coordinator.list_pending_requests(),
@@ -958,7 +966,18 @@ def _make_control_handler(
                 return
             if self.path == "/control/pairing/open":
                 ttl = int(body.get("ttl_seconds", DEFAULT_PAIRING_TTL_SECONDS))
-                _send_json(self, 200, {"ok": True, **coordinator.open_pairing_session(ttl)})
+                session = coordinator.open_pairing_session(ttl)
+                _send_json(
+                    self,
+                    200,
+                    {
+                        "ok": True,
+                        **self._lan_endpoint(),
+                        **session,
+                        "protocol": PROTOCOL_VERSION,
+                        "pairing_session": session,
+                    },
+                )
                 return
             if self.path == "/control/pairing/approve":
                 code, payload = coordinator.approve_request(
@@ -1079,7 +1098,12 @@ class ForegroundPairingServer:
         self.control_server = _QuietThreadingHTTPServer(
             ("127.0.0.1", 0),
             _make_control_handler(
-                self.coordinator, self.control_token, self.stop_event, self.exchange_bridge
+                self.coordinator,
+                self.control_token,
+                self.stop_event,
+                self.exchange_bridge,
+                lan_host=self.bind_host,
+                lan_port_getter=lambda: int(self.lan_server.server_address[1]),
             ),
         )
         self.lan_port = int(self.lan_server.server_address[1])
@@ -1195,7 +1219,16 @@ def _control_call(
         conn.close()
 
 
+def _ensure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            with suppress(Exception):
+                reconfigure(encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _ensure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Foreground LAN pairing prototype CLI.")
     sub = parser.add_subparsers(dest="action", required=True)
 
