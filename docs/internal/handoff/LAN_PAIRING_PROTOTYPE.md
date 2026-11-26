@@ -263,3 +263,144 @@ python -m desktop.lan_pairing serve --state-dir "$env:TEMP\travelflow-lan-proto"
 - Windows 原生（Python 3.12.10 / OpenSSL 3.0.16）：`test_lan_pairing` 通过（1/1，0.99s）。
 
 未覆盖项：真实 Android 手机经同 Wi-Fi／热点连接 `10.226.92.198`、Windows 防火墙入站弹窗实测、异地网络与 VPN／代理共存、以及 Android 真实业务命令经此通道投递和反向更正。
+
+## 5. Windows 原生业务服务端实测与 Android 下一轮联调入口（2026-11-26）
+
+### 5.1 实测环境与网络／防火墙观察
+
+- **服务端环境**：Windows 原生 `CPython 3.13.16`（由 Windows `uv` 在隔离目录 `%TEMP%\travelflow-win-py313-venv` 按 `backend/uv.lock` 冻结同步，不修改 WSL `backend/.venv` 或个人库），TLS 证书由 `C:\Program Files\Git\usr\bin\openssl.exe` 生成；业务库与配对状态均位于 Windows NTFS 隔离临时目录（`%TEMP%\travelflow-win-e2e-*`）。
+- **本机网卡与配置文件**：
+  - `Loopback Pseudo-Interface 1`：`127.0.0.1/8`
+  - `vEthernet (WSL (Hyper-V firewall))`：`172.20.16.1/20`
+  - `WLAN`：`10.226.92.198/24`（`NetworkCategory = Public`）
+  - `Meta`：`198.18.0.1/30`（`NetworkCategory = Public`）
+  - WSL2 `eth0`：`172.20.31.170/20`（默认网关 `172.20.16.1`）
+- **防火墙与端口约束（只读核查，未修改系统防火墙策略）**：
+  - Windows Defender Firewall 的 `Domain` / `Private` / `Public` 三档均开启且 `DefaultInboundAction = NotConfigured`（默认拦截未放行入站），Hyper-V 防火墙 `DefaultInboundAction = Block`。
+  - **新解释器首次非回环绑定拦截**：`uv` 虚拟环境实际执行的是底层 `C:\Users\<user>\AppData\Roaming\uv\python\cpython-3.13.16-windows-x86_64-none\python.exe`。该新路径最初没有任何入站放行规则，首次绑定 `172.20.16.1` 时，同机 Windows 客户端可达（`HTTP 200`），而跨虚拟网卡的 WSL2 客户端（`172.20.31.170`）连接超时（`TimeoutError`）；当 Windows Defender Firewall 为该 `cpython-3.13.16` 解释器建立 `Public` TCP/UDP `Allow` 规则后，WSL2 访问 `10.226.92.198` 与 `172.20.16.1` 均稳定返回 `HTTP 200`（`127.0.0.1` 仍仅限 Windows 本机回环，WSL 访问返回 `ConnectionRefusedError`）。
+  - **Android 联调注意事项**：
+    1. 若物理 Wi-Fi／热点在 Windows 中处于 `Private` 网络配置而防火墙仅放行了 `Public`（或首次启动尚未在安全警报中允许当前 `python.exe`），物理手机连向 WLAN IP 将超时；须确认目标网络类型对应的 `python.exe` 入站已放行。
+    2. Windows 存在系统 TCP 排除端口范围（可通过只读命令 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看，本机含 `6025-6124`、`9819-9918`、`11115-11214`、`50000-50059` 等）；优先使用 `--port 0` 由系统分配空闲端口，如需固定端口须避开排除区间。
+    3. Android 模拟器若通过 `10.0.2.2` 访问宿主 Windows 回环，服务端须绑定 `--bind 127.0.0.1 --san-ip 10.0.2.2`，使证书 SAN 包含 `IP:10.0.2.2`。
+
+### 5.2 已验证的完整业务往返与重启核对
+
+通过 [test_windows_native_exchange.py](../../../backend/tests/test_windows_native_exchange.py) 复用现有 CLI 入口完成两条真实路径的端到端验收：
+
+| 路径 | 客户端位置与网络路径 | 服务端绑定 | 实测结果 |
+| --- | --- | --- | --- |
+| 路径 1（跨虚拟网卡到 WLAN IP） | WSL2 `172.20.31.170` → Windows `WLAN 10.226.92.198:<随机端口>` | Windows 原生 Python 3.13.16 前台服务 | `PASSED`（26.45s） |
+| 路径 2（Windows 本机回环） | Windows 原生 Python 3.13.16 → Windows `127.0.0.1:<随机端口>` | Windows 原生 Python 3.13.16 前台服务 | `PASSED`（29.57s） |
+
+两条路径均在隔离目录实测通过以下完整序列：
+1. Windows 原生 `exchange_trip_handoff.py init-trip` 初始化虚构旅行库并写入 `context.json`。
+2. Windows 原生 `python -m desktop.lan_pairing serve --trip-db ... --open-pairing` 前台启动，客户端以固定证书指纹完成 `/health`（`exchange_enabled: true`）、`/pair/request` → Windows CLI `approve` → `/pair/complete` → Windows CLI `bind-exchange`。
+3. 客户端经配对 HTTPS 提交 0.1.0 `expense.create`（`1723` 分，`https-win-metro-1`）获得桌面确认版本 `R1`。
+4. Windows 原生 `exchange_trip_handoff.py edit-expense` 经真实 FastAPI `PUT /api/versions/{R1}/expenses/{id}` 将金额改为 `21.50` 元，推进桌面版本至 `R2` 并入队反向更正。
+5. 客户端经 `POST /exchange/expense-patch/pull` 领取原命令字节，由移动参考接收器应用得到 `m-rev-2` 回执并经 `POST /exchange/expense-patch/confirm` 原子确认（重复确认返回 `already_confirmed: true`）。
+6. Windows 原生 CLI `stop` 停机后，以同一 `--state-dir` 与 `--trip-db` 重新前台启动 `serve`，核对：
+   - **证书身份**：重启前后 `cert_sha256` 完全一致；
+   - **重连与待发队列**：`status` 返回 `lan_host`、`lan_port`、`cert_sha256`、`exchange_enabled: true` 与活跃授权；已配对客户端重连 `GET /trip/fictional` 返回 `200`、`POST /exchange/expense-patch/pull` 返回 `[]`；
+   - **账本与确认版本**：Windows 原生 `inspect-trip` 与 `outbound-status` 均以 UTF-8 正常读回 2 笔消费（`"虚构午餐"` `8635` 分 + `"机场快轨"` `2150` 分 = `10785` 分）、分支头 `R2`、原分叉 0 笔消费、`pending_count == 0`、`confirmed_count == 1`、`confirmed_mobile_revision_id == "m-rev-2"`。
+
+本轮额外修复了 Windows 原生控制台默认 `gb2312` 导致 CLI JSON 中文乱码的问题（`lan_pairing.py` 与 `exchange_trip_handoff.py` 入口自动切换 UTF-8 stdio，`_write_exclusive_bytes` 增加 `O_BINARY`），并为 `status` / `open-pairing` 补齐 `lan_host` 与 `lan_port` 字段。
+
+未覆盖项：真实 Android APK（模拟器或物理手机）直连 Windows 原生服务、物理手机经同 Wi-Fi／热点连接 `10.226.92.198`、以及物理手机与 `Meta` 代理共存。
+
+### 5.3 Android 下一轮可直接使用的 Windows 启动命令与配对信息获取方式
+
+以下全部在 Windows PowerShell 中执行（仓库目录 `<WIN_REPO>` 例如 `\\wsl.localhost\Arch\home\wqwt\code\TravelFlow-AI` 或本地 Windows 检出目录）：
+
+```powershell
+# 1. 准备隔离的 Windows 原生 Python 3.13 后端虚拟环境（不改动 WSL backend/.venv）
+$winVenv = "$env:TEMP\travelflow-win-py313-venv"
+$env:UV_PROJECT_ENVIRONMENT = $winVenv
+uv sync --frozen --no-dev --python 3.13 --directory "<WIN_REPO>\backend"
+$winPy = "$winVenv\Scripts\python.exe"
+
+# 2. 在独立隔离目录初始化虚构旅行副本与业务上下文（context.json）
+$workDir = "$env:TEMP\travelflow-win-android-handoff"
+Set-Location "<WIN_REPO>"
+& $winPy backend\scripts\exchange_trip_handoff.py init-trip `
+  --work-dir "$workDir\trip" `
+  --context-out "$workDir\context.json"
+Get-Content -Raw -Encoding UTF8 "$workDir\context.json"
+
+# 3. 前台启动 Windows 原生 HTTPS 业务服务并开启一次性配对会话
+#   - 物理 Android 同 Wi-Fi / 热点：将 <WIN_LAN_IP> 替换为当前 WLAN IPv4（如 10.226.92.198）
+& $winPy -m desktop.lan_pairing serve `
+  --state-dir "$workDir\pairing-state" `
+  --bind <WIN_LAN_IP> `
+  --port 0 `
+  --trip-db "$workDir\trip\travel.sqlite" `
+  --open-pairing
+
+#   - 若改用 Windows 本机 Android 模拟器（经 10.0.2.2 访问宿主回环）：
+# & $winPy -m desktop.lan_pairing serve `
+#   --state-dir "$workDir\pairing-state" `
+#   --bind 127.0.0.1 `
+#   --san-ip 10.0.2.2 `
+#   --port 0 `
+#   --trip-db "$workDir\trip\travel.sqlite" `
+#   --open-pairing
+```
+
+**配对信息获取方式（安全边界：严禁将 `pairing-state\control.json` 或 `control_token` 交给手机）**：
+1. **启动即取**：`serve --open-pairing` 启动后会在前台标准输出打印一行 UTF-8 JSON，直接包含手机配对所需的全部带外信息：`lan_host`、`lan_port`、`cert_sha256`、`pairing_session.pairing_session_id`、`pairing_session.pairing_code`、`pairing_session.expires_at`；业务上下文（`dataset_id`、`travel_id`、`branch_id`、`current_revision_id`）从 `$workDir\context.json` 读取。
+2. **过期后重开配对或随时查询监听地址与待审请求**（另一 PowerShell 窗口执行）：
+
+```powershell
+# 重新开启一次性配对会话（返回 lan_host、lan_port、cert_sha256、pairing_session_id、pairing_code）
+& $winPy -m desktop.lan_pairing open-pairing --state-dir "$workDir\pairing-state"
+
+# 查看当前监听地址、证书指纹、待批准请求（含 request_id 与 6 位 sas_code）及已配对设备
+& $winPy -m desktop.lan_pairing status --state-dir "$workDir\pairing-state"
+
+# 核对手机屏幕 6 位 SAS 码后批准配对
+& $winPy -m desktop.lan_pairing approve `
+  --state-dir "$workDir\pairing-state" `
+  --request-id <REQUEST_ID> `
+  --sas-code <6位SAS码>
+
+# 手机完成 /pair/complete 后，绑定其业务身份与隔离旅行分支
+& $winPy -m desktop.lan_pairing bind-exchange `
+  --state-dir "$workDir\pairing-state" `
+  --device-id <ANDROID_PAIRED_DEVICE_ID> `
+  --dataset-id p3-d1-handoff-dataset `
+  --source-device-id <ANDROID_BUSINESS_DEVICE_ID> `
+  --travel-id 92ba6a148a17 `
+  --branch-id f4f921d01f4e
+
+# 手机新增消费入账（版本 R1）后，桌面执行金额更正（如改为 21.50 元）
+& $winPy backend\scripts\exchange_trip_handoff.py edit-expense `
+  --database "$workDir\trip\travel.sqlite" `
+  --version-id <R1> `
+  --expense-id <EXPENSE_ID> `
+  --amount 21.50
+
+# 显式停止服务（重跑步骤 3 去掉 --open-pairing 即用同一证书与状态重启）
+& $winPy -m desktop.lan_pairing stop --state-dir "$workDir\pairing-state"
+
+# 重启或结束后核对桌面账本、版本链与待发队列
+& $winPy backend\scripts\exchange_trip_handoff.py inspect-trip `
+  --database "$workDir\trip\travel.sqlite" `
+  --branch-id f4f921d01f4e `
+  --fork-branch-id 80a581ac74f9
+& $winPy backend\scripts\exchange_trip_handoff.py outbound-status `
+  --database "$workDir\trip\travel.sqlite"
+```
+
+### 5.4 自动化复跑命令
+
+```sh
+# 从 WSL 驱动真实 Windows 原生 Python 3.13 前台服务（跨虚拟网卡连向 Windows WLAN IP）
+TRAVELFLOW_WINDOWS_BACKEND_PYTHON=/mnt/c/Users/<user>/AppData/Local/Temp/travelflow-win-py313-venv/Scripts/python.exe \
+TRAVELFLOW_WINDOWS_BIND_HOST=10.226.92.198 \
+bash -c 'cd backend && .venv/bin/pytest -v tests/test_windows_native_exchange.py'
+```
+
+```powershell
+# 直接在 Windows 原生 Python 3.13 环境运行（默认连向 127.0.0.1，可设 $env:TRAVELFLOW_WINDOWS_BIND_HOST 覆盖）
+Set-Location "<WIN_REPO>\backend"
+& "$env:TEMP\travelflow-win-py313-venv\Scripts\python.exe" -m pytest -v tests\test_windows_native_exchange.py
+```
