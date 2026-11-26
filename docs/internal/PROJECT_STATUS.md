@@ -6,7 +6,9 @@
 
 ## 当前接续状态
 
-- 已接受桌面 c526076 的 [Windows 原生业务往返与 Android 交接](handoff/LAN_PAIRING_PROTOTYPE.md#53-android-下一轮可直接使用的-windows-启动命令与配对信息获取方式)。集成版独立复跑两条路径，Windows 原生客户端经回环、WSL 测试客户端经虚拟网卡 172.20.16.1 分别连接真实 Windows Python 3.13 服务。重新开启的配对会话含 Android 所需完整结构；相同身份、地址和端口重启后两条路径均读到主分支 10785 分、待发 0、已确认 1、参考手机结果版本 m-rev-2，原分叉保持空账。原提交另记录同机 WSL 到 Windows WLAN 地址的实测及当时的入站策略。本轮复跑未修改防火墙。Android APK 经配对 HTTPS 连接 Windows 的验证待做。
+- 已接受移动 [c102aeb Windows 原生与 API 35 往返回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/c102aeb4928c1c69719166d7b7a9e0eda8338f70/docs/internal/PROJECT_STATUS.md#windows-原生前台服务与-android-单笔消费往返实读)。固定桌面 fcd696d，Android 沿用 da74b6f 的 APK 实现。手机离线新增 1723 分，桌面提交后丢回包；冷启动查询恢复确认，桌面随后将原消费改为 2150 分。手机交回前冷重领，原文摘要与持久回执一致。Windows 原生服务保持地址端口、证书与配对库重启，监听 PID 改变；手机凭旧配对冷重连成功。手机 1 笔 2150 分，Windows 两笔 10785 分，待发 0、已确认 1，双方确认版本吻合，原分叉仍为空。业务路径经同机模拟器虚拟 WLAN、WSL 虚拟网关到 Windows WLAN 地址；当时已有该解释器的入站放行规则。本轮桌面核对移动脚本及回执，独立复跑 Windows 原生回环端到端测试 1 项通过，移动契约检查通过；模拟器实跑归移动维护者。物理手机同 Wi-Fi／热点与前台自动同步待验。
+
+- 已接受桌面 c526076 的 [Windows 原生业务往返与 Android 交接](handoff/LAN_PAIRING_PROTOTYPE.md#53-android-下一轮可直接使用的-windows-启动命令与配对信息获取方式)。集成版独立复跑两条路径，Windows 原生客户端经回环、WSL 测试客户端经虚拟网卡 172.20.16.1 分别连接真实 Windows Python 3.13 服务。重新开启的配对会话含 Android 所需完整结构；相同身份、地址和端口重启后两条路径均读到主分支 10785 分、待发 0、已确认 1、参考手机结果版本 m-rev-2，原分叉保持空账。原提交另记录同机 WSL 到 Windows WLAN 地址的实测及当时的入站策略。本轮复跑未修改防火墙。该轮客户端为桌面参考实现。
 
 - 已接受移动 [da74b6f 单笔消费经配对 HTTPS 往返实读](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/da74b6fee92c8873da9f8bbe31dcf76da4d8341b/docs/internal/PROJECT_STATUS.md#单笔消费经配对-https-往返实读)。桌面 fbb4dfc，API 35 经模拟器虚拟 WLAN 到同机 WSL。手机离线记入 1723 分并同步，桌面正常入口改为 2150 分。手机领取并写入后强停，交回回执前桌面仍为 verification_pending；冷重领命令摘要与桌面原文一致，返回原回执，手机库逻辑导出不变。桌面服务以同一地址、端口与配对状态重启，实读待发 0、已确认 1；重复确认后手机仍为原消费 1 笔、2150 分，桌面 2 笔、10785 分，版本数与原分叉均保持。移动维护者执行模拟器实测；本轮桌面审阅实现与联合脚本并复跑相关后端检查。当前入口由前台操作触发；Windows 原生作为业务对端及物理手机 Wi-Fi／热点待验。
 
