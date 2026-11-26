@@ -805,7 +805,7 @@ def _run_desktop_expense_api(
     *,
     method: str,
     version_id: str,
-    expense_id: str,
+    expense_id: str | None = None,
     payload: dict | None = None,
 ) -> str:
     script = (
@@ -818,11 +818,13 @@ def _run_desktop_expense_api(
         "  conn, store, cp_cm, graph, client = await _open_isolated_app(Path(sys.argv[1]))\n"
         "  try:\n"
         "    method, vid, eid, body_raw = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]\n"
-        "    url = f'/api/versions/{vid}/expenses/{eid}'\n"
-        "    if method == 'PUT':\n"
-        "      r = await client.put(url, json=json.loads(body_raw))\n"
+        "    if method == 'POST':\n"
+        "      r = await client.post(f'/api/versions/{vid}/expenses', json=json.loads(body_raw))\n"
+        "    elif method == 'PUT':\n"
+        "      r = await client.put(f'/api/versions/{vid}/expenses/{eid}', "
+        "json=json.loads(body_raw))\n"
         "    elif method == 'DELETE':\n"
-        "      r = await client.delete(url)\n"
+        "      r = await client.delete(f'/api/versions/{vid}/expenses/{eid}')\n"
         "    else:\n"
         "      raise ValueError(method)\n"
         "    assert r.status_code == 200, r.text\n"
@@ -839,7 +841,7 @@ def _run_desktop_expense_api(
             db_path,
             method,
             version_id,
-            expense_id,
+            expense_id or "",
             json.dumps(payload or {}, ensure_ascii=False),
         ],
         cwd=REPO_ROOT,
@@ -1108,12 +1110,73 @@ def test_dual_device_same_entity_id_reuse_isolates_patch_pull_and_confirm(tmp_pa
         )
         assert st_cfb == 200 and res_cfb["confirmed"] is True
 
-        # 8. Legacy row without origin binding: ambiguous entity_id stays pending & unconfirmable.
+        # 8. Legacy row without origin binding: evaluated by provenance AT PATCH TIME.
+        #    - item_a (v_a_created -> v_a_patched) was uniquely created by A at v_a_created,
+        #      so even after B recreated shared_eid later, A (and ONLY A) can still pull/confirm it.
         with closing(sqlite3.connect(trip_db)) as db:
             db.execute(
                 "UPDATE exchange_outbound_operations "
                 "SET delivery_state = 'unsent', origin_dataset_id = NULL, "
                 "    origin_source_device_id = NULL, origin_operation_id = NULL "
+                "WHERE operation_id = ?",
+                (item_a["operation_id"],),
+            )
+            db.commit()
+
+        st_lpb, res_lpb = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/pull",
+            expected_cert_sha256=pin,
+            body={},
+            headers=hdr_b,
+        )
+        assert st_lpb == 200 and res_lpb == {"ok": True, "items": []}
+
+        st_lcb, res_lcb = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/confirm",
+            expected_cert_sha256=pin,
+            body=receipt_a,
+            headers=hdr_b,
+        )
+        assert st_lcb == 403 and res_lcb["error"] == "unauthorized"
+
+        st_lpa, res_lpa = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/pull",
+            expected_cert_sha256=pin,
+            body={},
+            headers=hdr_a,
+        )
+        assert st_lpa == 200 and [x["operation_id"] for x in res_lpa["items"]] == [
+            item_a["operation_id"]
+        ]
+
+        st_lca, res_lca = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/confirm",
+            expected_cert_sha256=pin,
+            body=receipt_a,
+            headers=hdr_a,
+        )
+        assert st_lca == 200 and res_lca["confirmed"] is True
+
+        #    - An unprovable legacy row (expected_revision_id cannot prove continuous birth)
+        #      must stay pending ('unsent') and be rejected for both A and B.
+        with closing(sqlite3.connect(trip_db)) as db:
+            db.execute(
+                "UPDATE exchange_outbound_operations "
+                "SET delivery_state = 'unsent', expected_revision_id = 'missing-rev-id', "
+                "    origin_dataset_id = NULL, origin_source_device_id = NULL, "
+                "    origin_operation_id = NULL "
                 "WHERE operation_id = ?",
                 (item_a["operation_id"],),
             )
@@ -1149,6 +1212,286 @@ def test_dual_device_same_entity_id_reuse_isolates_patch_pull_and_confirm(tmp_pa
                 (item_a["operation_id"],),
             ).fetchone()
             assert row_a is not None and row_a["delivery_state"] == "unsent"
+    finally:
+        srv.stop()
+
+
+def test_mobile_delete_then_desktop_local_recreate_same_id_never_emits_patch(tmp_path: Path):
+    """Mobile create -> pending patch -> delete -> desktop local recreate 18 -> edit 19.
+
+    Editing the desktop-local expense must succeed without enqueueing any new outbound patch,
+    while the pre-deletion mobile patch still belongs exclusively to the original mobile device.
+    A legacy outbound row anchored to the desktop-local edit must stay pending and undeliverable.
+    """
+    trip_work = tmp_path / "trip-local-recreate"
+    state_dir = tmp_path / "pairing-local-recreate"
+    ctx = _init_handoff_trip(trip_work)
+    trip_db = Path(ctx["database"])
+    reused_eid = "https-local-recreate-1"
+
+    paired_a, biz_a = "android-paired-local-A", "android-business-local-A"
+    paired_b, biz_b = "android-paired-local-B", "android-business-local-B"
+
+    srv = ForegroundPairingServer(state_dir, bind_host="127.0.0.1", port=0, trip_db=trip_db)
+    info = srv.start()
+    try:
+        host, port, pin = info["lan_host"], info["lan_port"], info["cert_sha256"]
+        tok_a = _pair_mobile_device(state_dir, host, port, pin, paired_device_id=paired_a)
+        tok_b = _pair_mobile_device(state_dir, host, port, pin, paired_device_id=paired_b)
+        hdr_a = {"Authorization": f"Bearer {tok_a}", "X-Device-Id": paired_a}
+        hdr_b = {"Authorization": f"Bearer {tok_b}", "X-Device-Id": paired_b}
+
+        for dev_id, src_id in ((paired_a, biz_a), (paired_b, biz_b)):
+            st_b, _ = _control_call(
+                state_dir,
+                "POST",
+                "/control/devices/bind-exchange",
+                {
+                    "device_id": dev_id,
+                    "dataset_id": ctx["dataset_id"],
+                    "source_device_id": src_id,
+                    "travel_id": ctx["travel_id"],
+                    "branch_id": ctx["branch_id"],
+                    "can_write": True,
+                    "can_lookup_receipt": True,
+                },
+            )
+            assert st_b == 200
+
+        # 1. Mobile A creates reused_eid (17.23) -> desktop patches to 21.50 (stays pending).
+        st_ca, res_ca = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-create",
+            expected_cert_sha256=pin,
+            raw_body=_make_create_bytes(
+                dataset_id=ctx["dataset_id"],
+                source_device_id=biz_a,
+                operation_id="op-local-recreate-create-A",
+                travel_id=ctx["travel_id"],
+                branch_id=ctx["branch_id"],
+                entity_id=reused_eid,
+                expected_revision_id=ctx["current_revision_id"],
+                amount_cents=1723,
+                title="机场快轨",
+            ),
+            headers=hdr_a,
+        )
+        assert st_ca == 200 and res_ca["ok"] is True
+        v_a_created = res_ca["receipt"]["result_revision_id"]
+
+        v_a_patched = _run_desktop_expense_api(
+            ctx["database"],
+            method="PUT",
+            version_id=v_a_created,
+            expense_id=reused_eid,
+            payload={
+                "title": "机场快轨",
+                "amount": "21.50",
+                "category": "transport",
+                "notes": "HTTPS 实连测试",
+            },
+        )
+
+        # 2. Desktop deletes reused_eid.
+        v_deleted = _run_desktop_expense_api(
+            ctx["database"],
+            method="DELETE",
+            version_id=v_a_patched,
+            expense_id=reused_eid,
+        )
+
+        # 3. Desktop locally creates a NEW expense with the SAME ID (18.00) -> edits to 19.00.
+        v_local_created = _run_desktop_expense_api(
+            ctx["database"],
+            method="POST",
+            version_id=v_deleted,
+            payload={
+                "request_id": reused_eid,
+                "title": "本地重记打车",
+                "amount": "18.00",
+                "category": "transport",
+                "notes": "桌面本地新记",
+            },
+        )
+        v_local_edited = _run_desktop_expense_api(
+            ctx["database"],
+            method="PUT",
+            version_id=v_local_created,
+            expense_id=reused_eid,
+            payload={
+                "title": "本地重记打车",
+                "amount": "19.00",
+                "category": "transport",
+                "notes": "桌面本地新记",
+            },
+        )
+
+        # 4. Verify desktop saved 19.00 cleanly AND emitted ZERO new outbound patches!
+        insp_mid = _inspect_handoff_trip(ctx["database"], ctx["branch_id"], ctx["fork_branch_id"])
+        assert insp_mid["head_revision_id"] == v_local_edited
+        assert [(e["id"], e["amount_cents"]) for e in insp_mid["head_expenses"]] == [
+            ("d1-fictional-lunch", 8635),
+            (reused_eid, 1900),
+        ]
+        assert len(insp_mid["outbound_operations"]) == 1
+        only_out = insp_mid["outbound_operations"][0]
+        assert only_out["expected_revision_id"] == v_a_created
+        assert only_out["source_revision_id"] == v_a_patched
+        assert only_out["origin_source_device_id"] == biz_a
+        assert only_out["origin_operation_id"] == "op-local-recreate-create-A"
+
+        # 5. Pre-deletion mobile patch still belongs exclusively to Device A (pull + confirm).
+        st_pb, res_pb = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/pull",
+            expected_cert_sha256=pin,
+            body={},
+            headers=hdr_b,
+        )
+        assert st_pb == 200 and res_pb == {"ok": True, "items": []}
+
+        st_pa, res_pa = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/pull",
+            expected_cert_sha256=pin,
+            body={},
+            headers=hdr_a,
+        )
+        assert st_pa == 200 and len(res_pa["items"]) == 1
+        item_a = res_pa["items"][0]
+        assert item_a["expected_revision_id"] == v_a_created
+        assert item_a["source_revision_id"] == v_a_patched
+
+        mobile_a_db = tmp_path / "mobile_a_local_recreate.sqlite"
+        init_mobile_replica(
+            mobile_a_db,
+            defaults={
+                "dataset_id": ctx["dataset_id"],
+                "travel_id": ctx["travel_id"],
+                "branch_id": ctx["branch_id"],
+                "entity_id": reused_eid,
+                "initial_local_revision_id": "mA-lr-1",
+                "initial_synced_desktop_revision_id": v_a_created,
+                "initial_expense": {
+                    "id": reused_eid,
+                    "title": "机场快轨",
+                    "amount_cents": 1723,
+                    "currency": "CNY",
+                    "paid_on": None,
+                    "category": "transport",
+                    "notes": "HTTPS 实连测试",
+                    "updated_at": "2026-11-24T12:00:00Z",
+                },
+            },
+        )
+        receipt_a = apply_desktop_patch(
+            mobile_a_db,
+            item_a["raw_command_json"].encode("utf-8"),
+            scope=PatchScope(
+                dataset_id=ctx["dataset_id"],
+                authorized_devices=frozenset({"desktop-device-1"}),
+                authorized_targets=frozenset({(ctx["travel_id"], ctx["branch_id"])}),
+            ),
+        )
+        assert receipt_a["ok"] is True
+
+        st_cfb, res_cfb = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/confirm",
+            expected_cert_sha256=pin,
+            body=receipt_a,
+            headers=hdr_b,
+        )
+        assert st_cfb == 403 and res_cfb["error"] == "unauthorized"
+
+        st_cfa, res_cfa = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/confirm",
+            expected_cert_sha256=pin,
+            body=receipt_a,
+            headers=hdr_a,
+        )
+        assert st_cfa == 200 and res_cfa["confirmed"] is True
+
+        # 6. A legacy outbound row anchored to the desktop-local edit (v_local_created ->
+        #    v_local_edited, origin_* = NULL) has no mobile create at v_local_created, so it
+        #    MUST remain pending ('unsent') and cannot be pulled or confirmed even by Device A.
+        with closing(sqlite3.connect(trip_db)) as db:
+            db.execute(
+                "INSERT INTO exchange_outbound_operations("
+                "dataset_id, source_device_id, operation_id, kind, canonical_profile, "
+                "intent_sha256, canonical_intent_json, raw_command_json, expected_revision_id, "
+                "source_revision_id, session_id, branch_id, entity_id, "
+                "origin_dataset_id, origin_source_device_id, origin_operation_id, "
+                "delivery_state, created_at, updated_at"
+                ") VALUES (?, ?, ?, 'expense.patch', ?, ?, '{}', '{}', ?, ?, ?, ?, ?, "
+                "NULL, NULL, NULL, 'unsent', '2026-11-26T00:00:00Z', '2026-11-26T00:00:00Z')",
+                (
+                    ctx["dataset_id"],
+                    "desktop-device-1",
+                    "op-legacy-local-misqueued",
+                    "p1-canonical-1",
+                    "a" * 64,
+                    v_local_created,
+                    v_local_edited,
+                    ctx["travel_id"],
+                    ctx["branch_id"],
+                    reused_eid,
+                ),
+            )
+            db.commit()
+
+        st_pull_after, pull_after = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/pull",
+            expected_cert_sha256=pin,
+            body={},
+            headers=hdr_a,
+        )
+        assert st_pull_after == 200 and pull_after == {"ok": True, "items": []}
+
+        fake_local_receipt = {
+            **receipt_a,
+            "receipt": {
+                **receipt_a["receipt"],
+                "operation": {
+                    "dataset_id": ctx["dataset_id"],
+                    "source_device_id": "desktop-device-1",
+                    "operation_id": "op-legacy-local-misqueued",
+                },
+                "synced_desktop_revision_id": v_local_edited,
+            },
+        }
+        st_cf_bad, res_cf_bad = pinned_https_request(
+            host,
+            port,
+            "POST",
+            "/exchange/expense-patch/confirm",
+            expected_cert_sha256=pin,
+            body=fake_local_receipt,
+            headers=hdr_a,
+        )
+        assert st_cf_bad == 403 and res_cf_bad["error"] == "unauthorized"
+
+        with closing(sqlite3.connect(trip_db)) as db:
+            db.row_factory = sqlite3.Row
+            bad_row = db.execute(
+                "SELECT delivery_state FROM exchange_outbound_operations WHERE operation_id = ?",
+                ("op-legacy-local-misqueued",),
+            ).fetchone()
+            assert bad_row is not None and bad_row["delivery_state"] == "unsent"
     finally:
         srv.stop()
 

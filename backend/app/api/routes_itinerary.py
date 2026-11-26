@@ -863,6 +863,7 @@ async def update_expense(
                 session_id=branch.session_id,
                 branch_id=detail.version.branch_id,
                 entity_id=expense_id,
+                at_version_id=detail.version.id,
             )
             if branch is not None
             else None
