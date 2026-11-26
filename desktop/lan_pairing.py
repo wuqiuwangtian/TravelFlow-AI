@@ -442,6 +442,111 @@ class _TripExchangeBridge:
         coro = lookup_exchange_receipt(self._store, raw_bytes, scope=scope)
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=30.0)
 
+    def pull_outbound_patches(self, grant: dict[str, Any]) -> dict[str, Any]:
+        """Prepare & return pending expense.patch raw commands owned by this grant's device."""
+        fault = self._consume_fault()
+
+        async def _pull() -> dict[str, Any]:
+            from app.services.exchange_outbox import (  # type: ignore[import-not-found]
+                _OUTBOUND_SELECT,
+                outbound_patch_matches_grant,
+                prepare_outbound_delivery,
+            )
+
+            cur = await self._store._conn.execute(
+                _OUTBOUND_SELECT + " WHERE kind = 'expense.patch' "
+                "  AND delivery_state != 'confirmed' "
+                "  AND dataset_id = ? "
+                "  AND session_id = ? "
+                "  AND branch_id = ? "
+                "ORDER BY created_at ASC, operation_id ASC",
+                (
+                    str(grant["dataset_id"]),
+                    str(grant["travel_id"]),
+                    str(grant["branch_id"]),
+                ),
+            )
+            rows = await cur.fetchall()
+            items: list[dict[str, Any]] = []
+            for row in rows:
+                if not await outbound_patch_matches_grant(self._store._conn, row, grant):
+                    continue
+                prep = await prepare_outbound_delivery(
+                    self._store,
+                    dataset_id=str(row["dataset_id"]),
+                    source_device_id=str(row["source_device_id"]),
+                    operation_id=str(row["operation_id"]),
+                )
+                if prep.get("ok") and not prep.get("already_confirmed"):
+                    rec = prep["record"]
+                    raw_b: bytes = prep["raw_bytes"]
+                    items.append(
+                        {
+                            "operation_id": rec["operation_id"],
+                            "dataset_id": rec["dataset_id"],
+                            "source_device_id": rec["source_device_id"],
+                            "expected_revision_id": rec["expected_revision_id"],
+                            "source_revision_id": rec["source_revision_id"],
+                            "entity_id": rec["entity_id"],
+                            "intent_sha256": rec["intent_sha256"],
+                            "delivery_state": rec["delivery_state"],
+                            "raw_command_json": raw_b.decode("utf-8"),
+                        }
+                    )
+            if fault == "after_pull_prepare_before_reply" and items:
+                raise _DropReplyAfterCommit("simulated HTTPS reply loss after pull prepare")
+            return {"ok": True, "items": items}
+
+        return asyncio.run_coroutine_threadsafe(_pull(), self._loop).result(timeout=30.0)
+
+    def confirm_outbound_patch(
+        self, raw_response: dict[str, Any], grant: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Verify grant ownership, then confirm outbound patch via consume_outbound_receipt."""
+        receipt = raw_response.get("receipt") if isinstance(raw_response, dict) else None
+        op = receipt.get("operation") if isinstance(receipt, dict) else None
+        if not isinstance(op, dict):
+            return {"ok": False, "error": "invalid_response", "confirmed": False}
+        dataset_id = op.get("dataset_id")
+        source_device_id = op.get("source_device_id")
+        operation_id = op.get("operation_id")
+        if not all(
+            isinstance(v, str) and 1 <= len(v) <= 256
+            for v in (dataset_id, source_device_id, operation_id)
+        ):
+            return {"ok": False, "error": "invalid_response", "confirmed": False}
+        assert isinstance(dataset_id, str) and isinstance(source_device_id, str)
+        assert isinstance(operation_id, str)
+
+        async def _confirm() -> dict[str, Any]:
+            from app.services.exchange_outbox import (  # type: ignore[import-not-found]
+                _OUTBOUND_SELECT,
+                consume_outbound_receipt,
+                outbound_patch_matches_grant,
+            )
+
+            # Use the exact same ownership check as pull before consuming the receipt.
+            cur = await self._store._conn.execute(
+                _OUTBOUND_SELECT + " WHERE kind = 'expense.patch' "
+                "  AND dataset_id = ? "
+                "  AND source_device_id = ? "
+                "  AND operation_id = ?",
+                (dataset_id, source_device_id, operation_id),
+            )
+            row = await cur.fetchone()
+            if row is None or not await outbound_patch_matches_grant(self._store._conn, row, grant):
+                return {"ok": False, "error": "unauthorized", "confirmed": False}
+
+            return await consume_outbound_receipt(
+                self._store,
+                dataset_id=dataset_id,
+                source_device_id=source_device_id,
+                operation_id=operation_id,
+                raw_response=raw_response,
+            )
+
+        return asyncio.run_coroutine_threadsafe(_confirm(), self._loop).result(timeout=30.0)
+
 
 class PairingCoordinator:
     """In-memory state machine for time-limited pairing sessions + persistent SQLite store."""
@@ -740,7 +845,12 @@ def _make_lan_handler(
             _send_json(self, 404, {"ok": False, "error": "not_found"})
 
         def do_POST(self) -> None:
-            if self.path in ("/exchange/expense-create", "/exchange/receipt-lookup"):
+            if self.path in (
+                "/exchange/expense-create",
+                "/exchange/receipt-lookup",
+                "/exchange/expense-patch/pull",
+                "/exchange/expense-patch/confirm",
+            ):
                 device_id = self._authenticate_paired_device()
                 if device_id is None:
                     return
@@ -760,8 +870,26 @@ def _make_lan_handler(
                 try:
                     if self.path == "/exchange/expense-create":
                         result = exchange_bridge.receive_expense_create(raw_bytes, grant)
-                    else:
+                    elif self.path == "/exchange/receipt-lookup":
                         result = exchange_bridge.lookup_receipt(raw_bytes, grant)
+                    elif self.path == "/exchange/expense-patch/pull":
+                        if not bool(grant["can_write"]):
+                            _send_json(self, 403, {"ok": False, "error": "unauthorized"})
+                            return
+                        result = exchange_bridge.pull_outbound_patches(grant)
+                    else:
+                        if not bool(grant["can_write"]):
+                            _send_json(self, 403, {"ok": False, "error": "unauthorized"})
+                            return
+                        try:
+                            parsed = json.loads(raw_bytes.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            _send_json(self, 400, {"ok": False, "error": "invalid_json"})
+                            return
+                        if not isinstance(parsed, dict):
+                            _send_json(self, 400, {"ok": False, "error": "invalid_json"})
+                            return
+                        result = exchange_bridge.confirm_outbound_patch(parsed, grant)
                 except _DropReplyAfterCommit:
                     self.close_connection = True
                     return
@@ -889,7 +1017,11 @@ def _make_control_handler(
                     _send_json(self, 503, {"ok": False, "error": "exchange_not_enabled"})
                     return
                 fault = body.get("fault")
-                if fault not in (None, "after_commit_before_reply"):
+                if fault not in (
+                    None,
+                    "after_commit_before_reply",
+                    "after_pull_prepare_before_reply",
+                ):
                     _send_json(self, 400, {"ok": False, "error": "invalid_fault"})
                     return
                 exchange_bridge.arm_fault_once(fault)

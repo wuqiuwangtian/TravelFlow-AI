@@ -846,7 +846,7 @@ async def update_expense(
     graph=Depends(get_graph),
 ) -> VersionDetail:
     from app.services.exchange_outbox import (
-        find_received_expense_dataset,
+        find_received_expense_origin,
         is_amount_only_expense_edit,
         is_no_op_expense_edit,
         save_expense_patch_with_outbox,
@@ -857,22 +857,31 @@ async def update_expense(
         detail = await _editable(store, version_id)
         await _validate_receipts(store, detail, payload, expense_id)
         branch = await store.get_branch(detail.version.branch_id)
-        dataset_id = (
-            await find_received_expense_dataset(
+        origin = (
+            await find_received_expense_origin(
                 store,
                 session_id=branch.session_id,
                 branch_id=detail.version.branch_id,
                 entity_id=expense_id,
+                at_version_id=detail.version.id,
             )
             if branch is not None
             else None
         )
-        if dataset_id is not None:
+        if origin is not None:
             if is_no_op_expense_edit(detail, expense_id, payload):
                 return detail
             if is_amount_only_expense_edit(detail, expense_id, payload):
                 return await save_expense_patch_with_outbox(
-                    store, graph, detail, expense_id, payload, dataset_id=dataset_id
+                    store,
+                    graph,
+                    detail,
+                    expense_id,
+                    payload,
+                    dataset_id=origin["dataset_id"],
+                    origin_dataset_id=origin["dataset_id"],
+                    origin_source_device_id=origin["source_device_id"],
+                    origin_operation_id=origin["operation_id"],
                 )
         edit_expense(_itinerary(detail), expense_id, payload)
         return await _save_revision(

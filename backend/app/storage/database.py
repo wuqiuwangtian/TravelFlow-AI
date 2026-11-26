@@ -194,6 +194,9 @@ CREATE TABLE IF NOT EXISTS exchange_outbound_operations (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     entity_id TEXT NOT NULL,
+    origin_dataset_id TEXT,
+    origin_source_device_id TEXT,
+    origin_operation_id TEXT,
     delivery_state TEXT NOT NULL DEFAULT 'unsent' CHECK (
         delivery_state IN ('unsent', 'verification_pending', 'confirmed')
     ),
@@ -234,6 +237,9 @@ async def create_connection(db_path: str | Path) -> aiosqlite.Connection:
     await _ensure_column(conn, "exchange_outbound_operations", "last_error", "TEXT")
     await _ensure_column(conn, "exchange_outbound_operations", "last_raw_response_json", "TEXT")
     await _ensure_column(conn, "exchange_outbound_operations", "confirmed_at", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "origin_dataset_id", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "origin_source_device_id", "TEXT")
+    await _ensure_column(conn, "exchange_outbound_operations", "origin_operation_id", "TEXT")
     await conn.commit()
 
     logger.info("数据库就绪", extra={"extra_fields": {"path": str(path)}})

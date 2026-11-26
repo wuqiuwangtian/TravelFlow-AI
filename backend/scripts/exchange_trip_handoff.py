@@ -518,8 +518,9 @@ async def _inspect_trip(
             dict(row)
             for row in db.execute(
                 "SELECT dataset_id, source_device_id, operation_id, kind, intent_sha256, "
-                "expected_revision_id, source_revision_id, entity_id, delivery_state, "
-                "confirmed_mobile_revision_id, confirmed_effect, last_error "
+                "expected_revision_id, source_revision_id, entity_id, "
+                "origin_dataset_id, origin_source_device_id, origin_operation_id, "
+                "delivery_state, confirmed_mobile_revision_id, confirmed_effect, last_error "
                 "FROM exchange_outbound_operations ORDER BY created_at, operation_id"
             ).fetchall()
         ]

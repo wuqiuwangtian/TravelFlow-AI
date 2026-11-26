@@ -103,23 +103,195 @@ def build_expense_patch_command(
     return raw_bytes, canonical_bytes, digest
 
 
+def _itinerary_has_expense(raw_itinerary: Any, entity_id: str) -> bool | None:
+    """Return True/False if expense presence is verifiable, or None on invalid JSON."""
+    if raw_itinerary is None:
+        return False
+    if not isinstance(raw_itinerary, str):
+        return None
+    try:
+        parsed = json.loads(raw_itinerary)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    expenses = parsed.get("expenses")
+    if expenses is None:
+        return False
+    if not isinstance(expenses, list):
+        return None
+    for item in expenses:
+        if not isinstance(item, dict):
+            return None
+        if item.get("id") == entity_id:
+            return True
+    return False
+
+
+async def _find_expense_birth_version_id(
+    conn: Any,
+    *,
+    branch_id: str,
+    entity_id: str,
+    at_version_id: str,
+) -> str | None:
+    """Return the version ID on branch_id where the expense instance at at_version_id was born.
+
+    Walks backwards along contiguous seq values (seq <= at_version.seq) while entity_id is
+    continuously present in plans.itinerary.expenses. Returns None if at_version_id is missing,
+    does not contain entity_id, or any scanned version has a seq gap, missing plan, or invalid JSON.
+    """
+    cur = await conn.execute(
+        "SELECT seq FROM versions WHERE id = ? AND branch_id = ?",
+        (at_version_id, branch_id),
+    )
+    target_row = await cur.fetchone()
+    if target_row is None:
+        return None
+    target_seq = int(target_row["seq"])
+
+    cur = await conn.execute(
+        "SELECT v.id, v.seq, p.version_id AS plan_version_id, p.itinerary "
+        "FROM versions v "
+        "LEFT JOIN plans p ON p.version_id = v.id "
+        "WHERE v.branch_id = ? AND v.seq <= ? "
+        "ORDER BY v.seq DESC",
+        (branch_id, target_seq),
+    )
+    rows = await cur.fetchall()
+    if not rows or str(rows[0]["id"]) != at_version_id:
+        return None
+
+    birth_version_id: str | None = None
+    birth_seq: int | None = None
+    expected_seq = target_seq
+    saw_absent = False
+    for idx, row in enumerate(rows):
+        row_seq = int(row["seq"])
+        if row_seq != expected_seq:
+            return None
+        if row["plan_version_id"] is None:
+            return None
+        present = _itinerary_has_expense(row["itinerary"], entity_id)
+        if present is None:
+            return None
+        if idx == 0:
+            if not present:
+                return None
+            birth_version_id = str(row["id"])
+            birth_seq = row_seq
+        elif present:
+            birth_version_id = str(row["id"])
+            birth_seq = row_seq
+        else:
+            saw_absent = True
+            break
+        expected_seq -= 1
+
+    if birth_version_id is None or birth_seq is None:
+        return None
+    if not saw_absent and birth_seq != 1:
+        return None
+    return birth_version_id
+
+
+async def _resolve_received_origin_at_version(
+    conn: Any,
+    *,
+    session_id: str,
+    branch_id: str,
+    entity_id: str,
+    at_version_id: str,
+    dataset_id: str | None = None,
+) -> dict[str, str] | None:
+    """Resolve the unique received expense.create receipt for entity_id at at_version_id."""
+    birth_version_id = await _find_expense_birth_version_id(
+        conn, branch_id=branch_id, entity_id=entity_id, at_version_id=at_version_id
+    )
+    if birth_version_id is None:
+        return None
+
+    sql = (
+        "SELECT dataset_id, source_device_id, operation_id, session_id, branch_id, entity_id, "
+        "       result_version_id "
+        "FROM exchange_operation_receipts "
+        "WHERE session_id = ? AND branch_id = ? AND entity_id = ? "
+        "  AND result_version_id = ? "
+        "  AND kind = 'expense.create' AND origin_direction = 'received'"
+    )
+    params: list[Any] = [session_id, branch_id, entity_id, birth_version_id]
+    if dataset_id is not None:
+        sql += " AND dataset_id = ?"
+        params.append(dataset_id)
+    sql += " LIMIT 2"
+
+    cur = await conn.execute(sql, params)
+    matches = await cur.fetchall()
+    if len(matches) != 1:
+        return None
+    rec = matches[0]
+    return {
+        "dataset_id": str(rec["dataset_id"]),
+        "travel_id": str(rec["session_id"]),
+        "branch_id": str(rec["branch_id"]),
+        "source_device_id": str(rec["source_device_id"]),
+        "operation_id": str(rec["operation_id"]),
+        "result_version_id": str(rec["result_version_id"]),
+    }
+
+
+async def find_received_expense_origin(
+    store: SessionStore,
+    *,
+    session_id: str,
+    branch_id: str,
+    entity_id: str,
+    at_version_id: str | None = None,
+) -> dict[str, str] | None:
+    """Return received expense.create identity for entity_id at at_version_id (or head)."""
+    target_version_id = at_version_id
+    if target_version_id is None:
+        cur = await store._conn.execute(
+            "SELECT id FROM versions WHERE branch_id = ? ORDER BY seq DESC LIMIT 1",
+            (branch_id,),
+        )
+        head = await cur.fetchone()
+        if head is None:
+            return None
+        target_version_id = str(head["id"])
+    origin = await _resolve_received_origin_at_version(
+        store._conn,
+        session_id=session_id,
+        branch_id=branch_id,
+        entity_id=entity_id,
+        at_version_id=target_version_id,
+    )
+    if origin is None:
+        return None
+    return {
+        "dataset_id": origin["dataset_id"],
+        "source_device_id": origin["source_device_id"],
+        "operation_id": origin["operation_id"],
+    }
+
+
 async def find_received_expense_dataset(
     store: SessionStore,
     *,
     session_id: str,
     branch_id: str,
     entity_id: str,
+    at_version_id: str | None = None,
 ) -> str | None:
-    """Return dataset_id if entity_id on (session_id, branch_id) was received from mobile."""
-    cur = await store._conn.execute(
-        "SELECT dataset_id FROM exchange_operation_receipts "
-        "WHERE session_id = ? AND branch_id = ? AND entity_id = ? "
-        "AND kind = 'expense.create' AND origin_direction = 'received' "
-        "ORDER BY committed_at DESC LIMIT 1",
-        (session_id, branch_id, entity_id),
+    """Return dataset_id if the expense instance at at_version_id was received from mobile."""
+    origin = await find_received_expense_origin(
+        store,
+        session_id=session_id,
+        branch_id=branch_id,
+        entity_id=entity_id,
+        at_version_id=at_version_id,
     )
-    row = await cur.fetchone()
-    return str(row["dataset_id"]) if row is not None else None
+    return origin["dataset_id"] if origin is not None else None
 
 
 def is_no_op_expense_edit(detail: VersionDetail, expense_id: str, payload: ExpenseInput) -> bool:
@@ -155,11 +327,113 @@ def is_amount_only_expense_edit(
 _OUTBOUND_SELECT = (
     "SELECT dataset_id, source_device_id, operation_id, kind, canonical_profile, "
     "intent_sha256, canonical_intent_json, raw_command_json, expected_revision_id, "
-    "source_revision_id, session_id, branch_id, entity_id, delivery_state, "
+    "source_revision_id, session_id, branch_id, entity_id, "
+    "origin_dataset_id, origin_source_device_id, origin_operation_id, delivery_state, "
     "confirmed_mobile_revision_id, confirmed_effect, last_error, "
     "last_raw_response_json, confirmed_at, created_at, updated_at "
     "FROM exchange_outbound_operations"
 )
+
+
+async def resolve_outbound_patch_owner(
+    conn: Any,
+    outbound_row: Any,
+) -> dict[str, str] | None:
+    """Resolve the uniquely verified mobile owner of an outbound expense.patch row.
+
+    Provenance is always anchored to the expense instance at the time the patch occurred
+    (expected_revision_id -> source_revision_id):
+    - Both expected_revision_id and source_revision_id must exist on branch_id with
+      source_seq >= expected_seq and trace back to the exact same expense birth version.
+    - Rows with persisted origin_create identity (origin_dataset_id, origin_source_device_id,
+      origin_operation_id) must match that exact birth-version received expense.create receipt.
+    - Legacy rows where all three origin columns are NULL are deliverable ONLY when the
+      patch-time birth version uniquely proves a single received expense.create receipt;
+      local creations, missing history, or ambiguous rows return None and stay pending.
+    - Partially populated origin columns are treated as unverifiable and return None.
+    """
+    if outbound_row["kind"] != "expense.patch":
+        return None
+
+    dataset_id = str(outbound_row["dataset_id"])
+    session_id = str(outbound_row["session_id"])
+    branch_id = str(outbound_row["branch_id"])
+    entity_id = str(outbound_row["entity_id"])
+    expected_revision_id = str(outbound_row["expected_revision_id"])
+    source_revision_id = str(outbound_row["source_revision_id"])
+
+    o_ds = outbound_row["origin_dataset_id"]
+    o_dev = outbound_row["origin_source_device_id"]
+    o_op = outbound_row["origin_operation_id"]
+    origin_parts = (o_ds, o_dev, o_op)
+    has_any_origin = any(part is not None for part in origin_parts)
+    if has_any_origin:
+        if not all(isinstance(part, str) and part != "" for part in origin_parts):
+            return None
+        if o_ds != dataset_id:
+            return None
+
+    ver_cur = await conn.execute(
+        "SELECT id, seq FROM versions WHERE branch_id = ? AND id IN (?, ?)",
+        (branch_id, expected_revision_id, source_revision_id),
+    )
+    ver_map = {str(r["id"]): int(r["seq"]) for r in await ver_cur.fetchall()}
+    if expected_revision_id not in ver_map or source_revision_id not in ver_map:
+        return None
+    if ver_map[source_revision_id] < ver_map[expected_revision_id]:
+        return None
+
+    resolved = await _resolve_received_origin_at_version(
+        conn,
+        session_id=session_id,
+        branch_id=branch_id,
+        entity_id=entity_id,
+        at_version_id=expected_revision_id,
+        dataset_id=dataset_id,
+    )
+    if resolved is None:
+        return None
+
+    birth_at_source = await _find_expense_birth_version_id(
+        conn,
+        branch_id=branch_id,
+        entity_id=entity_id,
+        at_version_id=source_revision_id,
+    )
+    if birth_at_source != resolved["result_version_id"]:
+        return None
+
+    if has_any_origin and (
+        o_ds != resolved["dataset_id"]
+        or o_dev != resolved["source_device_id"]
+        or o_op != resolved["operation_id"]
+    ):
+        return None
+
+    return {
+        "dataset_id": resolved["dataset_id"],
+        "travel_id": resolved["travel_id"],
+        "branch_id": resolved["branch_id"],
+        "source_device_id": resolved["source_device_id"],
+        "origin_operation_id": resolved["operation_id"],
+    }
+
+
+async def outbound_patch_matches_grant(
+    conn: Any,
+    outbound_row: Any,
+    grant: dict[str, Any],
+) -> bool:
+    """Shared ownership check for both reverse-patch pull and receipt confirm."""
+    owner = await resolve_outbound_patch_owner(conn, outbound_row)
+    if owner is None:
+        return False
+    return (
+        owner["dataset_id"] == str(grant["dataset_id"])
+        and owner["travel_id"] == str(grant["travel_id"])
+        and owner["branch_id"] == str(grant["branch_id"])
+        and owner["source_device_id"] == str(grant["source_device_id"])
+    )
 
 
 def _build_lookup_query_bytes(
@@ -444,6 +718,9 @@ async def save_expense_patch_with_outbox(
     *,
     dataset_id: str,
     source_device_id: str = DESKTOP_SOURCE_DEVICE_ID,
+    origin_dataset_id: str | None = None,
+    origin_source_device_id: str | None = None,
+    origin_operation_id: str | None = None,
     on_before_commit: Callable[[], Any] | Callable[[], Awaitable[Any]] | None = None,
 ) -> VersionDetail:
     """Atomically save a desktop amount-only expense correction and its outbound patch command."""
@@ -512,7 +789,39 @@ async def save_expense_patch_with_outbox(
                 await tx_conn.execute("ROLLBACK")
                 raise ConflictError("当前查看的是历史版本，请先分叉为新方案再编辑")
 
-            next_seq = int(head_row["seq"]) + 1
+            head_seq = int(head_row["seq"])
+            resolved_origin = await _resolve_received_origin_at_version(
+                tx_conn,
+                session_id=branch.session_id,
+                branch_id=branch_id,
+                entity_id=expense_id,
+                at_version_id=expected_revision_id,
+                dataset_id=dataset_id,
+            )
+            if resolved_origin is None:
+                await tx_conn.execute("ROLLBACK")
+                raise InvalidRequest("找不到当前消费实例对应的手机新增回执，无法入队反向更正")
+            if (
+                (
+                    origin_dataset_id is not None
+                    and origin_dataset_id != resolved_origin["dataset_id"]
+                )
+                or (
+                    origin_source_device_id is not None
+                    and origin_source_device_id != resolved_origin["source_device_id"]
+                )
+                or (
+                    origin_operation_id is not None
+                    and origin_operation_id != resolved_origin["operation_id"]
+                )
+            ):
+                await tx_conn.execute("ROLLBACK")
+                raise InvalidRequest("原始新增操作身份不匹配，无法入队反向更正")
+            bound_origin_ds = resolved_origin["dataset_id"]
+            bound_origin_dev = resolved_origin["source_device_id"]
+            bound_origin_op = resolved_origin["operation_id"]
+
+            next_seq = head_seq + 1
             await tx_conn.execute(
                 "INSERT INTO versions(id, branch_id, seq, summary, detail_level, trigger, "
                 "checkpoint_id, created_at) VALUES (?, ?, ?, ?, ?, 'itinerary_edit', NULL, ?)",
@@ -546,9 +855,11 @@ async def save_expense_patch_with_outbox(
                 "INSERT INTO exchange_outbound_operations("
                 "dataset_id, source_device_id, operation_id, kind, canonical_profile, "
                 "intent_sha256, canonical_intent_json, raw_command_json, expected_revision_id, "
-                "source_revision_id, session_id, branch_id, entity_id, delivery_state, "
-                "created_at, updated_at"
-                ") VALUES (?, ?, ?, 'expense.patch', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unsent', ?, ?)",
+                "source_revision_id, session_id, branch_id, entity_id, "
+                "origin_dataset_id, origin_source_device_id, origin_operation_id, "
+                "delivery_state, created_at, updated_at"
+                ") VALUES (?, ?, ?, 'expense.patch', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "'unsent', ?, ?)",
                 (
                     dataset_id,
                     source_device_id,
@@ -562,6 +873,9 @@ async def save_expense_patch_with_outbox(
                     branch.session_id,
                     branch_id,
                     expense_id,
+                    bound_origin_ds,
+                    bound_origin_dev,
+                    bound_origin_op,
                     now_utc,
                     now_utc,
                 ),
