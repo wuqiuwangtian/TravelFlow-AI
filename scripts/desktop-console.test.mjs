@@ -108,3 +108,67 @@ test('a control request timeout does not replay the operation and the deadline c
   assert.equal(signal.aborted, true);
   assert.equal(ui.timers.size, 0);
 });
+
+test('sync controls display pairing info when connected and lock down on disconnect', async () => {
+  let failing = false;
+  const fixture = {
+    mode: 'windows-native',
+    preferences: {},
+    runtime: null,
+    sync: {
+      running: true,
+      windows_native: true,
+      backend_python_ready: true,
+      bind_candidates: ['10.226.92.198', '127.0.0.1'],
+      config: { bind_host: '10.226.92.198', port: 0, san_ips: [] },
+      lan_host: '10.226.92.198',
+      lan_port: 18443,
+      cert_sha256: 'a'.repeat(64),
+      exchange_enabled: true,
+      pairing: {
+        lan_host: '10.226.92.198',
+        lan_port: 18443,
+        cert_sha256: 'a'.repeat(64),
+        pairing_session_id: 'sess-1',
+        pairing_code: '654321',
+        expires_at: '2026-11-27T17:00:00+00:00',
+      },
+      pairing_json: '{"pairing_code":"654321"}',
+      pending_requests: [],
+      devices: [],
+      exchange_grants: [],
+      trip: {
+        title: '北京三日游',
+        dataset_id: 'p3-d1-handoff-dataset',
+        travel_id: '92ba6a148a17',
+        branch_id: 'f4f921d01f4e',
+        head_revision_id: '9639db1eb3b8',
+        expense_count: 1,
+        paid_cents: 8635,
+        pending_outbound_count: 0,
+        confirmed_outbound_count: 0,
+      },
+    },
+  };
+  const ui = page(() => (failing ? Promise.reject(new Error('offline')) : Promise.resolve(response(fixture))));
+  await tick();
+  await ui.run('refresh()');
+  assert.equal(ui.node('sync-pairing-box').hidden, false);
+  assert.equal(ui.node('sync-pair-code').textContent, '654321');
+  assert.equal(ui.node('sync-port').value, '0');
+  assert.equal(ui.node('sync-start').disabled, true);
+  assert.equal(ui.node('sync-stop').disabled, false);
+  assert.equal(ui.node('sync-open-pairing').disabled, false);
+
+  // When server persists an auto-allocated port into sync.config.port, UI updates sync-port.
+  fixture.sync.config = { bind_host: '10.226.92.198', port: 18443, san_ips: [] };
+  await ui.run('refresh()');
+  assert.equal(ui.node('sync-port').value, '18443');
+
+  failing = true;
+  await ui.run('refresh()');
+  assert.equal(ui.node('sync-pairing-box').hidden, true);
+  assert.equal(ui.node('sync-stop').disabled, true);
+  assert.equal(ui.node('sync-open-pairing').disabled, true);
+  assert.match(ui.node('sync-state').textContent, /未确认/);
+});

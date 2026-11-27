@@ -17,6 +17,7 @@ from pathlib import Path
 from desktop.application import application_selection, doctor, prepare_application
 from desktop.backup import absolute_path, create_backup, restore_backup
 from desktop.host_ports import ensure_host_ports
+from desktop.lan_sync import LanSyncManager
 from desktop.processes import OwnerExit, supervisor_python
 from desktop.runtime import (
     ROOT,
@@ -39,7 +40,7 @@ from desktop.runtime import (
     recover as recover_runtime,
 )
 
-CONSOLE_VERSION = 7
+CONSOLE_VERSION = 8
 ASSETS = Path(__file__).with_name("ui")
 _LAUNCHED = []
 
@@ -94,6 +95,7 @@ class Console:
         self.active = None
         self.state_error = None
         self.recovery = None
+        self.sync = LanSyncManager(folder)
         path = folder / "preferences.json"
         if path.exists() or path.is_symlink():
             try:
@@ -241,6 +243,7 @@ class Console:
         data["runtime_unverified"] = bool(
             self.state_error or (active and not data["runtime"] and unconfirmed(active))
         )
+        data["sync"] = self.sync.snapshot()
         return data
 
     def inspect(self, payload):
@@ -377,6 +380,13 @@ class Console:
             "recover",
             "backup",
             "restore",
+            "sync-start",
+            "sync-stop",
+            "sync-open-pairing",
+            "sync-approve",
+            "sync-reject",
+            "sync-authorize",
+            "sync-revoke",
         ):
             raise ValueError("未知操作。")
         with self.lock:
@@ -424,9 +434,34 @@ class Console:
                             "kind": payload["kind"],
                             "path": path,
                         }
+                elif action == "sync-start":
+                    self.sync.start(
+                        bind_host=payload.get("bind_host"),
+                        port=payload.get("port"),
+                        san_ips=payload.get("san_ips"),
+                    )
+                elif action == "sync-stop":
+                    self.sync.stop()
+                elif action == "sync-open-pairing":
+                    self.sync.open_pairing(ttl_seconds=payload.get("ttl_seconds", 120))
+                elif action == "sync-approve":
+                    self.sync.approve(
+                        request_id=payload.get("request_id"),
+                        sas_code=payload.get("sas_code"),
+                    )
+                elif action == "sync-reject":
+                    self.sync.reject(request_id=payload.get("request_id"))
+                elif action == "sync-authorize":
+                    self.sync.authorize_trip(
+                        device_id=payload.get("device_id"),
+                        source_device_id=payload.get("source_device_id"),
+                    )
+                elif action == "sync-revoke":
+                    self.sync.revoke(device_id=payload.get("device_id"))
                 else:
                     self.stop_application()
                     if action == "exit":
+                        self.sync.stop()
                         self.exit_ready = True
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 with self.lock:

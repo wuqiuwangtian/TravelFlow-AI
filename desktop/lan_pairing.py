@@ -558,6 +558,7 @@ class PairingCoordinator:
         self._lock = threading.Lock()
         self._sessions: dict[str, dict[str, Any]] = {}
         self._requests: dict[str, dict[str, Any]] = {}
+        self._observed_source_devices: dict[str, dict[str, Any]] = {}
 
     def open_pairing_session(
         self, ttl_seconds: int = DEFAULT_PAIRING_TTL_SECONDS
@@ -671,6 +672,7 @@ class PairingCoordinator:
         with self._lock:
             # Serialize persistent revocation and pending-request invalidation with claim.
             revoked_active = self.store.revoke_device(device_id)
+            self._observed_source_devices.pop(device_id, None)
             for req in self._requests.values():
                 if req["device_id"] == device_id and req["status"] in (
                     "awaiting_desktop_confirm",
@@ -746,6 +748,34 @@ class PairingCoordinator:
                 }
                 for r in self._requests.values()
             ]
+
+    def record_observed_source_device(
+        self, paired_device_id: str, raw_bytes: bytes, route: str
+    ) -> None:
+        """Record an in-memory verifiable source_device_id hint from an authenticated request."""
+        try:
+            parsed = json.loads(raw_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return
+        if not isinstance(parsed, dict):
+            return
+        op = parsed.get("operation")
+        if not isinstance(op, dict):
+            return
+        src = op.get("source_device_id")
+        if not isinstance(src, str) or not 1 <= len(src.strip()) <= 256:
+            return
+        with self._lock:
+            self._observed_source_devices[paired_device_id] = {
+                "paired_device_id": paired_device_id,
+                "source_device_id": src.strip(),
+                "route": route,
+                "observed_at": datetime.now(UTC).isoformat(),
+            }
+
+    def list_observed_source_devices(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return {k: dict(v) for k, v in self._observed_source_devices.items()}
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any] | None:
@@ -865,13 +895,23 @@ def _make_lan_handler(
                     device_id, self.headers["Authorization"][len("Bearer ") :]
                 )
                 if grant is None:
+                    if self.path in ("/exchange/expense-create", "/exchange/receipt-lookup"):
+                        coordinator.record_observed_source_device(device_id, raw_bytes, self.path)
                     _send_json(self, 403, {"ok": False, "error": "exchange_not_authorized"})
                     return
                 try:
                     if self.path == "/exchange/expense-create":
                         result = exchange_bridge.receive_expense_create(raw_bytes, grant)
+                        if not result.get("ok") and result.get("error") == "unauthorized":
+                            coordinator.record_observed_source_device(
+                                device_id, raw_bytes, self.path
+                            )
                     elif self.path == "/exchange/receipt-lookup":
                         result = exchange_bridge.lookup_receipt(raw_bytes, grant)
+                        if not result.get("ok") and result.get("error") == "unauthorized":
+                            coordinator.record_observed_source_device(
+                                device_id, raw_bytes, self.path
+                            )
                     elif self.path == "/exchange/expense-patch/pull":
                         if not bool(grant["can_write"]):
                             _send_json(self, 403, {"ok": False, "error": "unauthorized"})
@@ -952,6 +992,7 @@ def _make_control_handler(
                         "pending_requests": coordinator.list_pending_requests(),
                         "devices": coordinator.store.list_devices(),
                         "exchange_grants": coordinator.store.list_exchange_grants(),
+                        "observed_source_devices": coordinator.list_observed_source_devices(),
                     },
                 )
                 return
@@ -1057,6 +1098,10 @@ def _make_control_handler(
 
 class _QuietThreadingHTTPServer(ThreadingHTTPServer):
     """Suppress expected client-abort SSL/pipe tracebacks (e.g. rejected certificate pin)."""
+
+    # On Windows, SO_REUSEADDR allows silently sharing an actively listening TCP port;
+    # disabling it guarantees port-in-use conflicts fail explicitly.
+    allow_reuse_address = os.name != "nt"
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         _, exc, _ = sys.exc_info()

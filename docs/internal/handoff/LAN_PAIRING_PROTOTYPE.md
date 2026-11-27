@@ -407,3 +407,46 @@ bash -c 'cd backend && .venv/bin/pytest -v tests/test_windows_native_exchange.py
 Set-Location "<WIN_REPO>\backend"
 & "$env:TEMP\travelflow-win-py313-venv\Scripts\python.exe" -m pytest -v tests\test_windows_native_exchange.py
 ```
+
+## 6. 桌面可视管理界面接入（2026-11-27）
+
+现有本机可视管理入口（[console.py](../../../desktop/console.py)、[lan_sync.py](../../../desktop/lan_sync.py)、[index.html](../../../desktop/ui/index.html)、[console.js](../../../desktop/ui/console.js)）已接入隔离测试旅行的同步服务管理，管理 API 升级至 `CONSOLE_VERSION = 8`（升级前需先通过原管理页或 `python -m desktop console-stop` 停止旧版管理器）。
+
+### 6.1 隔离与安全边界
+
+- **独立隔离目录**：全部同步状态位于 `<管理状态目录>/lan-sync/`，首次启动时复用 `backend/scripts/exchange_trip_handoff.py init-trip` 初始化独立虚构测试旅行副本（`北京三日游`，`trip/travel.sqlite` 与 `context.json`），配对状态保存在 `pairing-state/`（`server.crt`、`server.key`、`pairing.sqlite`），不打开个人数据库或 `.env`。
+- **复用既有控制面**：管理器仅通过 `127.0.0.1` 回环调用 `desktop.lan_pairing` 原有 `/control/*` 接口（`status`、`pairing/open`、`pairing/approve`、`pairing/reject`、`devices/bind-exchange`、`devices/revoke`、`stop`）；`pairing-state/control.json` 中的 `control_token` 与 `control_port` 严禁进入 `/api/state` 或页面配对 JSON。
+- **后端解释器定位**：优先读取 `TRAVELFLOW_SYNC_PYTHON`，其次依次查找 `backend/.venv-desktop-<mode>` 与 `backend/.venv` 中的后端 Python 3.13+ 解释器。
+
+### 6.2 界面操作流程（无需手工拼 JSON 或执行配对 CLI）
+
+1. 在管理页「手机同步服务（隔离测试旅行）」区确认监听地址（默认自动检测本机 IPv4，可选填附加证书 SAN IP 如模拟器 `10.0.2.2`）与端口（首次填 `0` 由系统分配空闲端口并自动持久化保存，后续服务重启与管理器重开默认沿用该实际端口；若原端口被其他进程占用，页面将明确提示端口冲突，可释放端口或改填新端口）。点击 **「启动同步服务」**。
+2. 服务启动后页面直接展示 **「手机可直接使用的配对资料」**（含地址、端口、6 位配对码、会话 ID、证书指纹 `cert_sha256`、有效期与一键复制的完整配对 JSON；过期后可点击 **「生成新配对资料」**）。
+3. 手机发起配对后，页面「待核对的配对请求」区自动展示设备名称、配对设备 ID 与 6 位核对短码，核对一致后点击 **「核对短码并批准」**（或 **「拒绝」**）。
+4. 手机领取凭据后，设备出现在「已配对设备与旅行授权」区并标为 **「活跃 · 未授权旅行」**；此时提交消费、查询回执或领取更正均被拒绝（`403 exchange_not_authorized`）。
+5. **区分配对 ID 与业务来源 ID**：卡片分别展示 `配对设备 ID（device_id）` 与 `业务来源设备 ID（operation.source_device_id）`，未授权时业务来源 ID 输入框保持留空（不默认沿用配对 ID）且「授权隔离旅行」按钮禁用；下方提供可核对的业务来源 ID 候选（该已配对设备最近一次被拒试连上报的 `operation.source_device_id`、本旅行已有账本回执来源、`context.json` 默认测试来源，点击「核对并填入」仅填入输入框）。确认无误后点击 **「授权隔离旅行」** 单独授权，状态变为 **「活跃 · 已授权隔离旅行」**，手机即可读写隔离旅行账本并在管理页实时看到消费笔数与实付总额更新。
+6. 点击 **「撤销设备」** 立即撤权并移除旅行授权（设备立即收到 `403 device_revoked`）；点击 **「停止同步服务」** 或退出重开管理器后，证书指纹、已保存监听端口、已撤销／活跃状态、授权记录与隔离账本均持久保留。
+
+### 6.3 实测记录与复跑命令
+
+- **实际 Windows 原生浏览器界面 + 参考 HTTPS 客户端实测**：在 Windows 原生 Python 3.13.16 启动真实 `desktop.console`（`mode = windows-native`），使用真实 Microsoft Edge（Playwright）操作页面完成：
+  - 首次以端口 `0` 启动同步服务，页面 `#sync-port` 自动更新并持久保存实际端口，从页面读取配对 JSON（不含 `control_token`）；
+  - 使用配对 ID（`edge-paired-alpha`）与业务来源 ID（`edge-biz-omega-7`）不同的设备完成配对，核实界面中业务来源 ID 输入框默认留空且授权按钮禁用；
+  - 授权前参考客户端发起 `expense-create`/`receipt-lookup`/`expense-patch/pull` 均返回 `403 exchange_not_authorized`，界面自动展示该设备最近试连上报的 `edge-biz-omega-7`，点击「核对并填入」并点击「授权隔离旅行」后，提交 `1723` 分消费成功且页面账本更新为 `103.58 元（10358 分）`；
+  - 停止服务后人为占用原端口，界面点击启动明确提示端口已被占用；释放占用后重启服务及关闭重开整个管理器均复用同一实际端口与证书指纹，已配对参考客户端仅凭首次保存的地址、端口、证书与凭据查回原回执；
+  - 界面撤销设备后立即返回 `403 device_revoked`，再次关闭重开管理器后仍保持已撤销状态与原账本（零页面异常）。
+- **自动化回归复跑**：
+
+```sh
+# JS 管理页状态与断连回归（5 passed）
+node --test scripts/desktop-console.test.mjs
+
+# 桌面管理控制台全链路回归（Linux / WSL）
+TRAVELFLOW_SYNC_PYTHON=backend/.venv/bin/python python3 -m unittest desktop.tests.test_console -v
+```
+
+```powershell
+# Windows 原生 Python 3.13 控制台全链路回归
+$env:TRAVELFLOW_SYNC_PYTHON = "$env:TEMP\travelflow-win-py313-venv\Scripts\python.exe"
+& $env:TRAVELFLOW_SYNC_PYTHON -m unittest desktop.tests.test_console -v
+```
