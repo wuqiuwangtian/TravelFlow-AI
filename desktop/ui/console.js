@@ -17,7 +17,7 @@ let lastConfirmation = null;
 let lastRecovery = null;
 let pendingPick = null;
 let lastBackup = null;
-let syncLoaded = false;
+let lastSyncConfigSig = null;
 let syncDirty = false;
 let lastPendingSig = null;
 let lastDevicesSig = null;
@@ -53,11 +53,14 @@ function el(tag, className, text) {
 function renderSync(busy) {
   const sync = state?.sync;
   if (!sync) return;
-  if (!syncLoaded && !syncDirty && sync.config) {
-    byId("sync-bind-host").value = sync.config.bind_host || "127.0.0.1";
-    byId("sync-port").value = String(sync.config.port ?? 0);
-    byId("sync-san-ips").value = (sync.config.san_ips || []).join(", ");
-    syncLoaded = true;
+  if (!syncDirty && sync.config) {
+    const cfgSig = JSON.stringify(sync.config);
+    if (cfgSig !== lastSyncConfigSig) {
+      byId("sync-bind-host").value = sync.config.bind_host || "127.0.0.1";
+      byId("sync-port").value = String(sync.config.port ?? 0);
+      byId("sync-san-ips").value = (sync.config.san_ips || []).join(", ");
+      lastSyncConfigSig = cfgSig;
+    }
   }
   const canDom = typeof document.createElement === "function";
   if (canDom && Array.isArray(sync.bind_candidates)) {
@@ -73,20 +76,27 @@ function renderSync(busy) {
     }
   }
   byId("sync-env-hint").textContent = sync.windows_native
-    ? "当前为 Windows 原生环境，仅开放隔离虚构测试旅行（北京三日游），不读取个人数据库或 .env；批准配对后仍需单独授权旅行才可读写。"
+    ? "当前为 Windows 原生环境，仅开放隔离虚构测试旅行（北京三日游），不读取个人数据库或 .env；配对设备 ID 与业务来源 ID 相互独立，批准配对后仍需核对业务来源 ID 并单独授权旅行。"
     : "当前处于非 Windows 原生环境，仍可启动隔离虚构测试旅行同步服务；物理手机局域网直连请使用 Windows 原生环境。";
   byId("sync-fields").disabled = busy || Boolean(sync.running);
   byId("sync-start").disabled = busy || Boolean(sync.running) || !sync.backend_python_ready;
   byId("sync-stop").disabled = busy || !sync.running;
   byId("sync-open-pairing").disabled = busy || !sync.running;
+  const savedPort = Number(sync.config?.port || 0);
   byId("sync-state").textContent = !connected
     ? "管理连接未确认，同步服务状态暂不可操作；请等待重新核对。"
     : !sync.backend_python_ready
       ? "未找到后端 Python 3.13+ 虚拟环境，请先准备环境与构建或配置 TRAVELFLOW_SYNC_PYTHON。"
       : sync.running
         ? `同步服务运行中（https://${sync.lan_host}:${sync.lan_port}）`
-        : "同步服务已停止（重启将沿用同一证书与配对记录）";
-  byId("sync-endpoint").textContent = sync.running ? `https://${sync.lan_host}:${sync.lan_port}` : "未监听";
+        : savedPort > 0
+          ? `同步服务已停止（重启将沿用已保存端口 ${savedPort} 与同一证书）`
+          : "同步服务已停止（首次启动将自动分配并保存端口）";
+  byId("sync-endpoint").textContent = sync.running
+    ? `https://${sync.lan_host}:${sync.lan_port}`
+    : savedPort > 0
+      ? `未监听（上次固定：https://${sync.config.bind_host}:${savedPort}）`
+      : "未监听";
   byId("sync-cert").textContent = sync.cert_sha256 || "尚未生成（首次启动时创建）";
   const trip = sync.trip;
   byId("sync-trip").textContent = trip
@@ -120,7 +130,7 @@ function renderSync(busy) {
         const card = el("div", "sync-card");
         card.dataset.requestId = req.request_id;
         const head = el("div", "sync-card-head");
-        head.appendChild(el("span", "sync-card-title", `${req.device_name} (${req.device_id})`));
+        head.appendChild(el("span", "sync-card-title", `${req.device_name}（配对设备 ID：${req.device_id}）`));
         const waiting = req.status === "awaiting_desktop_confirm";
         head.appendChild(
           el("span", waiting ? "sync-badge" : "sync-badge sync-badge-ok", waiting ? "等待核对短码并批准" : "已批准，等待手机领取")
@@ -152,19 +162,29 @@ function renderSync(busy) {
 
   const devices = sync.devices || [];
   const grantsByDev = new Map((sync.exchange_grants || []).map((g) => [g.paired_device_id, g]));
+  const observedMap = sync.observed_source_devices || {};
   byId("sync-devices-empty").hidden = devices.length > 0;
   if (canDom) {
-    const devicesSig = JSON.stringify({ busy, running: sync.running, devices, grants: sync.exchange_grants || [] });
+    const devicesSig = JSON.stringify({
+      busy,
+      running: sync.running,
+      devices,
+      grants: sync.exchange_grants || [],
+      observed: observedMap,
+      defaultSources: trip?.default_source_devices || [],
+      receiptSources: trip?.receipt_source_devices || [],
+    });
     if (devicesSig !== lastDevicesSig) {
       lastDevicesSig = devicesSig;
       const box = byId("sync-devices-list");
       box.textContent = "";
       for (const dev of devices) {
         const grant = grantsByDev.get(dev.device_id) || null;
+        const observed = observedMap[dev.device_id] || null;
         const card = el("div", "sync-card");
         card.dataset.deviceId = dev.device_id;
         const head = el("div", "sync-card-head");
-        head.appendChild(el("span", "sync-card-title", `${dev.device_name} (${dev.device_id})`));
+        head.appendChild(el("span", "sync-card-title", dev.device_name));
         const badgeText = dev.status === "revoked"
           ? "已撤销"
           : grant
@@ -177,38 +197,117 @@ function renderSync(busy) {
             : "sync-badge";
         head.appendChild(el("span", badgeClass, badgeText));
         card.appendChild(head);
+        card.appendChild(
+          el("p", "hint mono", `配对设备 ID（device_id，仅用于连接与撤销）：${dev.device_id}`)
+        );
         if (grant) {
           card.appendChild(
             el(
               "p",
               "hint mono",
-              `授权范围：业务设备 ${grant.source_device_id} · 旅行 ${grant.travel_id} · 分支 ${grant.branch_id} · 数据集 ${grant.dataset_id}`
+              `已授权业务来源 ID（source_device_id）：${grant.source_device_id} · 旅行 ${grant.travel_id} · 分支 ${grant.branch_id} · 数据集 ${grant.dataset_id}`
             )
           );
         } else if (dev.status === "active") {
-          card.appendChild(el("p", "hint", "已配对但尚未授权旅行：此时提交消费或查询回执会被拒绝（403）。"));
+          card.appendChild(el("p", "hint", "已配对但尚未授权旅行：此时提交消费或查询回执会被拒绝（403）。请先核对手机业务来源 ID 再单独授权。"));
         }
         if (dev.status === "active") {
           const grantRow = el("div", "sync-grant-row");
-          const lbl = el("label", "", "业务设备标识（source_device_id）");
+          const lbl = el("label", "", "业务来源设备 ID（operation.source_device_id，与配对 ID 独立）");
           const input = document.createElement("input");
           input.autocomplete = "off";
+          input.placeholder = "请核对手机端业务来源 ID 后填写（不默认沿用配对 ID）";
           input.disabled = busy || !sync.running;
           input.dataset.sourceInput = dev.device_id;
+          // NEVER silently default to dev.device_id when unauthorized!
           input.value = syncSourceDrafts.has(dev.device_id)
             ? syncSourceDrafts.get(dev.device_id)
-            : (grant?.source_device_id || dev.device_id);
-          input.addEventListener("input", () => { syncSourceDrafts.set(dev.device_id, input.value); });
+            : (grant?.source_device_id || "");
           lbl.appendChild(input);
           grantRow.appendChild(lbl);
 
           const authBtn = el("button", "", grant ? "更新旅行授权" : "授权隔离旅行");
           authBtn.type = "button";
-          authBtn.disabled = busy || !sync.running;
           authBtn.dataset.action = "sync-authorize";
-          authBtn.addEventListener("click", () => syncAction("sync-authorize", { device_id: dev.device_id, source_device_id: input.value.trim() }));
+          const sameIdWarn = el(
+            "p",
+            "sync-warn",
+            "提示：当前填写与配对设备 ID 相同；请确认手机消费命令中的 operation.source_device_id 确实相同，否则授权后仍会返回 403。"
+          );
+          const syncAuthControls = () => {
+            const val = input.value.trim();
+            authBtn.disabled = busy || !sync.running || !val;
+            sameIdWarn.hidden = !val || val !== dev.device_id;
+          };
+          syncAuthControls();
+          input.addEventListener("input", () => {
+            syncSourceDrafts.set(dev.device_id, input.value);
+            syncAuthControls();
+          });
+          authBtn.addEventListener("click", () => {
+            const val = input.value.trim();
+            if (!val) return;
+            syncAction("sync-authorize", { device_id: dev.device_id, source_device_id: val });
+          });
           grantRow.appendChild(authBtn);
           card.appendChild(grantRow);
+          card.appendChild(sameIdWarn);
+
+          // Verifiable business source ID hints (never auto-bound; user verifies & clicks to fill).
+          const sourcesBox = el("div", "sync-sources");
+          sourcesBox.appendChild(
+            el(
+              "p",
+              "hint",
+              "可核对的业务来源 ID（点击「核对并填入」仅填入输入框，确认无误后再点授权）："
+            )
+          );
+          const candidates = [];
+          const seenSrc = new Set();
+          const addCandidate = (srcId, label) => {
+            if (!srcId || seenSrc.has(srcId)) return;
+            seenSrc.add(srcId);
+            candidates.push({ srcId, label });
+          };
+          if (observed?.source_device_id) {
+            addCandidate(
+              observed.source_device_id,
+              `该设备最近试连上报（${observed.route}，授权前已拒绝）`
+            );
+          }
+          for (const srcId of trip?.receipt_source_devices || []) {
+            addCandidate(srcId, "本隔离旅行已有账本回执来源");
+          }
+          for (const srcId of trip?.default_source_devices || []) {
+            addCandidate(srcId, "隔离旅行配置默认来源（context.json）");
+          }
+          for (const item of candidates) {
+            const row = el("div", "sync-source-item");
+            const desc = el("span", "");
+            desc.appendChild(el("span", "hint", `${item.label}：`));
+            desc.appendChild(el("span", "mono", item.srcId));
+            row.appendChild(desc);
+            const fillBtn = el("button", "secondary sync-source-btn", "核对并填入");
+            fillBtn.type = "button";
+            fillBtn.disabled = busy || !sync.running;
+            fillBtn.dataset.fillSource = item.srcId;
+            fillBtn.addEventListener("click", () => {
+              input.value = item.srcId;
+              syncSourceDrafts.set(dev.device_id, item.srcId);
+              syncAuthControls();
+              authBtn.focus();
+            });
+            row.appendChild(fillBtn);
+            sourcesBox.appendChild(row);
+          }
+          sourcesBox.appendChild(
+            el(
+              "p",
+              "hint",
+              "也可直接核对手机端同步页显示的业务来源 ID 后手动输入；或先让手机试连一次，授权前被拒后会在此展示其上报的业务 ID。"
+            )
+          );
+          card.appendChild(sourcesBox);
 
           const actions = el("div", "actions");
           const revokeBtn = el("button", "danger", "撤销设备");

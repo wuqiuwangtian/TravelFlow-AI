@@ -1,7 +1,9 @@
 """Management permissions, confirmation and actual HTTP identity monitoring."""
 
 import json
+import os
 import secrets
+import socket
 import tempfile
 import threading
 import time
@@ -209,17 +211,21 @@ class ConsoleTests(unittest.TestCase):
         self.assertNotIn(ctrl_json["control_token"], json.dumps(snap))
 
         host = pairing["lan_host"]
-        port = pairing["lan_port"]
+        port1 = pairing["lan_port"]
         pin = pairing["cert_sha256"]
         trip = pairing["trip"]
-        paired_id = "ref-android-console-1"
-        biz_id = "ref-android-biz-1"
+        # First auto-selected port must be persisted immediately for reuse on restart.
+        self.assertGreater(port1, 0)
+        self.assertEqual(sync["config"]["port"], port1)
+        paired_id = "ref-android-paired-alpha"
+        biz_id = "ref-android-biz-omega-9"
+        self.assertNotEqual(paired_id, biz_id)
         nonce = secrets.token_hex(16)
 
         # 1. Reference client initiates pairing using ONLY the bundle from console state.
         st_req, req = pinned_https_request(
             host,
-            port,
+            port1,
             "POST",
             "/pair/request",
             expected_cert_sha256=pin,
@@ -270,7 +276,7 @@ class ConsoleTests(unittest.TestCase):
 
         st_done, done = pinned_https_request(
             host,
-            port,
+            port1,
             "POST",
             "/pair/complete",
             expected_cert_sha256=pin,
@@ -287,7 +293,8 @@ class ConsoleTests(unittest.TestCase):
             "X-Device-Id": paired_id,
         }
 
-        # 2. BEFORE separate trip authorization -> 403 exchange_not_authorized, zero writes.
+        # 2. BEFORE separate trip authorization -> 403 exchange_not_authorized, zero writes,
+        #    AND console surfaces the observed business source_device_id for desktop verification.
         create_raw = json.dumps(
             {
                 "profile": "p1-host-control-1",
@@ -340,7 +347,7 @@ class ConsoleTests(unittest.TestCase):
         ):
             st_pre, res_pre = pinned_https_request(
                 host,
-                port,
+                port1,
                 "POST",
                 route,
                 expected_cert_sha256=pin,
@@ -350,7 +357,21 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(st_pre, 403)
             self.assertEqual(res_pre["error"], "exchange_not_authorized")
 
-        # 3. Separately authorize the isolated test trip via console control plane.
+        snap_obs = console_request(record, "/api/state")
+        observed = snap_obs["sync"]["observed_source_devices"].get(paired_id)
+        self.assertIsNotNone(observed)
+        self.assertEqual(observed["source_device_id"], biz_id)
+
+        # Empty source_device_id must be rejected rather than defaulting to paired_id.
+        console_request(
+            record,
+            "/api/sync-authorize",
+            {"device_id": paired_id, "source_device_id": ""},
+        )
+        snap_empty = self._wait_idle(record)
+        self.assertIn("业务设备标识", snap_empty["error"] or "")
+
+        # 3. Separately authorize the isolated test trip using the distinct business source ID.
         console_request(
             record,
             "/api/sync-authorize",
@@ -364,7 +385,7 @@ class ConsoleTests(unittest.TestCase):
         # AFTER authorization -> expense.create & receipt.lookup succeed!
         st_c, res_c = pinned_https_request(
             host,
-            port,
+            port1,
             "POST",
             "/exchange/expense-create",
             expected_cert_sha256=pin,
@@ -377,7 +398,7 @@ class ConsoleTests(unittest.TestCase):
 
         st_l, res_l = pinned_https_request(
             host,
-            port,
+            port1,
             "POST",
             "/exchange/receipt-lookup",
             expected_cert_sha256=pin,
@@ -391,25 +412,41 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(snap["sync"]["trip"]["expense_count"], 2)
         self.assertEqual(snap["sync"]["trip"]["paid_cents"], 8635 + 1723)
 
-        # 4. Restart sync service: cert identity, active grant & ledger survive.
+        # 4. Stop sync service -> restart WITHOUT passing port -> MUST reuse EXACT port1!
         console_request(record, "/api/sync-stop", {})
         snap = self._wait_idle(record)
         self.assertFalse(snap["sync"]["running"])
         self.assertEqual(snap["sync"]["cert_sha256"], pin)
+        self.assertEqual(snap["sync"]["config"]["port"], port1)
         self.assertEqual(len(snap["sync"]["exchange_grants"]), 1)
 
-        console_request(
-            record,
-            "/api/sync-start",
-            {"bind_host": "127.0.0.1", "port": 0, "san_ips": ""},
-        )
+        # If original port1 is occupied by another listener, sync-start must report it clearly.
+        blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            if os.name != "nt":
+                blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            blocker.bind((host, port1))
+            blocker.listen(1)
+            console_request(record, "/api/sync-start", {})
+            snap_busy = self._wait_idle(record)
+            self.assertFalse(snap_busy["sync"]["running"])
+            self.assertIn("已被占用", snap_busy["error"] or "")
+            self.assertIn(str(port1), snap_busy["error"] or "")
+            self.assertEqual(snap_busy["sync"]["config"]["port"], port1)
+        finally:
+            blocker.close()
+
+        # Once freed, sync-start rebinds exact port1; client reconnects with ONLY original
+        # (host, port1, pin, token) to retrieve the committed receipt!
+        console_request(record, "/api/sync-start", {})
         snap = self._wait_idle(record)
+        self.assertIsNone(snap["error"])
         self.assertTrue(snap["sync"]["running"])
         self.assertEqual(snap["sync"]["cert_sha256"], pin)
-        port2 = snap["sync"]["lan_port"]
+        self.assertEqual(snap["sync"]["lan_port"], port1)
         st_l2, res_l2 = pinned_https_request(
             host,
-            port2,
+            port1,
             "POST",
             "/exchange/receipt-lookup",
             expected_cert_sha256=pin,
@@ -419,16 +456,41 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(st_l2, 200)
         self.assertEqual(res_l2["receipt"]["result_revision_id"], v_created)
 
-        # 5. Revoke device via console -> immediately rejected with 403 device_revoked.
-        console_request(record, "/api/sync-revoke", {"device_id": paired_id})
-        snap = self._wait_idle(record)
+        # 5. Full console close & reopen BEFORE revocation -> MUST still reuse exact port1
+        #    so the paired client retrieves the original receipt using first-saved endpoint!
+        close_console(self.folder)
+        record_mid = open_console(self.folder, browser=False)
+        snap_mid = console_request(record_mid, "/api/state")
+        self.assertFalse(snap_mid["sync"]["running"])
+        self.assertEqual(snap_mid["sync"]["cert_sha256"], pin)
+        self.assertEqual(snap_mid["sync"]["config"]["port"], port1)
+
+        console_request(record_mid, "/api/sync-start", {})
+        snap_mid = self._wait_idle(record_mid)
+        self.assertIsNone(snap_mid["error"])
+        self.assertEqual(snap_mid["sync"]["lan_port"], port1)
+        st_l3, res_l3 = pinned_https_request(
+            host,
+            port1,
+            "POST",
+            "/exchange/receipt-lookup",
+            expected_cert_sha256=pin,
+            raw_body=lookup_raw,
+            headers=auth_headers,
+        )
+        self.assertEqual(st_l3, 200)
+        self.assertEqual(res_l3["receipt"]["result_revision_id"], v_created)
+
+        # 6. Revoke device via console -> immediately rejected with 403 device_revoked.
+        console_request(record_mid, "/api/sync-revoke", {"device_id": paired_id})
+        snap = self._wait_idle(record_mid)
         self.assertIsNone(snap["error"])
         self.assertEqual(snap["sync"]["exchange_grants"], [])
         self.assertEqual(snap["sync"]["devices"][0]["status"], "revoked")
 
         st_rev, res_rev = pinned_https_request(
             host,
-            port2,
+            port1,
             "POST",
             "/exchange/receipt-lookup",
             expected_cert_sha256=pin,
@@ -438,28 +500,26 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(st_rev, 403)
         self.assertEqual(res_rev["error"], "device_revoked")
 
-        # 6. Full console exit & reopen: persisted cert, revoked status & ledger intact.
+        # 7. Full console exit & reopen after revocation: persisted cert, port, revoked status
+        #    and ledger remain intact, and revoked device stays blocked on exact port1.
         close_console(self.folder)
         record2 = open_console(self.folder, browser=False)
         snap2 = console_request(record2, "/api/state")
         self.assertFalse(snap2["sync"]["running"])
         self.assertEqual(snap2["sync"]["cert_sha256"], pin)
+        self.assertEqual(snap2["sync"]["config"]["port"], port1)
         self.assertEqual(snap2["sync"]["devices"][0]["status"], "revoked")
         self.assertEqual(snap2["sync"]["exchange_grants"], [])
         self.assertEqual(snap2["sync"]["trip"]["paid_cents"], 8635 + 1723)
 
-        # Restart sync service after console reopen -> revoked device remains blocked.
-        console_request(
-            record2,
-            "/api/sync-start",
-            {"bind_host": "127.0.0.1", "port": 0, "san_ips": ""},
-        )
+        console_request(record2, "/api/sync-start", {})
         snap2 = self._wait_idle(record2)
         self.assertTrue(snap2["sync"]["running"])
         self.assertEqual(snap2["sync"]["cert_sha256"], pin)
+        self.assertEqual(snap2["sync"]["lan_port"], port1)
         st_rev2, res_rev2 = pinned_https_request(
             host,
-            snap2["sync"]["lan_port"],
+            port1,
             "POST",
             "/exchange/receipt-lookup",
             expected_cert_sha256=pin,

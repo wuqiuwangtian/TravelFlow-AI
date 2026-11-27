@@ -34,6 +34,10 @@ textarea { min-width: 0; width: 100%; background: var(--tf-surface); color: var(
 .sync-badge-ok { border-color: var(--tf-accent); color: var(--tf-accent); }
 .sync-badge-danger { border-color: var(--tf-danger-line); background: var(--tf-danger-soft); color: var(--tf-danger); }
 .sync-grant-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.sync-sources { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--tf-line); border-radius: var(--tf-radius); background: var(--tf-paper); }
+.sync-source-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.sync-source-btn { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.sync-warn { color: var(--tf-danger); font-size: 13px; margin: 0; }
 button.danger { background: var(--tf-danger-soft); color: var(--tf-danger); border-color: var(--tf-danger-line); }
 button.danger:hover:not(:disabled) { background: var(--tf-danger); color: #fff; }
 @media (max-width: 640px) { .sync-grant-row { grid-template-columns: 1fr; } }

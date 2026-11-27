@@ -155,9 +155,15 @@ test('sync controls display pairing info when connected and lock down on disconn
   await ui.run('refresh()');
   assert.equal(ui.node('sync-pairing-box').hidden, false);
   assert.equal(ui.node('sync-pair-code').textContent, '654321');
+  assert.equal(ui.node('sync-port').value, '0');
   assert.equal(ui.node('sync-start').disabled, true);
   assert.equal(ui.node('sync-stop').disabled, false);
   assert.equal(ui.node('sync-open-pairing').disabled, false);
+
+  // When server persists an auto-allocated port into sync.config.port, UI updates sync-port.
+  fixture.sync.config = { bind_host: '10.226.92.198', port: 18443, san_ips: [] };
+  await ui.run('refresh()');
+  assert.equal(ui.node('sync-port').value, '18443');
 
   failing = true;
   await ui.run('refresh()');

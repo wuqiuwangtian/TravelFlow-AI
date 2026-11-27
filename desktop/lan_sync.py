@@ -7,6 +7,7 @@ dependencies into the console process or touching personal databases / .env.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import http.client
 import ipaddress
@@ -188,6 +189,73 @@ def _read_persisted_pairing_db(db_path: Path) -> tuple[list[dict[str, Any]], lis
             return devices, grants
     except sqlite3.Error:
         return [], []
+
+
+def _check_bind_available(host: str, port: int) -> None:
+    """Verify (host, port) can be bound right now; raise clear Chinese guidance if occupied."""
+    if port <= 0:
+        return
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        if os.name != "nt":
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+    except OSError as exc:
+        winerr = getattr(exc, "winerror", None)
+        if exc.errno == errno.EADDRINUSE or winerr == 10048:
+            raise RuntimeError(
+                f"原同步端口 {host}:{port} 已被占用，无法启动同步服务；"
+                "请先释放该端口，或在界面改填其他空闲端口"
+                "（填 0 可重新自动分配，变更端口后已配对手机需更新端口）。"
+            ) from None
+        if exc.errno == errno.EACCES or winerr == 10013:
+            err_num = winerr or exc.errno
+            raise RuntimeError(
+                f"同步端口 {host}:{port} 受系统保留或权限限制无法绑定（Error {err_num}）；"
+                "请改填其他端口或填 0 重新自动分配。"
+            ) from None
+        if exc.errno == errno.EADDRNOTAVAIL or winerr == 10049:
+            raise RuntimeError(
+                f"监听地址 {host} 当前不可用（可能网络已切换）；请核对当前本机 IPv4 地址。"
+            ) from None
+        raise RuntimeError(f"无法绑定同步地址 {host}:{port}（{exc}）。") from None
+    finally:
+        sock.close()
+
+
+def _translate_start_failure(host: str, port: int, detail: str, log_path: Path) -> str:
+    lower = detail.lower()
+    if "address already in use" in lower or "10048" in lower or "eaddrinuse" in lower:
+        return (
+            f"原同步端口 {host}:{port} 已被占用，无法启动同步服务；"
+            "请先释放该端口，或在界面改填其他空闲端口（填 0 可重新自动分配）。"
+        )
+    if "10013" in lower or "permission denied" in lower:
+        return (
+            f"同步端口 {host}:{port} 受系统保留或权限限制无法绑定；"
+            "请改填其他端口或填 0 重新自动分配。"
+        )
+    if "10049" in lower or "cannot assign requested address" in lower:
+        return f"监听地址 {host} 当前不可用，请核对当前本机 IPv4 地址。"
+    return f"同步服务启动超时或异常退出，请查看日志：{log_path}"
+
+
+def _read_receipt_source_devices(trip_db: Path, branch_id: str) -> list[str]:
+    if not trip_db.is_file():
+        return []
+    try:
+        with closing(
+            sqlite3.connect(f"{trip_db.resolve().as_uri()}?mode=ro", uri=True, timeout=2.0)
+        ) as db:
+            rows = db.execute(
+                "SELECT DISTINCT source_device_id FROM exchange_operation_receipts "
+                "WHERE branch_id = ? AND kind = 'expense.create' "
+                "  AND origin_direction = 'received' ORDER BY source_device_id",
+                (branch_id,),
+            ).fetchall()
+            return [str(r[0]) for r in rows if r[0]]
+    except sqlite3.Error:
+        return []
 
 
 def _read_trip_ledger_summary(trip_db: Path, branch_id: str) -> dict[str, Any] | None:
@@ -388,14 +456,24 @@ class LanSyncManager:
             raise RuntimeError("隔离测试旅行初始化完成但上下文文件缺失。")
         return ctx
 
-    def start(self, *, bind_host: Any, port: Any = 0, san_ips: Any = None) -> dict[str, Any]:
-        host = _validate_ipv4(bind_host, field_name="监听地址")
-        port_num = _validate_port(port)
-        extra_sans = _parse_san_ips(san_ips)
+    def start(
+        self, *, bind_host: Any = None, port: Any = None, san_ips: Any = None
+    ) -> dict[str, Any]:
+        saved_cfg = self._load_config()
+        raw_host = saved_cfg["bind_host"] if bind_host in (None, "") else bind_host
+        raw_port = saved_cfg["port"] if port in (None, "") else port
+        raw_sans = saved_cfg["san_ips"] if san_ips is None else san_ips
+
+        host = _validate_ipv4(raw_host, field_name="监听地址")
+        port_num = _validate_port(raw_port)
+        extra_sans = _parse_san_ips(raw_sans)
 
         live = self._control_call("GET", "/control/status")
         if live is not None and live[0] == 200 and live[1].get("ok"):
             raise ValueError("同步服务已在运行；如需更改监听地址或端口，请先停止服务。")
+
+        if port_num > 0:
+            _check_bind_available(host, port_num)
 
         backend_py = sync_backend_python()
         if backend_py is None:
@@ -424,6 +502,7 @@ class LanSyncManager:
         for ip in extra_sans:
             cmd.extend(["--san-ip", ip])
 
+        log_offset = self.log_path.stat().st_size if self.log_path.is_file() else 0
         with open(self.log_path, "ab") as log_handle:
             proc = subprocess.Popen(
                 cmd,
@@ -451,7 +530,15 @@ class LanSyncManager:
                     proc.wait(timeout=5.0)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            raise RuntimeError(f"同步服务启动超时或异常退出，请查看日志：{self.log_path}")
+            detail = ""
+            if self.log_path.is_file():
+                try:
+                    with open(self.log_path, "rb") as fh:
+                        fh.seek(log_offset)
+                        detail = fh.read(8192).decode("utf-8", errors="replace")
+                except OSError:
+                    detail = ""
+            raise RuntimeError(_translate_start_failure(host, port_num, detail, self.log_path))
 
         try:
             info = json.loads(first_line[0].decode("utf-8"))
@@ -471,13 +558,18 @@ class LanSyncManager:
 
         threading.Thread(target=_drain_stdout, daemon=True).start()
 
-        write_json(self.config_path, {"bind_host": host, "port": port_num, "san_ips": extra_sans})
+        # Persist the ACTUAL bound port so service restarts and console reopens reuse it.
+        actual_port = int(info["lan_port"])
+        write_json(
+            self.config_path,
+            {"bind_host": host, "port": actual_port, "san_ips": extra_sans},
+        )
         session = info.get("pairing_session")
         bundle = (
             self._build_pairing_bundle(
                 protocol=str(info.get("protocol", "travelflow-lan-pairing/0-draft")),
                 lan_host=str(info["lan_host"]),
-                lan_port=int(info["lan_port"]),
+                lan_port=actual_port,
                 session=session,
                 context=ctx,
             )
@@ -487,7 +579,7 @@ class LanSyncManager:
         with self._lock:
             self._proc = proc
             self._latest_pairing = bundle
-        return {"lan_host": str(info["lan_host"]), "lan_port": int(info["lan_port"])}
+        return {"lan_host": str(info["lan_host"]), "lan_port": actual_port}
 
     def stop(self) -> None:
         with self._lock:
@@ -593,12 +685,13 @@ class LanSyncManager:
 
         trip_info: dict[str, Any] | None = None
         if ctx is not None:
-            ledger = _read_trip_ledger_summary(self.trip_db, str(ctx["branch_id"]))
+            branch_id = str(ctx["branch_id"])
+            ledger = _read_trip_ledger_summary(self.trip_db, branch_id)
             trip_info = {
                 "title": FICTIONAL_TRIP_TITLE,
                 "dataset_id": str(ctx["dataset_id"]),
                 "travel_id": str(ctx["travel_id"]),
-                "branch_id": str(ctx["branch_id"]),
+                "branch_id": branch_id,
                 "fork_branch_id": str(ctx.get("fork_branch_id") or ""),
                 "database": str(self.trip_db),
                 "head_revision_id": (
@@ -608,6 +701,10 @@ class LanSyncManager:
                 "paid_cents": ledger["paid_cents"] if ledger else None,
                 "pending_outbound_count": ledger["pending_outbound_count"] if ledger else 0,
                 "confirmed_outbound_count": ledger["confirmed_outbound_count"] if ledger else 0,
+                "default_source_devices": [
+                    str(item) for item in (ctx.get("authorized_devices") or []) if item
+                ],
+                "receipt_source_devices": _read_receipt_source_devices(self.trip_db, branch_id),
             }
 
         if live_reply is not None and live_reply[0] == 200 and live_reply[1].get("ok"):
@@ -657,6 +754,7 @@ class LanSyncManager:
                 "pending_requests": list(status.get("pending_requests") or []),
                 "devices": list(status.get("devices") or []),
                 "exchange_grants": list(status.get("exchange_grants") or []),
+                "observed_source_devices": dict(status.get("observed_source_devices") or {}),
                 "trip": trip_info,
             }
 
@@ -679,5 +777,6 @@ class LanSyncManager:
             "pending_requests": [],
             "devices": devices,
             "exchange_grants": grants,
+            "observed_source_devices": {},
             "trip": trip_info,
         }

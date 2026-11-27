@@ -437,7 +437,7 @@ class Console:
                 elif action == "sync-start":
                     self.sync.start(
                         bind_host=payload.get("bind_host"),
-                        port=payload.get("port", 0),
+                        port=payload.get("port"),
                         san_ips=payload.get("san_ips"),
                     )
                 elif action == "sync-stop":
