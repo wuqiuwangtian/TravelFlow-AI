@@ -407,3 +407,41 @@ bash -c 'cd backend && .venv/bin/pytest -v tests/test_windows_native_exchange.py
 Set-Location "<WIN_REPO>\backend"
 & "$env:TEMP\travelflow-win-py313-venv\Scripts\python.exe" -m pytest -v tests\test_windows_native_exchange.py
 ```
+
+## 6. 桌面可视管理界面接入（2026-11-27）
+
+现有本机可视管理入口（[console.py](../../../desktop/console.py)、[lan_sync.py](../../../desktop/lan_sync.py)、[index.html](../../../desktop/ui/index.html)、[console.js](../../../desktop/ui/console.js)）已接入隔离测试旅行的同步服务管理，管理 API 升级至 `CONSOLE_VERSION = 8`（升级前需先通过原管理页或 `python -m desktop console-stop` 停止旧版管理器）。
+
+### 6.1 隔离与安全边界
+
+- **独立隔离目录**：全部同步状态位于 `<管理状态目录>/lan-sync/`，首次启动时复用 `backend/scripts/exchange_trip_handoff.py init-trip` 初始化独立虚构测试旅行副本（`北京三日游`，`trip/travel.sqlite` 与 `context.json`），配对状态保存在 `pairing-state/`（`server.crt`、`server.key`、`pairing.sqlite`），不打开个人数据库或 `.env`。
+- **复用既有控制面**：管理器仅通过 `127.0.0.1` 回环调用 `desktop.lan_pairing` 原有 `/control/*` 接口（`status`、`pairing/open`、`pairing/approve`、`pairing/reject`、`devices/bind-exchange`、`devices/revoke`、`stop`）；`pairing-state/control.json` 中的 `control_token` 与 `control_port` 严禁进入 `/api/state` 或页面配对 JSON。
+- **后端解释器定位**：优先读取 `TRAVELFLOW_SYNC_PYTHON`，其次依次查找 `backend/.venv-desktop-<mode>` 与 `backend/.venv` 中的后端 Python 3.13+ 解释器。
+
+### 6.2 界面操作流程（无需手工拼 JSON 或执行配对 CLI）
+
+1. 在管理页「手机同步服务（隔离测试旅行）」区确认监听地址（默认自动检测本机 IPv4，可选填附加证书 SAN IP 如模拟器 `10.0.2.2`）与端口（`0` 为自动分配），点击 **「启动同步服务」**。
+2. 服务启动后页面直接展示 **「手机可直接使用的配对资料」**（含地址、端口、6 位配对码、会话 ID、证书指纹 `cert_sha256`、有效期与一键复制的完整配对 JSON；过期后可点击 **「生成新配对资料」**）。
+3. 手机发起配对后，页面「待核对的配对请求」区自动展示设备名称、设备 ID 与 6 位核对短码，核对一致后点击 **「核对短码并批准」**（或 **「拒绝」**）。
+4. 手机领取凭据后，设备出现在「已配对设备与旅行授权」区并标为 **「活跃 · 未授权旅行」**；此时提交消费、查询回执或领取更正均被拒绝（`403 exchange_not_authorized`）。
+5. 在该设备卡片填写或确认业务设备标识（`source_device_id`）后点击 **「授权隔离旅行」** 单独授权，状态变为 **「活跃 · 已授权隔离旅行」**，手机即可读写隔离旅行账本并在管理页实时看到消费笔数与实付总额更新。
+6. 点击 **「撤销设备」** 立即撤权并移除旅行授权（设备立即收到 `403 device_revoked`）；点击 **「停止同步服务」** 或退出重开管理器后，证书指纹、已撤销／活跃状态、授权记录与隔离账本均持久保留。
+
+### 6.3 实测记录与复跑命令
+
+- **实际 Windows 原生浏览器界面 + 参考 HTTPS 客户端实测**：在 Windows 原生 Python 3.13.16 启动真实 `desktop.console`（`mode = windows-native`），使用真实 Microsoft Edge（Playwright）操作页面完成：界面启动同步服务 → 页面读取配对 JSON（不含 `control_token`）→ 参考客户端发起配对 → 界面核对 6 位短码并点击批准 → 验证授权前 `expense-create`/`receipt-lookup`/`expense-patch/pull` 全部返回 `403 exchange_not_authorized` → 界面单独授权隔离旅行 → 提交 `1723` 分消费成功且页面账本更新为 `103.58 元（10358 分）` → 界面停止并重启服务验证证书指纹与授权保留 → 界面撤销设备验证立即返回 `403 device_revoked` → 关闭并重开整个管理器后验证证书指纹、已撤销状态、账本与重新生成配对资料均正常（零页面异常）。
+- **自动化回归复跑**：
+
+```sh
+# JS 管理页状态与断连回归（5 passed）
+node --test scripts/desktop-console.test.mjs
+
+# 桌面管理控制台全链路回归（Linux / WSL）
+TRAVELFLOW_SYNC_PYTHON=backend/.venv/bin/python python3 -m unittest desktop.tests.test_console -v
+```
+
+```powershell
+# Windows 原生 Python 3.13 控制台全链路回归
+$env:TRAVELFLOW_SYNC_PYTHON = "$env:TEMP\travelflow-win-py313-venv\Scripts\python.exe"
+& $env:TRAVELFLOW_SYNC_PYTHON -m unittest desktop.tests.test_console -v
+```

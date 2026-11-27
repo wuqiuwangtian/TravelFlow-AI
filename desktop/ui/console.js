@@ -17,7 +17,12 @@ let lastConfirmation = null;
 let lastRecovery = null;
 let pendingPick = null;
 let lastBackup = null;
-const labels = { backup: "正在备份并校验数据库…", restore: "正在校验并恢复副本…", recover: "正在核对实例归属与运行锁…", pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…" };
+let syncLoaded = false;
+let syncDirty = false;
+let lastPendingSig = null;
+let lastDevicesSig = null;
+const syncSourceDrafts = new Map();
+const labels = { backup: "正在备份并校验数据库…", restore: "正在校验并恢复副本…", recover: "正在核对实例归属与运行锁…", pick: "正在等待系统文件选择器…", inspect: "正在核对配置和数据…", prepare: "正在准备环境与构建，请等待完成…", start: "正在启动旅行助手…", stop: "正在安全停止旅行助手…", exit: "正在停止并退出管理器…", "sync-start": "正在初始化隔离测试旅行并启动同步服务…", "sync-stop": "正在停止同步服务…", "sync-open-pairing": "正在生成新的配对资料…", "sync-approve": "正在批准配对请求…", "sync-reject": "正在拒绝配对请求…", "sync-authorize": "正在授权该设备访问隔离测试旅行…", "sync-revoke": "正在撤销设备并移除旅行授权…" };
 const modes = { "windows-native": "Windows 原生", wsl: "WSL Linux", linux: "Linux" };
 async function api(path, payload) {
   const controller = new AbortController();
@@ -36,6 +41,200 @@ async function api(path, payload) {
 }
 function payload() { const qa = byId("profile").value === "application-qa"; return { profile: byId("profile").value, env_file: qa ? "" : byId("env-file").value.trim(), database: byId("database").value.trim(), ports: [Number(byId("backend-port").value), Number(byId("frontend-port").value)] }; }
 function showError(message) { byId("error").hidden = !message; byId("error").textContent = message || ""; }
+function formatYuan(cents) {
+  return typeof cents === "number" ? (cents / 100).toFixed(2) + " 元（" + cents + " 分）" : "—";
+}
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function renderSync(busy) {
+  const sync = state?.sync;
+  if (!sync) return;
+  if (!syncLoaded && !syncDirty && sync.config) {
+    byId("sync-bind-host").value = sync.config.bind_host || "127.0.0.1";
+    byId("sync-port").value = String(sync.config.port ?? 0);
+    byId("sync-san-ips").value = (sync.config.san_ips || []).join(", ");
+    syncLoaded = true;
+  }
+  const canDom = typeof document.createElement === "function";
+  if (canDom && Array.isArray(sync.bind_candidates)) {
+    const list = byId("sync-bind-list");
+    if (list && list.dataset?.candidates !== sync.bind_candidates.join(",")) {
+      list.textContent = "";
+      for (const ip of sync.bind_candidates) {
+        const opt = document.createElement("option");
+        opt.value = ip;
+        list.appendChild(opt);
+      }
+      if (list.dataset) list.dataset.candidates = sync.bind_candidates.join(",");
+    }
+  }
+  byId("sync-env-hint").textContent = sync.windows_native
+    ? "当前为 Windows 原生环境，仅开放隔离虚构测试旅行（北京三日游），不读取个人数据库或 .env；批准配对后仍需单独授权旅行才可读写。"
+    : "当前处于非 Windows 原生环境，仍可启动隔离虚构测试旅行同步服务；物理手机局域网直连请使用 Windows 原生环境。";
+  byId("sync-fields").disabled = busy || Boolean(sync.running);
+  byId("sync-start").disabled = busy || Boolean(sync.running) || !sync.backend_python_ready;
+  byId("sync-stop").disabled = busy || !sync.running;
+  byId("sync-open-pairing").disabled = busy || !sync.running;
+  byId("sync-state").textContent = !connected
+    ? "管理连接未确认，同步服务状态暂不可操作；请等待重新核对。"
+    : !sync.backend_python_ready
+      ? "未找到后端 Python 3.13+ 虚拟环境，请先准备环境与构建或配置 TRAVELFLOW_SYNC_PYTHON。"
+      : sync.running
+        ? `同步服务运行中（https://${sync.lan_host}:${sync.lan_port}）`
+        : "同步服务已停止（重启将沿用同一证书与配对记录）";
+  byId("sync-endpoint").textContent = sync.running ? `https://${sync.lan_host}:${sync.lan_port}` : "未监听";
+  byId("sync-cert").textContent = sync.cert_sha256 || "尚未生成（首次启动时创建）";
+  const trip = sync.trip;
+  byId("sync-trip").textContent = trip
+    ? `${trip.title} · 旅行 ${trip.travel_id} · 主分支 ${trip.branch_id} · 数据集 ${trip.dataset_id}`
+    : "首次启动时自动初始化隔离测试旅行（北京三日游）";
+  byId("sync-ledger").textContent = trip && trip.expense_count !== null
+    ? `${trip.expense_count} 笔消费 · 共 ${formatYuan(trip.paid_cents)} · 分支头 ${trip.head_revision_id} · 待发更正 ${trip.pending_outbound_count} / 已确认 ${trip.confirmed_outbound_count}`
+    : "尚未初始化";
+
+  const showPairing = connected && Boolean(sync.running) && Boolean(sync.pairing);
+  byId("sync-pairing-box").hidden = !showPairing;
+  if (showPairing) {
+    byId("sync-pair-endpoint").textContent = `https://${sync.pairing.lan_host}:${sync.pairing.lan_port}`;
+    byId("sync-pair-code").textContent = sync.pairing.pairing_code;
+    byId("sync-pair-session").textContent = sync.pairing.pairing_session_id;
+    byId("sync-pair-cert").textContent = sync.pairing.cert_sha256;
+    byId("sync-pair-expires").textContent = sync.pairing.expires_at;
+    byId("sync-pairing-json").value = sync.pairing_json || "";
+  }
+  byId("sync-copy-pairing").disabled = busy || !showPairing;
+
+  const pending = connected && sync.running ? (sync.pending_requests || []) : [];
+  byId("sync-pending-empty").hidden = pending.length > 0;
+  if (canDom) {
+    const pendingSig = JSON.stringify({ busy, pending });
+    if (pendingSig !== lastPendingSig) {
+      lastPendingSig = pendingSig;
+      const box = byId("sync-pending-list");
+      box.textContent = "";
+      for (const req of pending) {
+        const card = el("div", "sync-card");
+        card.dataset.requestId = req.request_id;
+        const head = el("div", "sync-card-head");
+        head.appendChild(el("span", "sync-card-title", `${req.device_name} (${req.device_id})`));
+        const waiting = req.status === "awaiting_desktop_confirm";
+        head.appendChild(
+          el("span", waiting ? "sync-badge" : "sync-badge sync-badge-ok", waiting ? "等待核对短码并批准" : "已批准，等待手机领取")
+        );
+        card.appendChild(head);
+        const sasRow = el("p", "", "核对短码（请确认手机屏幕一致）：");
+        sasRow.appendChild(el("span", "sas-code", req.sas_code));
+        card.appendChild(sasRow);
+        if (waiting) {
+          const actions = el("div", "actions");
+          const approveBtn = el("button", "", "核对短码并批准");
+          approveBtn.type = "button";
+          approveBtn.disabled = busy;
+          approveBtn.dataset.action = "sync-approve";
+          approveBtn.addEventListener("click", () => syncAction("sync-approve", { request_id: req.request_id, sas_code: req.sas_code }));
+          const rejectBtn = el("button", "secondary", "拒绝");
+          rejectBtn.type = "button";
+          rejectBtn.disabled = busy;
+          rejectBtn.dataset.action = "sync-reject";
+          rejectBtn.addEventListener("click", () => syncAction("sync-reject", { request_id: req.request_id }));
+          actions.appendChild(approveBtn);
+          actions.appendChild(rejectBtn);
+          card.appendChild(actions);
+        }
+        box.appendChild(card);
+      }
+    }
+  }
+
+  const devices = sync.devices || [];
+  const grantsByDev = new Map((sync.exchange_grants || []).map((g) => [g.paired_device_id, g]));
+  byId("sync-devices-empty").hidden = devices.length > 0;
+  if (canDom) {
+    const devicesSig = JSON.stringify({ busy, running: sync.running, devices, grants: sync.exchange_grants || [] });
+    if (devicesSig !== lastDevicesSig) {
+      lastDevicesSig = devicesSig;
+      const box = byId("sync-devices-list");
+      box.textContent = "";
+      for (const dev of devices) {
+        const grant = grantsByDev.get(dev.device_id) || null;
+        const card = el("div", "sync-card");
+        card.dataset.deviceId = dev.device_id;
+        const head = el("div", "sync-card-head");
+        head.appendChild(el("span", "sync-card-title", `${dev.device_name} (${dev.device_id})`));
+        const badgeText = dev.status === "revoked"
+          ? "已撤销"
+          : grant
+            ? "活跃 · 已授权隔离旅行"
+            : "活跃 · 未授权旅行";
+        const badgeClass = dev.status === "revoked"
+          ? "sync-badge sync-badge-danger"
+          : grant
+            ? "sync-badge sync-badge-ok"
+            : "sync-badge";
+        head.appendChild(el("span", badgeClass, badgeText));
+        card.appendChild(head);
+        if (grant) {
+          card.appendChild(
+            el(
+              "p",
+              "hint mono",
+              `授权范围：业务设备 ${grant.source_device_id} · 旅行 ${grant.travel_id} · 分支 ${grant.branch_id} · 数据集 ${grant.dataset_id}`
+            )
+          );
+        } else if (dev.status === "active") {
+          card.appendChild(el("p", "hint", "已配对但尚未授权旅行：此时提交消费或查询回执会被拒绝（403）。"));
+        }
+        if (dev.status === "active") {
+          const grantRow = el("div", "sync-grant-row");
+          const lbl = el("label", "", "业务设备标识（source_device_id）");
+          const input = document.createElement("input");
+          input.autocomplete = "off";
+          input.disabled = busy || !sync.running;
+          input.dataset.sourceInput = dev.device_id;
+          input.value = syncSourceDrafts.has(dev.device_id)
+            ? syncSourceDrafts.get(dev.device_id)
+            : (grant?.source_device_id || dev.device_id);
+          input.addEventListener("input", () => { syncSourceDrafts.set(dev.device_id, input.value); });
+          lbl.appendChild(input);
+          grantRow.appendChild(lbl);
+
+          const authBtn = el("button", "", grant ? "更新旅行授权" : "授权隔离旅行");
+          authBtn.type = "button";
+          authBtn.disabled = busy || !sync.running;
+          authBtn.dataset.action = "sync-authorize";
+          authBtn.addEventListener("click", () => syncAction("sync-authorize", { device_id: dev.device_id, source_device_id: input.value.trim() }));
+          grantRow.appendChild(authBtn);
+          card.appendChild(grantRow);
+
+          const actions = el("div", "actions");
+          const revokeBtn = el("button", "danger", "撤销设备");
+          revokeBtn.type = "button";
+          revokeBtn.disabled = busy || !sync.running;
+          revokeBtn.dataset.action = "sync-revoke";
+          revokeBtn.addEventListener("click", () => syncAction("sync-revoke", { device_id: dev.device_id }));
+          actions.appendChild(revokeBtn);
+          card.appendChild(actions);
+        }
+        box.appendChild(card);
+      }
+    }
+  }
+}
+async function syncAction(name, body) {
+  if (!connected || submitting || state?.busy) return;
+  submitting = true; render();
+  byId("operation").textContent = labels[name] || "正在处理同步操作…";
+  try {
+    await api(`/api/${name}`, body || {});
+    if (name === "sync-start") syncDirty = false;
+    await refresh();
+  } catch (error) { state.error = error.message; showError(error.message); }
+  finally { submitting = false; render(); }
+}
 function render() {
   if (!state || ended) return;
   const busy = !connected || Boolean(state.busy) || submitting;
@@ -120,6 +319,7 @@ function render() {
     byId("open-app").href = url;
     byId("health-time").textContent = runtime.checked_at ? new Date(runtime.checked_at * 1000).toLocaleString() : "等待健康检查";
   }
+  renderSync(busy);
   showError(state.error || state.state_error);
 }
 async function refresh() {
@@ -213,3 +413,23 @@ for (const [id, kind] of [["pick-env", "env_file"], ["pick-db", "database"], ["p
     finally { submitting = false; render(); }
   });
 }
+for (const id of ["sync-bind-host", "sync-port", "sync-san-ips"]) {
+  byId(id).addEventListener("input", () => { syncDirty = true; });
+}
+byId("sync-start").addEventListener("click", () => syncAction("sync-start", {
+  bind_host: byId("sync-bind-host").value.trim(),
+  port: Number(byId("sync-port").value || 0),
+  san_ips: byId("sync-san-ips").value.trim(),
+}));
+byId("sync-stop").addEventListener("click", () => syncAction("sync-stop", {}));
+byId("sync-open-pairing").addEventListener("click", () => syncAction("sync-open-pairing", { ttl_seconds: 120 }));
+byId("sync-copy-pairing").addEventListener("click", async () => {
+  const text = byId("sync-pairing-json").value;
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    byId("sync-copy-status").textContent = "已复制配对资料 JSON";
+  } catch {
+    byId("sync-copy-status").textContent = "请手动选中上方文本框复制";
+  }
+});
