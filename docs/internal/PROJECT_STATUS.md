@@ -1,10 +1,12 @@
 # TravelFlow AI 阶段现状
 
-整理日期：2026-11-21。本页描述当前代码能力与验收边界；使用方法见 [README](../../README.md)，后续顺序见 [产品路线](./PRODUCT_ROADMAP.md)，具体变更见 [更新日志](../../CHANGELOG.md)。
+整理日期：2026-11-27。本页描述当前代码能力与验收边界；使用方法见 [README](../../README.md)，后续顺序见 [产品路线](./PRODUCT_ROADMAP.md)，具体变更见 [更新日志](../../CHANGELOG.md)。
 
 项目入口与文档职责见 [开发维护文档](./MAINTAINING.md)。本页维护当前状态，不重复维护路线图的任务表。
 
 ## 当前接续状态
+
+- 已接受移动 [e9d303e 前台自动同步回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/e9d303e8073efbf7631aecfd206f776b2a20eecb/docs/internal/PROJECT_STATUS.md#正常记账页的前台自动同步)。移动维护者用 API 35 和 Windows 原生 fcd696d 验证前台恢复网络、联网冷启动两条路径。离线 17.23 元在丢回包后自动查回，桌面更正为 21.50 元后手机自动领取并交回；每轮新增和更正确认各发送一次。另测版本冲突及设备撤销，重复唤醒、强停重开后均无新业务请求，本机待发原文保留。桌面侧独立复跑两项调度测试、类型和冻结契约检查，以及桌面 HTTPS 交换回归 5 项，全部通过。物理手机 Wi-Fi／热点仍待实测。连续新增存在版本衔接缺口：手机保存新命令使用本地分支头，桌面接收检查桌面分支头，首次同步后两者可不同。
 
 - 已接受移动 [c102aeb Windows 原生与 API 35 往返回执](https://github.com/wuqiuwangtian/TravelFlow-Mobile/blob/c102aeb4928c1c69719166d7b7a9e0eda8338f70/docs/internal/PROJECT_STATUS.md#windows-原生前台服务与-android-单笔消费往返实读)。固定桌面 fcd696d，Android 沿用 da74b6f 的 APK 实现。手机离线新增 1723 分，桌面提交后丢回包；冷启动查询恢复确认，桌面随后将原消费改为 2150 分。手机交回前冷重领，原文摘要与持久回执一致。Windows 原生服务保持地址端口、证书与配对库重启，监听 PID 改变；手机凭旧配对冷重连成功。手机 1 笔 2150 分，Windows 两笔 10785 分，待发 0、已确认 1，双方确认版本吻合，原分叉仍为空。业务路径经同机模拟器虚拟 WLAN、WSL 虚拟网关到 Windows WLAN 地址；当时已有该解释器的入站放行规则。本轮桌面核对移动脚本及回执，独立复跑 Windows 原生回环端到端测试 1 项通过，移动契约检查通过；模拟器实跑归移动维护者。物理手机同 Wi-Fi／热点与前台自动同步待验。
 
